@@ -16,8 +16,6 @@ spec:
           restartPolicy: OnFailure
           tolerations:
             - operator: Exists
-          imagePullSecrets:
-            - name: ghcr-pull
           containers:
             - name: cleaner
               image: ghcr.io/cxiyuan/nss-ndr-cleaner

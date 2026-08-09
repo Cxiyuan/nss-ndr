@@ -67,18 +67,15 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
 
 ### k3s 拉取 GHCR 镜像
 
-GHCR 用户包默认**私有**，k3s 节点需要拉取凭据（DaemonSet 已引用 `imagePullSecrets: ghcr-pull`）：
+镜像包已设为 **public**（workflow 自动设置），k3s 节点无需凭据即可拉取。若后续改回私有：
 
 ```bash
-# 在 k3s 节点上，用带 read:packages 权限的 PAT 创建 secret
+# 用带 read:packages 权限的 PAT 在 k3s 节点创建 secret
 kubectl -n nss-ndr create secret docker-registry ghcr-pull \
   --docker-server=ghcr.io \
   --docker-username=<你的 GitHub 用户名> \
   --docker-password=<PAT>
 ```
-
-如需公开（跳过 secret），在 GitHub 网页打开对应 Package → Settings → Change visibility 设为 public，并删除
-DaemonSet 中的 `imagePullSecrets`。
 
 ## 许可说明
 

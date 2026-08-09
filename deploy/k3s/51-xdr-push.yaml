@@ -15,8 +15,6 @@ spec:
       labels:
         app: nss-xdr-push
     spec:
-      imagePullSecrets:
-        - name: ghcr-pull
       containers:
         - name: xdr-push
           image: ghcr.io/cxiyuan/nss-ndr-xdr-push

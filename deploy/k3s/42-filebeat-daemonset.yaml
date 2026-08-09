@@ -16,8 +16,6 @@ spec:
     spec:
       tolerations:
         - operator: Exists
-      imagePullSecrets:
-        - name: ghcr-pull
       containers:
         - name: filebeat
           image: ghcr.io/cxiyuan/nss-ndr-filebeat

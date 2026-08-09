@@ -3,8 +3,7 @@
 images:
   registry: ghcr.io/cxiyuan
   tag: latest
-  pullSecrets:
-    - name: ghcr-pull
+  pullSecrets: []   # 镜像包已公开；如后续改私有，填 [{name: ghcr-pull}]
   elasticsearch: docker.elastic.co/elasticsearch/elasticsearch:9.3.3
 
 # 与 configs/probe.yaml 同结构的探针配置

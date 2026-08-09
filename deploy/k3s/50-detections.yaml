@@ -15,8 +15,6 @@ spec:
       labels:
         app: nss-detections
     spec:
-      imagePullSecrets:
-        - name: ghcr-pull
       containers:
         - name: detections
           image: ghcr.io/cxiyuan/nss-ndr-detections

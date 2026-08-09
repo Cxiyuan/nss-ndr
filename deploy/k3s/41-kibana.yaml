@@ -15,8 +15,6 @@ spec:
       labels:
         app: nss-kibana
     spec:
-      imagePullSecrets:
-        - name: ghcr-pull
       containers:
         - name: kibana
           image: ghcr.io/cxiyuan/nss-ndr-kibana
