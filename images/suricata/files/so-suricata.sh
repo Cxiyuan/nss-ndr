@@ -29,8 +29,14 @@ chmod 770 /var/run/suricata
 rm -rf /var/run/suricata.pid
 
 # pcap-log 全包目录（对应 suricata.yaml 的 pcap-log.dir=/nsm/suripcap）
+# mode: multi 时每个 af-packet worker 一个子目录（/nsm/suripcap/N，与 SO 3.1.0 一致）
 mkdir -p /nsm/suripcap
-chown 940:940 /nsm/suripcap
+THREADS=$(awk '/^af-packet:/{f=1} f && /threads:/{gsub(/[^0-9]/,""); print; exit}' /etc/suricata/suricata.yaml)
+THREADS=${THREADS:-1}
+for i in $(seq 1 "$THREADS"); do
+  mkdir -p "/nsm/suripcap/$i"
+done
+chown 940:940 /nsm/suripcap /nsm/suripcap/* 2>/dev/null || true
 
 exec /opt/suricata/bin/suricata \
   -c /etc/suricata/suricata.yaml \
