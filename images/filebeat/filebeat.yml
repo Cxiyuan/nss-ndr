@@ -17,6 +17,13 @@ filebeat.inputs:
           fields:
             category: network
             module: suricata
+      - script:
+          lang: javascript
+          source: >
+            function process(event) {
+              var et = event.Get("event_type") || "other";
+              event.Put("@metadata.pipeline", et === "alert" ? "suricata.alert" : "suricata.common");
+            }
 
   - type: filestream
     id: zeek-logs
