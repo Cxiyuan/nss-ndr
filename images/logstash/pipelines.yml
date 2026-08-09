@@ -1,0 +1,6 @@
+- pipeline.id: manager
+  path.config: "/usr/share/logstash/pipelines/manager/"
+  pipeline.workers: 2
+- pipeline.id: search
+  path.config: "/usr/share/logstash/pipelines/search/"
+  pipeline.workers: 2

@@ -41,6 +41,9 @@ spec:
               readOnly: true
             - name: data
               mountPath: /usr/share/filebeat/data
+            - name: certs
+              mountPath: /etc/filebeat/certs
+              readOnly: true
       volumes:
         - name: config
           configMap:
@@ -50,3 +53,6 @@ spec:
             claimName: nss-ndr-nsm
         - name: data
           emptyDir: {}
+        - name: certs
+          secret:
+            secretName: nss-ndr-certs

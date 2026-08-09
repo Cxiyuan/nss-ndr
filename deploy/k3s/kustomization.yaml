@@ -11,6 +11,8 @@ resources:
   - 40-elasticsearch.yaml
   - 41-kibana.yaml
   - 42-filebeat-daemonset.yaml
+  - 44-logstash.yaml
+  - 45-redis.yaml
   - 51-xdr-push.yaml
   - 60-cleaner-cronjob.yaml
   - 55-manager.yaml
@@ -25,6 +27,8 @@ images:
     newTag: ec759f8362a7b2ecda1efed4d8a6a7cdf5639eb4
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-filebeat
     newTag: ec759f8362a7b2ecda1efed4d8a6a7cdf5639eb4
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-logstash
+    newTag: latest
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-kibana
     newTag: ec759f8362a7b2ecda1efed4d8a6a7cdf5639eb4
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-xdr-push

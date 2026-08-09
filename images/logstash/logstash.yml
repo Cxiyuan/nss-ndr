@@ -1,0 +1,7 @@
+api.http.host: "0.0.0.0"
+api.http.port: 9600
+config.reload.automatic: true
+config.reload.interval: 3s
+xpack.monitoring.enabled: false
+log.level: info
+path.data: /usr/share/logstash/data

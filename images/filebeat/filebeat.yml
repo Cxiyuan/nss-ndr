@@ -24,6 +24,13 @@ filebeat.inputs:
               var et = event.Get("event_type") || "other";
               event.Put("@metadata.pipeline", et === "alert" ? "suricata.alert" : "suricata.common");
             }
+      - add_fields:
+          target: data_stream
+          fields:
+            type: logs
+            dataset: suricata.alerts
+            namespace: so
+          override: true
 
   - type: filestream
     id: zeek-logs
@@ -50,18 +57,25 @@ filebeat.inputs:
           fields:
             category: network
             module: zeek
+      - add_fields:
+          target: data_stream
+          fields:
+            type: logs
+            dataset: zeek
+            namespace: so
+          override: true
       - add_tags:
           tags: ["ics"]
           when:
             regexp:
               pipeline: "^bacnet|^bsap|^cip|^cotp|^dnp3|^ecat|^enip|^modbus|^opcua|^profinet|^s7comm"
 
-output.elasticsearch:
-  hosts: ["${ES_HOST:http://nss-elasticsearch:9200}"]
-  username: "${ES_USERNAME:}"
-  password: "${ES_PASSWORD:}"
-  ssl.verification_mode: none
-  index: "logs-nss-ndr"
+# 数据总线：Lumberjack 输出到 Logstash（对齐 SO 架构）
+output.logstash:
+  hosts: ["${LOGSTASH_HOST:nss-logstash:5055}"]
+  ssl.certificate_authorities: ["${LOGSTASH_CA:/etc/filebeat/certs/ca.crt}"]
+  ssl.verification_mode: full
+  worker: 2
 
 setup.template.enabled: false
 logging.level: info

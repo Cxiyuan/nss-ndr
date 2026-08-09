@@ -34,6 +34,9 @@ jobs:
           - name: filebeat
             context: images/filebeat
             file: images/filebeat/Dockerfile
+          - name: logstash
+            context: .
+            file: images/logstash/Dockerfile
           - name: kibana
             context: images/kibana
             file: images/kibana/Dockerfile
