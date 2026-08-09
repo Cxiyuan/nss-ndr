@@ -30,6 +30,8 @@ $EDITOR configs/probe.yaml
 
 # 2. 渲染 k3s 清单中的 ConfigMap
 python3 scripts/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
+# 注意：10-configmap.yaml 为生成物不入库；镜像口(interface)为部署环境参数，
+# 必须在本步骤前于 probe.yaml 中按服务器实际网卡填写（空值会渲染失败）
 
 # 3. 部署到 k3s
 kubectl apply -k deploy/k3s/

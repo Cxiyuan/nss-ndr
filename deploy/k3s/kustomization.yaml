@@ -3,7 +3,7 @@ kind: Kustomization
 
 resources:
   - 00-namespace.yaml
-  - 10-configmap.yaml
+  - 10-configmap.yaml   # 由 scripts/render-configs.py 生成（不入库），apply 前先渲染
   - 20-pv-pvc.yaml
   - 25-secret.yaml
   - 30-suricata-daemonset.yaml

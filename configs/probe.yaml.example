@@ -3,7 +3,9 @@
 
 probe:
   id: nss-001                 # 探针唯一标识（observer.name / 推送标记）
-  interface: enp5s0           # 镜像口（抓包网卡，本机为 enp5s0）
+  # 镜像口（抓包网卡）：部署时必须按服务器实际网卡填写，如 enp5s0 / eth1
+  # 留空时 render-configs.py 会拒绝渲染，防止误用默认值
+  interface: ""
   home_net:                   # HOME_NET 地址组
     - 10.0.0.0/8
     - 192.168.0.0/16

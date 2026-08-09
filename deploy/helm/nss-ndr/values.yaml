@@ -11,7 +11,8 @@ images:
 probeConfig:
   probe:
     id: nss-001
-    interface: enp5s0
+    # 镜像口（抓包网卡）：部署时必填，如 --set probeConfig.probe.interface=enp5s0
+    interface: ""
     home_net:
       - 10.0.0.0/8
       - 192.168.0.0/16

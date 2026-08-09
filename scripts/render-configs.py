@@ -80,6 +80,11 @@ def main():
     probe, suri, zeek = cfg["probe"], cfg["suricata"], cfg["zeek"]
     pcap = suri.get("pcap", {})
 
+    if not probe.get("interface"):
+        sys.exit("错误: probe.interface 未配置。镜像口是部署环境参数，请按服务器实际网卡填写（如 enp5s0）")
+    if "CHANGE_ME" in probe.get("interface", "") or "占位" in probe.get("interface", ""):
+        sys.exit("错误: probe.interface 仍是占位符，请填写实际镜像口网卡")
+
     threads = int(suri.get("af_packet_threads", 4))
     file_size_mb = int(pcap.get("file_size_mb", 1000))
     storage_gb = int(pcap.get("storage_limit_gb", 500))

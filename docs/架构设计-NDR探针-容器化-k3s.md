@@ -307,7 +307,7 @@ flowchart LR
 ```yaml
 probe:
   id: nss-001                 # 探针唯一标识（observer.name / 推送标记）
-  interface: enp5s0           # 镜像口（按部署机实际网卡填写）
+  interface: ""               # 镜像口：部署时按服务器实际网卡填写（如 enp5s0），不固化默认值
   home_net:                   # HOME_NET 地址组
     - 10.0.0.0/8
     - 192.168.0.0/16
