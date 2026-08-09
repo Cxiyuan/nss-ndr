@@ -18,7 +18,7 @@ spec:
         - operator: Exists
       containers:
         - name: filebeat
-          image: ghcr.io/cxiyuan/nss-ndr-filebeat
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-filebeat
           imagePullPolicy: IfNotPresent
           env:
             - name: ES_HOST

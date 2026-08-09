@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: xdr-push
-          image: ghcr.io/cxiyuan/nss-ndr-xdr-push
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-xdr-push
           imagePullPolicy: IfNotPresent
           env:
             - name: ES_HOST

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: detections
-          image: ghcr.io/cxiyuan/nss-ndr-detections
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-detections
           imagePullPolicy: IfNotPresent
           env:
             - name: LISTEN_ADDR

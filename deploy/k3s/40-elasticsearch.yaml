@@ -51,7 +51,7 @@ spec:
               memory: 4Gi
         # sidecar：ES 就绪后导入 ingest pipelines / ILM / 索引模板
         - name: es-init
-          image: ghcr.io/cxiyuan/nss-ndr-es-init
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-es-init
           imagePullPolicy: IfNotPresent
           env:
             - name: ES_URL

@@ -51,8 +51,8 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
 ## 镜像构建（GitHub Actions）
 
 - 推送 `master` 分支或 `v*` tag 时，`.github/workflows/build-images.yml` 自动构建 Suricata/Zeek 镜像并推送到 GHCR：
-  - `ghcr.io/cxiyuan/nss-ndr-suricata:latest` / `:<git-sha>` / `:<tag>`
-  - `ghcr.io/cxiyuan/nss-ndr-zeek:latest` / `:<git-sha>` / `:<tag>`
+- `ghcr.io/cxiyuan/nss-ndr/nss-ndr-suricata:latest` / `:<git-sha>` / `:<tag>`
+- `ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek:latest` / `:<git-sha>` / `:<tag>`
   - 另有 `nss-ndr-es-init`、`nss-ndr-filebeat`、`nss-ndr-kibana`（M1）
   - 另有 `nss-ndr-detections`、`nss-ndr-xdr-push`（M2）
 - 也可在 GitHub Actions 页面手动触发（workflow_dispatch）。

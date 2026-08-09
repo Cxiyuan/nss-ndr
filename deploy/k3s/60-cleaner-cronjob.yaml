@@ -18,7 +18,7 @@ spec:
             - operator: Exists
           containers:
             - name: cleaner
-              image: ghcr.io/cxiyuan/nss-ndr-cleaner
+              image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-cleaner
               imagePullPolicy: IfNotPresent
               volumeMounts:
                 - name: config

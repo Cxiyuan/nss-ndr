@@ -17,19 +17,19 @@ resources:
 
 # 镜像 tag 覆盖：构建后把 newTag 改为对应 git sha 以固定版本
 images:
-  - name: ghcr.io/cxiyuan/nss-ndr-suricata
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-suricata
     newTag: latest
-  - name: ghcr.io/cxiyuan/nss-ndr-zeek
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek
     newTag: latest
-  - name: ghcr.io/cxiyuan/nss-ndr-es-init
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-es-init
     newTag: latest
-  - name: ghcr.io/cxiyuan/nss-ndr-filebeat
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-filebeat
     newTag: latest
-  - name: ghcr.io/cxiyuan/nss-ndr-kibana
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-kibana
     newTag: latest
-  - name: ghcr.io/cxiyuan/nss-ndr-detections
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-detections
     newTag: latest
-  - name: ghcr.io/cxiyuan/nss-ndr-xdr-push
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-xdr-push
     newTag: latest
-  - name: ghcr.io/cxiyuan/nss-ndr-cleaner
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-cleaner
     newTag: latest

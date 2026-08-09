@@ -21,7 +21,7 @@ spec:
         - name: zeek
           # 由 GitHub Actions 构建并推送至 GHCR（见 .github/workflows/build-images.yml）
           # tag 通过 kustomization.yaml 的 images 覆盖（默认 latest）
-          image: ghcr.io/cxiyuan/nss-ndr-zeek
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true

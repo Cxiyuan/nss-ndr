@@ -8,7 +8,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # 镜像名：ghcr.io/<owner>/nss-ndr-suricata / nss-ndr-zeek
+  # 镜像推送到仓库级命名空间 ghcr.io/<owner>/<repo>/nss-ndr-<name>
+  # 仓库已 public，仓库关联的包自动继承 public 可见性（无需单独设包可见性）
 
 permissions:
   contents: read
@@ -66,7 +67,7 @@ jobs:
       - name: Compute image tags
         id: meta
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/nss-ndr-${{ matrix.name }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ github.event.repository.name }}/nss-ndr-${{ matrix.name }}
         run: |
           TAGS="$IMAGE:latest,$IMAGE:${{ github.sha }}"
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
@@ -84,13 +85,3 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
-
-      # 用户级 GHCR 包可见性只能由 PAT(write:packages) 或网页设置；
-      # GITHUB_TOKEN 的 PATCH 会返回 404，这里仅尽力而为，不阻断构建。
-      - name: Make package public (best-effort)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api --method PATCH "/user/packages/container/nss-ndr-${{ matrix.name }}" \
-            -f visibility=public && echo "包已公开" \
-            || echo "提示: GITHUB_TOKEN 无法修改用户级包可见性，请用 PAT 或网页设置（不阻断构建）"
