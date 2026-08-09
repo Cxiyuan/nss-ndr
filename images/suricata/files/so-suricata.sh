@@ -28,6 +28,10 @@ chown 940:940 /var/run/suricata
 chmod 770 /var/run/suricata
 rm -rf /var/run/suricata.pid
 
+# pcap-log 全包目录（对应 suricata.yaml 的 pcap-log.dir=/nsm/suripcap）
+mkdir -p /nsm/suripcap
+chown 940:940 /nsm/suripcap
+
 exec /opt/suricata/bin/suricata \
   -c /etc/suricata/suricata.yaml \
   $AFPACKET \

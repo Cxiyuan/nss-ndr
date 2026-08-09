@@ -42,12 +42,37 @@ spec:
               cpu: "4"
               memory: 4Gi
             requests:
-              cpu: "2"
-              memory: 2Gi
+              cpu: "1"
+              memory: 1Gi
       volumes:
         - name: config
           configMap:
             name: nss-ndr-config
+            # ConfigMap key 不允许 "/"，policy 文件已扁平化（policy_securityonion_*），
+            # 这里用 items[].path 还原 /opt/so/conf/policy/securityonion/ 目录结构
+            items:
+              - key: local.zeek
+                path: local.zeek
+              - key: node.cfg
+                path: node.cfg
+              - key: zeekctl.cfg
+                path: zeekctl.cfg
+              - key: networks.cfg
+                path: networks.cfg
+              - key: bpf
+                path: bpf
+              - key: policy_securityonion_community-id-extended.zeek
+                path: policy/securityonion/community-id-extended.zeek
+              - key: policy_securityonion_bpfconf.zeek
+                path: policy/securityonion/bpfconf.zeek
+              - key: policy_securityonion_json-logs.zeek
+                path: policy/securityonion/json-logs.zeek
+              - key: policy_securityonion_conn-add-sensorname.zeek
+                path: policy/securityonion/conn-add-sensorname.zeek
+              - key: policy_securityonion_file-extraction___load__.zeek
+                path: policy/securityonion/file-extraction/__load__.zeek
+              - key: policy_securityonion_file-extraction_extract.zeek
+                path: policy/securityonion/file-extraction/extract.zeek
         - name: nsm
           persistentVolumeClaim:
             claimName: nss-ndr-nsm

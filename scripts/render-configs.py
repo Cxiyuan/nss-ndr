@@ -58,7 +58,9 @@ def render_policy():
         for name in files:
             rel = os.path.relpath(os.path.join(root, name), base)
             with open(os.path.join(root, name), encoding="utf-8") as f:
-                data[f"policy/securityonion/{rel}"] = f.read()
+                # ConfigMap data key 不允许 "/"（仅 [-._a-zA-Z0-9]），
+                # 用 "_" 扁平化；挂载时由 zeek DaemonSet volume items[].path 还原目录结构
+                data[f"policy_securityonion_{rel.replace('/', '_')}"] = f.read()
     return data
 
 
@@ -94,7 +96,8 @@ def main():
     ctx = {
         "INTERFACE": probe["interface"],
         "THREADS": str(threads),
-        "HOME_NET": "[" + ",".join(probe["home_net"]) + "]",
+        # 与 SO 3.1.0 一致：地址序列用引号包裹，Suricata 8.0.5 要求
+        "HOME_NET": "'[" + ",".join(probe["home_net"]) + "]'",
         "EXTERNAL_NET": str(probe.get("external_net", "any")),
         "PCAP_ENABLED": "yes" if pcap.get("enabled", True) else "no",
         "PCAP_FILE_SIZE_MB": str(file_size_mb),

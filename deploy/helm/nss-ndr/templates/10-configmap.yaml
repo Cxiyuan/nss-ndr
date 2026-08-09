@@ -28,6 +28,6 @@ data:
   interface: {{ .Values.probeConfig.probe.interface }}
   all-rulesets.rules: ""
 {{- range $path, $_ := .Files.Glob "configs/policy/**" }}
-  {{ $path | trimPrefix "configs/" }}: |
+  {{ $path | trimPrefix "configs/" | replace "/" "_" }}: |
 {{ $.Files.Get $path | indent 4 }}
 {{- end }}
