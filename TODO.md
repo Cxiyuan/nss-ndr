@@ -15,18 +15,21 @@
   - [x] ES 认证加固（xpack security + 应用用户）
   - [ ] 文件提取 + Strelka（可选，延后）
 
-## 部署验证（待用户指定服务器）
+## 部署验证（2026-08-09 已完成，10.44.77.250）
 
-- [ ] k3s 节点准备：`vm.max_map_count=262144`、`ghcr-pull` secret、/nsm 数据盘
-- [ ] `kubectl apply -k deploy/k3s/` 验证全栈
-- [ ] 验证 eve.json / zeek JSON 落盘与 ES 检索（M0/M1 验收）
-- [ ] 验证自定义规则 → 告警 → Webhook 推送闭环（M2 验收）
-- [ ] 验证 pcap 留存/清理阈值（M3 验收）
+- [x] `kubectl apply -k deploy/k3s/` 全栈部署：suricata/zeek/es/filebeat/kibana/detections/xdr-push/cleaner 全部 Running
+- [x] 镜像口参数化：`configs/probe.local.yaml`（interface=enp5s0，不入库）→ `render-configs.py` 生成 ConfigMap
+- [x] 数据管道：eve.json + zeek JSON 落盘 → filebeat → ES（`logs-suricata.alerts-so` / `logs-zeek-so`，自定义 pipeline/ILM/模板）
+- [x] Kibana 30601 / detections 30602 NodePort 可访问
+- [x] 告警闭环：注入测试告警 → xdr-push 查询命中 → Webhook 重试推送 → 失败写死信（18888 为测试地址）
+- [x] suricata unix socket 热加载通道（detections reload-rules）
+- [x] 部署机未改 k3s/rancher 配置；`vm.max_map_count` 本机已 1048576（满足 ES 要求），未做系统级修改
+- [ ] 清理阈值实测：cleaner 已跑（Completed），需观察 pcap 增长后按 retention/storage_limit 清理（M3 验收）
+- [ ] 接入真实 XDR Webhook 地址（替换 `probe.local.yaml` 中 18888 测试 URL 后重新渲染 ConfigMap）
 
 ## 待确认项
 
+- [x] GHCR 包可见性：仓库级命名空间 `ghcr.io/cxiyuan/nss-ndr/*`，随 public 仓库自动公开（方法B）
 - [ ] XDR 侧确认 Webhook 报文规范（docs/架构设计 §5.8）
-- [ ] GHCR 包可见性：私有+secret（默认）还是公开
 - [ ] ES 版本/许可：Elasticsearch 9.3.3（默认）还是 OpenSearch
-- [ ] detections UI：先 REST API + 极简页，还是完整界面
 - [ ] Zeek 轮转历史是否补采进 ES（默认只留档）
