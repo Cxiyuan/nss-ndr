@@ -1,0 +1,39 @@
+#!/bin/bash
+# NSS-NDR Suricata 入口
+# 环境变量：
+#   INTERFACE   抓包接口（必填，如 bond0 / eth1）
+#   EXTRA_ARGS  附加 suricata 参数（可选）
+
+set -e
+
+CONF=/opt/so/conf
+
+# 从 ConfigMap（挂载于 /opt/so/conf）同步配置
+if [ -f "$CONF/suricata.yaml" ]; then
+  cp -f "$CONF/suricata.yaml" /etc/suricata/suricata.yaml
+fi
+[ -f "$CONF/threshold.conf" ] && cp -f "$CONF/threshold.conf" /etc/suricata/threshold.conf
+[ -f "$CONF/bpf" ] && cp -f "$CONF/bpf" /etc/suricata/bpf
+if [ -f "$CONF/all-rulesets.rules" ]; then
+  cp -f "$CONF/all-rulesets.rules" /etc/suricata/rules/all-rulesets.rules
+fi
+chown -R 940:940 /etc/suricata/rules
+
+AFPACKET=
+if [ -n "$INTERFACE" ]; then
+  AFPACKET="--af-packet=$INTERFACE"
+fi
+
+# 清理旧 PID，确保可启动
+mkdir -p /var/run/suricata
+chown 940:940 /var/run/suricata
+chmod 770 /var/run/suricata
+rm -rf /var/run/suricata.pid
+
+exec /opt/suricata/bin/suricata \
+  -c /etc/suricata/suricata.yaml \
+  $AFPACKET \
+  --user=940 --group=940 \
+  --pidfile /var/run/suricata.pid \
+  -F /etc/suricata/bpf \
+  $EXTRA_ARGS

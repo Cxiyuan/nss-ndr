@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nss-zeek
+  namespace: nss-ndr
+  labels:
+    app: nss-zeek
+spec:
+  selector:
+    matchLabels:
+      app: nss-zeek
+  template:
+    metadata:
+      labels:
+        app: nss-zeek
+    spec:
+      hostNetwork: true
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: zeek
+          image: nss-ndr/zeek:0.1.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          env:
+            - name: NSS_SENSORNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: nss-ndr-config
+                  key: sensor_id
+          volumeMounts:
+            - name: config
+              mountPath: /opt/so/conf
+              readOnly: true
+            - name: nsm
+              mountPath: /nsm
+          resources:
+            limits:
+              cpu: "4"
+              memory: 4Gi
+            requests:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: nss-ndr-config
+        - name: nsm
+          persistentVolumeClaim:
+            claimName: nss-ndr-nsm

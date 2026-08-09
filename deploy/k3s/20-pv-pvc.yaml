@@ -1,0 +1,39 @@
+# NSS-NDR 数据卷
+# M0 默认使用 k3s 内置 local-path（零配置）。生产建议按注释改用 hostPath/LocalPV：
+#   1) 在节点上准备 /nsm 数据盘（建议独立挂载）
+#   2) 将下面的 PVC 的 storageClassName 改为 local-nsm，并创建对应 PV（见文件尾部注释）
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nss-ndr-nsm
+  namespace: nss-ndr
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1000Gi
+---
+# 生产 LocalPV 示例（把 REPLACE_NODE_NAME 换成探针节点名后启用）：
+#
+# apiVersion: v1
+# kind: PersistentVolume
+# metadata:
+#   name: nss-ndr-nsm-local
+# spec:
+#   capacity:
+#     storage: 1000Gi
+#   accessModes: [ReadWriteOnce]
+#   persistentVolumeReclaimPolicy: Retain
+#   storageClassName: local-nsm
+#   local:
+#     path: /nsm
+#   nodeAffinity:
+#     required:
+#       nodeSelectorTerms:
+#         - matchExpressions:
+#             - key: kubernetes.io/hostname
+#               operator: In
+#               values: ["REPLACE_NODE_NAME"]

@@ -1,0 +1,43 @@
+# NSS-NDR 流量探针
+
+NDR 流量探针：Suricata（NIDS + 全包）+ Zeek（元数据）的容器化流量检测单元，部署在单节点 k3s，告警通过 Webhook 实时推送到主平台 XDR。
+
+## 目录结构
+
+```text
+docs/                     # 设计文档（调研报告、架构设计）
+images/
+  suricata/               # Suricata 8.0.5 镜像（NIDS + pcap-log）
+  zeek/                   # Zeek 8.0.8 镜像（元数据 + 文件提取）
+deploy/k3s/               # k3s 清单（namespace/ConfigMap/PV/DaemonSet）
+configs/                  # 探针配置文件示例（probe.yaml）
+scripts/                  # 配置渲染等开发工具
+```
+
+## 当前状态
+
+- [x] M0 骨架：引擎镜像 + k3s 清单 + 配置模板（本提交）
+- [ ] M1：filebeat + elasticsearch + kibana 本地检索闭环
+- [ ] M2：detections 规则管理 + xdr-push Webhook 推送
+- [ ] M3：全包清理（cleaner）+ 文件提取 + Helm Chart
+
+## 快速开始（M0）
+
+```bash
+# 1. 修改探针配置（接口/网段/阈值/XDR 地址等）
+cp configs/probe.yaml.example configs/probe.yaml
+$EDITOR configs/probe.yaml
+
+# 2. 渲染 k3s 清单中的 ConfigMap
+python3 scripts/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
+
+# 3. 部署到 k3s
+kubectl apply -k deploy/k3s/
+kubectl -n nss-ndr get pods
+```
+
+## 许可说明
+
+- 设计参考 Security Onion 3.1.0（Elastic License 2.0）。本项目自研实现为主；
+  若后续直接引入 SO 的 ingest pipeline/组件模板等资产，需按 ELv2 要求评估合规性（详见 `docs/架构设计-NDR探针-容器化-k3s.md` §10.2）。
+- Suricata / Zeek 为 GPL-2.0 / BSD 系开源软件，按各自许可使用。

@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 00-namespace.yaml
+  - 10-configmap.yaml
+  - 20-pv-pvc.yaml
+  - 30-suricata-daemonset.yaml
+  - 31-zeek-daemonset.yaml

@@ -1,0 +1,56 @@
+# NSS-NDR 探针配置文件（示例）
+# 修改后运行：python3 scripts/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
+
+probe:
+  id: nss-001                 # 探针唯一标识（observer.name / 推送标记）
+  interface: bond0            # 镜像口（抓包网卡）
+  home_net:                   # HOME_NET 地址组
+    - 10.0.0.0/8
+    - 192.168.0.0/16
+    - 172.16.0.0/12
+  external_net: any           # EXTERNAL_NET
+  bpf: ""                     # 可选 BPF 过滤（如 "not port 22"）
+  min_free_gb: 20             # 磁盘低水位告警（GB）
+  disk_pressure_threshold: 90 # /nsm 用量百分比，超过触发强制清理（兜底）
+  cleanup_interval: "1h"      # cleaner 扫描周期
+
+suricata:
+  enabled: true
+  af_packet_threads: 4        # AF_PACKET worker 数
+  pcap:
+    enabled: true
+    file_size_mb: 1000        # 全包单文件大小
+    compression: none         # none | lz4
+    retention_days: 7         # 全包留存天数
+    storage_limit_gb: 500     # 全包目录存储上限（GB）
+  eve:
+    retention_days: 7         # eve.json 留档天数
+
+zeek:
+  enabled: true
+  workers: 4                  # Zeek worker 数（AF_PACKET fanout）
+  buffer_size: 128*1024*1024  # AF_PACKET 缓冲区
+  log_rotation_interval_s: 3600
+  history_retention_days: 30  # 轮转历史留档天数
+  extraction:
+    max_days: 7               # 提取文件留档天数
+
+elasticsearch:
+  heap_gb: 2
+  retention:
+    metadata_days: 60         # ES ILM：元数据
+    alerts_days: 365          # ES ILM：告警
+
+detections:
+  default_ruleset: none       # 默认不加载任何规则（M2 启用）
+
+xdr:
+  webhook:
+    url: https://xdr.example.com/api/v1/alerts/webhook   # XDR 接收地址（可改）
+    secret: ""                                          # 可选 HMAC 签名密钥
+  timeout_s: 10
+  push_interval_s: 2          # 告警轮询/推送周期
+  retry_max: 5
+  event_types:                # 推送白名单
+    - suricata.alert
+    - zeek.notice
