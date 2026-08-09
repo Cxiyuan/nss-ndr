@@ -6,6 +6,7 @@ set -e
 ES_URL="${ES_URL:-https://localhost:9200}"
 ES_USER="${ES_USER:-}"
 ES_PASS="${ES_PASS:-}"
+ES_SECURITY="${ES_SECURITY:-false}"
 CURL_AUTH=
 [ -n "$ES_USER" ] && CURL_AUTH="-u ${ES_USER}:${ES_PASS}"
 
@@ -27,7 +28,28 @@ import_json() {
     }
 }
 
+create_app_users() {
+  [ "$ES_SECURITY" = "true" ] || return 0
+  [ -n "$FB_PASSWORD" ] && [ -n "$KIBANA_PASSWORD" ] && [ -n "$XDR_PASSWORD" ] || {
+    echo "warn: 缺少应用用户密码环境变量，跳过用户创建"
+    return 1
+  }
+  create_user() {
+    local name=$1 pass=$2 roles=$3
+    curl -sk $CURL_AUTH -X POST "$ES_URL/_security/user/$name" \
+      -H "Content-Type: application/json" \
+      -d "{\"password\":\"$pass\",\"roles\":[\"$roles\"]}" \
+      -o /dev/null -w "%{http_code}" | grep -qE "^2[0-9]{2}$" \
+      && echo "$(date) - 已创建/更新用户 $name" \
+      || echo "$(date) - 创建用户 $name 失败"
+  }
+  create_user filebeat "$FB_PASSWORD" superuser
+  create_user kibana_system "$KIBANA_PASSWORD" kibana_system
+  create_user xdr-push "$XDR_PASSWORD" superuser
+}
+
 load_once() {
+  create_app_users
   for f in /pipelines/*.json; do
     name=$(basename "$f" .json)
     echo "$(date) - 导入 pipeline: $name"

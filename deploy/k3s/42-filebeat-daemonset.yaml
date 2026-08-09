@@ -26,9 +26,12 @@ spec:
             - name: ES_HOST
               value: "https://nss-elasticsearch:9200"
             - name: ES_USERNAME
-              value: ""
+              value: "filebeat"
             - name: ES_PASSWORD
-              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: filebeat-password
           volumeMounts:
             - name: config
               mountPath: /usr/share/filebeat/filebeat.yml

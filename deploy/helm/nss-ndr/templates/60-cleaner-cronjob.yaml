@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nss-cleaner
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: {{ .Values.cleaner.schedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          tolerations: [{operator: Exists}]
+          imagePullSecrets: {{ toYaml .Values.images.pullSecrets | nindent 12 }}
+          containers:
+            - name: cleaner
+              image: "{{ .Values.images.registry }}/nss-ndr-cleaner:{{ .Values.images.tag }}"
+              imagePullPolicy: IfNotPresent
+              volumeMounts:
+                - {name: config, mountPath: /opt/so/conf, readOnly: true}
+                - {name: nsm, mountPath: /nsm}
+                - {name: state, mountPath: /opt/so/state}
+          volumes:
+            - {name: config, configMap: {name: nss-ndr-config}}
+            - {name: nsm, persistentVolumeClaim: {claimName: nss-ndr-nsm}}
+            - {name: state, hostPath: {path: /opt/so/state, type: DirectoryOrCreate}}

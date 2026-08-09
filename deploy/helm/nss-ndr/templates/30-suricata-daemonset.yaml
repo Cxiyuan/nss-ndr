@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nss-suricata
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels: {app: nss-suricata}
+  template:
+    metadata:
+      labels: {app: nss-suricata}
+    spec:
+      hostNetwork: true
+      tolerations: [{operator: Exists}]
+      imagePullSecrets: {{ toYaml .Values.images.pullSecrets | nindent 8 }}
+      containers:
+        - name: suricata
+          image: "{{ .Values.images.registry }}/nss-ndr-suricata:{{ .Values.images.tag }}"
+          imagePullPolicy: IfNotPresent
+          securityContext: {privileged: true}
+          env:
+            - name: INTERFACE
+              valueFrom: {configMapKeyRef: {name: nss-ndr-config, key: interface}}
+            - name: NSS_SENSORNAME
+              valueFrom: {configMapKeyRef: {name: nss-ndr-config, key: sensor_id}}
+          volumeMounts:
+            - {name: config, mountPath: /opt/so/conf, readOnly: true}
+            - {name: nsm, mountPath: /nsm}
+            - {name: rules, mountPath: /etc/suricata/rules}
+            - {name: run, mountPath: /var/run/suricata}
+          {{- with .Values.resources.suricata }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - {name: config, configMap: {name: nss-ndr-config}}
+        - {name: nsm, persistentVolumeClaim: {claimName: nss-ndr-nsm}}
+        - {name: rules, hostPath: {path: /opt/so/rules/suricata, type: DirectoryOrCreate}}
+        - {name: run, hostPath: {path: /opt/so/run/suricata, type: DirectoryOrCreate}}

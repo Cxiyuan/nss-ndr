@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -31,11 +33,16 @@ type Poller struct {
 	host   string
 	client *http.Client
 	types  []string
+	auth   string
 }
 
 func NewPoller(host string, cfg Config) *Poller {
 	if host == "" {
 		host = defaultHost
+	}
+	auth := ""
+	if u, p := os.Getenv("ES_USERNAME"), os.Getenv("ES_PASSWORD"); u != "" {
+		auth = "Basic " + base64.StdEncoding.EncodeToString([]byte(u+":"+p))
 	}
 	return &Poller{
 		host: host,
@@ -46,6 +53,7 @@ func NewPoller(host string, cfg Config) *Poller {
 			},
 		},
 		types: cfg.XDR.EventTypes,
+		auth:  auth,
 	}
 }
 
@@ -79,6 +87,9 @@ func (p *Poller) Fetch(c Cursor) ([]Hit, *Cursor, error) {
 		return nil, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if p.auth != "" {
+		req.Header.Set("Authorization", p.auth)
+	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {

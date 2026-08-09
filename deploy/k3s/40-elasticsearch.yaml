@@ -28,7 +28,12 @@ spec:
             - name: discovery.type
               value: single-node
             - name: xpack.security.enabled
-              value: "false"
+              value: "true"
+            - name: ELASTIC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: elastic-password
             - name: ES_JAVA_OPTS
               value: "-Xms2g -Xmx2g"
             - name: ingest.geoip.downloader.enabled
@@ -53,6 +58,30 @@ spec:
           env:
             - name: ES_URL
               value: "http://localhost:9200"
+            - name: ES_SECURITY
+              value: "true"
+            - name: ES_USER
+              value: "elastic"
+            - name: ES_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: elastic-password
+            - name: FB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: filebeat-password
+            - name: KIBANA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: kibana-password
+            - name: XDR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: xdr-push-password
       volumes:
         - name: data
           persistentVolumeClaim:

@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nss-zeek
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels: {app: nss-zeek}
+  template:
+    metadata:
+      labels: {app: nss-zeek}
+    spec:
+      hostNetwork: true
+      tolerations: [{operator: Exists}]
+      imagePullSecrets: {{ toYaml .Values.images.pullSecrets | nindent 8 }}
+      containers:
+        - name: zeek
+          image: "{{ .Values.images.registry }}/nss-ndr-zeek:{{ .Values.images.tag }}"
+          imagePullPolicy: IfNotPresent
+          securityContext: {privileged: true}
+          env:
+            - name: NSS_SENSORNAME
+              valueFrom: {configMapKeyRef: {name: nss-ndr-config, key: sensor_id}}
+          volumeMounts:
+            - {name: config, mountPath: /opt/so/conf, readOnly: true}
+            - {name: nsm, mountPath: /nsm}
+          {{- with .Values.resources.zeek }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - {name: config, configMap: {name: nss-ndr-config}}
+        - {name: nsm, persistentVolumeClaim: {claimName: nss-ndr-nsm}}

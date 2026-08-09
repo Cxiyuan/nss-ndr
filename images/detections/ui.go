@@ -28,6 +28,7 @@ button{cursor:pointer}
 <input id="name" placeholder="规则名" size="24">
 <label><input type="checkbox" id="enabled" checked> 启用</label><br>
 <textarea id="rule" rows="4" cols="80" placeholder="Suricata 规则，如：alert tcp any any -> any any (msg:&quot;test&quot;; sid:9000001; rev:1;)"></textarea><br>
+<input id="threshold" size="60" placeholder="可选阈值/抑制：如 type limit, track by_src, count 1, seconds 60"><br>
 <button onclick="createRule()">提交</button>
 <h2>规则列表</h2>
 <table id="rules">
@@ -52,7 +53,7 @@ async function load() {
   });
 }
 async function createRule() {
-  var body = {name: document.getElementById('name').value, rule: document.getElementById('rule').value, enabled: document.getElementById('enabled').checked};
+  var body = {name: document.getElementById('name').value, rule: document.getElementById('rule').value, threshold: document.getElementById('threshold').value, enabled: document.getElementById('enabled').checked};
   var r = await fetch('/api/rules', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
   if (r.status === 201) { alert('已添加并重载'); document.getElementById('rule').value=''; }
   else { alert((await r.json()).error || '失败'); }

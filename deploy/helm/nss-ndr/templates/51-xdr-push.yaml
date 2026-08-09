@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-xdr-push
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: nss-xdr-push}
+  template:
+    metadata:
+      labels: {app: nss-xdr-push}
+    spec:
+      imagePullSecrets: {{ toYaml .Values.images.pullSecrets | nindent 8 }}
+      containers:
+        - name: xdr-push
+          image: "{{ .Values.images.registry }}/nss-ndr-xdr-push:{{ .Values.images.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: ES_HOST, value: "https://nss-elasticsearch:9200"}
+            - {name: ES_USERNAME, value: "xdr-push"}
+            - name: ES_PASSWORD
+              valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: xdr-push-password}}
+          volumeMounts:
+            - {name: config, mountPath: /opt/so/conf, readOnly: true}
+            - {name: state, mountPath: /opt/so/state}
+      volumes:
+        - {name: config, configMap: {name: nss-ndr-config}}
+        - {name: state, hostPath: {path: /opt/so/state, type: DirectoryOrCreate}}

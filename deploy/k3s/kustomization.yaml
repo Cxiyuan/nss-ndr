@@ -5,6 +5,7 @@ resources:
   - 00-namespace.yaml
   - 10-configmap.yaml
   - 20-pv-pvc.yaml
+  - 25-secret.yaml
   - 30-suricata-daemonset.yaml
   - 31-zeek-daemonset.yaml
   - 40-elasticsearch.yaml
@@ -12,6 +13,7 @@ resources:
   - 42-filebeat-daemonset.yaml
   - 50-detections.yaml
   - 51-xdr-push.yaml
+  - 60-cleaner-cronjob.yaml
 
 # 镜像 tag 覆盖：构建后把 newTag 改为对应 git sha 以固定版本
 images:
@@ -28,4 +30,6 @@ images:
   - name: ghcr.io/cxiyuan/nss-ndr-detections
     newTag: latest
   - name: ghcr.io/cxiyuan/nss-ndr-xdr-push
+    newTag: latest
+  - name: ghcr.io/cxiyuan/nss-ndr-cleaner
     newTag: latest

@@ -42,6 +42,9 @@ jobs:
           - name: xdr-push
             context: images/xdr-push
             file: images/xdr-push/Dockerfile
+          - name: cleaner
+            context: images/cleaner
+            file: images/cleaner/Dockerfile
 
     steps:
       - name: Checkout

@@ -1,0 +1,76 @@
+# NSS-NDR Helm values
+
+images:
+  registry: ghcr.io/cxiyuan
+  tag: latest
+  pullSecrets:
+    - name: ghcr-pull
+  elasticsearch: docker.elastic.co/elasticsearch/elasticsearch:9.3.3
+
+# 与 configs/probe.yaml 同结构的探针配置
+probeConfig:
+  probe:
+    id: nss-001
+    interface: bond0
+    home_net:
+      - 10.0.0.0/8
+      - 192.168.0.0/16
+      - 172.16.0.0/12
+    external_net: any
+    bpf: ""
+    min_free_gb: 20
+    disk_pressure_threshold: 90
+    cleanup_interval: "1h"
+  suricata:
+    enabled: true
+    af_packet_threads: 4
+    pcap:
+      enabled: true
+      file_size_mb: 1000
+      compression: none
+      retention_days: 7
+      storage_limit_gb: 500
+    eve:
+      retention_days: 7
+  zeek:
+    enabled: true
+    workers: 4
+    buffer_size: 128*1024*1024
+    log_rotation_interval_s: 3600
+    history_retention_days: 30
+    extraction:
+      max_days: 7
+  elasticsearch:
+    heap_gb: 2
+    retention:
+      metadata_days: 60
+      alerts_days: 365
+  detections:
+    default_ruleset: none
+  xdr:
+    webhook:
+      url: https://xdr.example.com/api/v1/alerts/webhook
+      secret: ""
+    timeout_s: 10
+    push_interval_s: 2
+    retry_max: 5
+    event_types:
+      - suricata.alert
+      - zeek.notice
+
+# 凭据（部署前修改）
+secrets:
+  elastic: CHANGE_ME_elastic
+  filebeat: CHANGE_ME_filebeat
+  kibana: CHANGE_ME_kibana
+  xdrPush: CHANGE_ME_xdr
+
+service:
+  kibanaNodePort: 30601
+  detectionsNodePort: 30602
+
+cleaner:
+  schedule: "0 * * * *"
+
+# 资源配额（可选覆盖；默认见各模板）
+resources: {}

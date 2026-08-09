@@ -1,0 +1,60 @@
+# NSS-NDR filebeat 配置模板（由 render-configs.py 渲染，${VAR} 为占位符）
+
+filebeat.inputs:
+  - type: filestream
+    id: suricata-eve
+    enabled: true
+    paths:
+      - /nsm/suricata/eve*.json
+    exclude_files:
+      - '\.gz$'
+    parsers:
+      - ndjson:
+          target: ""
+    processors:
+      - add_fields:
+          target: event
+          fields:
+            category: network
+            module: suricata
+
+  - type: filestream
+    id: zeek-logs
+    enabled: true
+    paths:
+      - /nsm/zeek/logs/current/*.log
+    exclude_files:
+      - '(broker|capture_loss|cluster|conn-summary|console|ecat_arp_info|known_certs|known_hosts|known_services|loaded_scripts|ntp|ocsp|packet_filter|reporter|stats|stderr|stdout)(\..+)?\.log$'
+    processors:
+      - dissect:
+          tokenizer: "/nsm/zeek/logs/current/%{pipeline}.log"
+          field: log.file.path
+          trim_chars: ".log"
+          target_prefix: ""
+      - script:
+          lang: javascript
+          source: >
+            function process(event) {
+              var pl = event.Get("pipeline");
+              event.Put("@metadata.pipeline", "zeek." + pl);
+            }
+      - add_fields:
+          target: event
+          fields:
+            category: network
+            module: zeek
+      - add_tags:
+          tags: ["ics"]
+          when:
+            regexp:
+              pipeline: "^bacnet|^bsap|^cip|^cotp|^dnp3|^ecat|^enip|^modbus|^opcua|^profinet|^s7comm"
+
+output.elasticsearch:
+  hosts: ["${ES_HOST:https://nss-elasticsearch:9200}"]
+  username: "${ES_USERNAME:}"
+  password: "${ES_PASSWORD:}"
+  ssl.verification_mode: none
+  index: "logs-nss-ndr"
+
+setup.template.enabled: false
+logging.level: info

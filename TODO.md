@@ -8,12 +8,12 @@
   - [x] detections 服务（规则 CRUD / 启停 / 自定义规则 / suricata 热加载）
   - [x] xdr-push 服务（ES 轮询新告警 → Webhook 推送，游标/重试/去重/HMAC）
   - [x] 镜像构建与 k8s 清单
-  - [ ] 阈值/抑制（threshold/suppress）规则支持（M3 补）
-- [ ] **M3 运维完善**
-  - [ ] cleaner（全包/日志双阈值 + 磁盘压力兜底）
-  - [ ] 文件提取 + Strelka（可选）
-  - [ ] Helm Chart 化
-  - [ ] ES 认证加固（M1 暂关 security）
+  - [x] 阈值/抑制（规则内嵌 threshold 关键字，reload 即生效）
+- [x] **M3 运维完善**
+  - [x] cleaner（全包/日志双阈值 + 磁盘压力兜底）
+  - [x] Helm Chart 化
+  - [x] ES 认证加固（xpack security + 应用用户）
+  - [ ] 文件提取 + Strelka（可选，延后）
 
 ## 部署验证（待用户指定服务器）
 

@@ -16,6 +16,7 @@ type Rule struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Rule      string    `json:"rule"`
+	Threshold string    `json:"threshold,omitempty"` // 可选：内嵌 threshold/suppress 配置
 	Type      string    `json:"type"` // custom | builtin
 	Enabled   bool      `json:"enabled"`
 	Category  string    `json:"category,omitempty"`
@@ -144,8 +145,9 @@ func (s *Store) Apply() error {
 			continue
 		}
 		sb.WriteString("# === " + r.Name + " ===\n")
-		sb.WriteString(r.Rule)
-		if !strings.HasSuffix(r.Rule, "\n") {
+		text := injectThreshold(r.Rule, r.Threshold)
+		sb.WriteString(text)
+		if !strings.HasSuffix(text, "\n") {
 			sb.WriteString("\n")
 		}
 	}
@@ -157,4 +159,16 @@ func (s *Store) Apply() error {
 	}
 	log.Printf("已渲染 %s（%d 字节）", rulesFile, sb.Len())
 	return reloadSuricata()
+}
+
+// injectThreshold 把阈值/抑制配置内嵌到规则末尾括号前（suricata 原生支持，reload 即生效）
+func injectThreshold(rule, threshold string) string {
+	if strings.TrimSpace(threshold) == "" {
+		return rule
+	}
+	idx := strings.LastIndex(rule, ")")
+	if idx < 0 {
+		return rule
+	}
+	return rule[:idx] + "threshold: " + strings.TrimSpace(threshold) + "; " + rule[idx:]
 }

@@ -19,7 +19,7 @@ scripts/                  # 配置渲染等开发工具
 - [x] M0 骨架：引擎镜像 + k3s 清单 + 配置模板（本提交）
 - [x] M1：filebeat + elasticsearch + kibana 本地检索闭环（镜像/清单/管道就绪，待部署验证）
 - [x] M2：detections 规则管理 + xdr-push Webhook 推送（镜像/清单就绪，待部署验证）
-- [ ] M3：全包清理（cleaner）+ 文件提取 + Helm Chart
+- [x] M3：cleaner 全包/日志清理 + 阈值/抑制 + ES 认证加固 + Helm Chart
 
 ## 快速开始（M0）
 
@@ -36,6 +36,16 @@ kubectl apply -k deploy/k3s/
 kubectl -n nss-ndr get pods
 ```
 
+## Helm 部署
+
+```bash
+# 修改 deploy/helm/nss-ndr/values.yaml（探针配置/凭据）后：
+helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-namespace
+```
+
+> `deploy/helm/nss-ndr/configs/` 与 `images/*/files/` 保持同步，改引擎配置后运行
+> `scripts/sync-helm-configs.sh`。
+
 ## 镜像构建（GitHub Actions）
 
 - 推送 `master` 分支或 `v*` tag 时，`.github/workflows/build-images.yml` 自动构建 Suricata/Zeek 镜像并推送到 GHCR：
@@ -50,7 +60,8 @@ kubectl -n nss-ndr get pods
 ### 部署前提（ES）
 
 - 节点需设置 `vm.max_map_count=262144`（`sysctl -w vm.max_map_count=262144`，写入 `/etc/sysctl.d/` 持久化）。
-- M1 使用 ES 官方镜像 `docker.elastic.co/elasticsearch/elasticsearch:9.3.3`，安全功能暂关闭（`xpack.security.enabled=false`），M2 引入认证。
+- M2/M3：ES 已启用 xpack security；部署前修改 `deploy/k3s/25-secret.yaml`（或 Helm
+  `values.secrets`）中的 4 个密码，es-init 会自动创建 filebeat / kibana_system / xdr-push 应用用户。
 
 ### k3s 拉取 GHCR 镜像
 

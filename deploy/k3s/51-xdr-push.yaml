@@ -24,6 +24,13 @@ spec:
           env:
             - name: ES_HOST
               value: "https://nss-elasticsearch:9200"
+            - name: ES_USERNAME
+              value: "xdr-push"
+            - name: ES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: xdr-push-password
           volumeMounts:
             - name: config
               mountPath: /opt/so/conf

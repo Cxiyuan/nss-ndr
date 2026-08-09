@@ -21,6 +21,7 @@ func handleCreateRule(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name     string `json:"name"`
 		Rule     string `json:"rule"`
+		Threshold string `json:"threshold"`
 		Enabled  bool   `json:"enabled"`
 		Category string `json:"category"`
 	}
@@ -36,6 +37,7 @@ func handleCreateRule(w http.ResponseWriter, r *http.Request) {
 		ID:       newID("rule"),
 		Name:     body.Name,
 		Rule:     body.Rule,
+		Threshold: body.Threshold,
 		Type:     "custom",
 		Enabled:  body.Enabled,
 		Category: body.Category,
@@ -59,6 +61,7 @@ func handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name     *string `json:"name"`
 		Rule     *string `json:"rule"`
+		Threshold *string `json:"threshold"`
 		Enabled  *bool   `json:"enabled"`
 		Category *string `json:"category"`
 	}
@@ -71,6 +74,9 @@ func handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Rule != nil {
 		rule.Rule = *body.Rule
+	}
+	if body.Threshold != nil {
+		rule.Threshold = *body.Threshold
 	}
 	if body.Enabled != nil {
 		rule.Enabled = *body.Enabled
