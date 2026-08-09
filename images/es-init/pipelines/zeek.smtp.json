@@ -1,0 +1,9 @@
+{
+  "description": "NSS-NDR zeek.smtp",
+  "processors": [
+    { "set": { "field": "event.dataset", "value": "smtp" } },
+    { "json": { "field": "message", "target_field": "message2", "ignore_failure": true } },
+    { "rename": { "field": "message2.subject", "target_field": "email.subject", "ignore_missing": true } },
+    { "pipeline": { "name": "zeek.common" } }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "description": "NSS-NDR zeek.ssl",
+  "processors": [
+    { "set": { "field": "event.dataset", "value": "ssl" } },
+    { "json": { "field": "message", "target_field": "message2", "ignore_failure": true } },
+    { "rename": { "field": "message2.version", "target_field": "tls.version", "ignore_missing": true } },
+    { "rename": { "field": "message2.server_name", "target_field": "tls.server.name", "ignore_missing": true } },
+    { "rename": { "field": "message2.ja3", "target_field": "tls.ja3", "ignore_missing": true } },
+    { "rename": { "field": "message2.ja3s", "target_field": "tls.ja3s", "ignore_missing": true } },
+    { "rename": { "field": "message2.cipher", "target_field": "tls.cipher", "ignore_missing": true } },
+    { "pipeline": { "name": "zeek.common" } }
+  ]
+}
