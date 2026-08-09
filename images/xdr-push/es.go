@@ -13,8 +13,8 @@ import (
 )
 
 type Cursor struct {
-	TS int64  `json:"ts"`
-	ID string `json:"id"`
+	TS       int64 `json:"ts"`
+	ShardDoc int64 `json:"shard_doc"`
 }
 
 type Hit struct {
@@ -72,11 +72,12 @@ func (p *Poller) Fetch(c Cursor) ([]Hit, *Cursor, error) {
 		},
 		"sort": []any{
 			map[string]any{"@timestamp": map[string]any{"order": "asc", "unmapped_type": "long"}},
-			map[string]any{"_id": map[string]any{"order": "asc", "unmapped_type": "keyword"}},
+			// _id 排序需要开启 fielddata（默认禁用），改用 _shard_doc 作为分页 tiebreaker
+			map[string]any{"_shard_doc": map[string]any{"order": "asc"}},
 		},
 	}
 	if c.TS != 0 {
-		body["search_after"] = []any{c.TS, c.ID}
+		body["search_after"] = []any{c.TS, c.ShardDoc}
 	}
 	data, _ := json.Marshal(body)
 
@@ -112,8 +113,8 @@ func (p *Poller) Fetch(c Cursor) ([]Hit, *Cursor, error) {
 	var next *Cursor
 	if len(last.Sort) == 2 {
 		ts, _ := last.Sort[0].(float64)
-		id, _ := last.Sort[1].(string)
-		next = &Cursor{TS: int64(ts), ID: id}
+		shardDoc, _ := last.Sort[1].(float64)
+		next = &Cursor{TS: int64(ts), ShardDoc: int64(shardDoc)}
 	}
 	return sr.Hits.Hits, next, nil
 }

@@ -65,7 +65,7 @@ func main() {
 
 	cursor, err := loadCursor()
 	if err != nil || cursor.TS == 0 {
-		cursor = Cursor{TS: time.Now().Add(-time.Minute).UnixMilli(), ID: ""}
+		cursor = Cursor{TS: time.Now().Add(-time.Minute).UnixMilli(), ShardDoc: 0}
 		log.Printf("初始化游标: %s", time.UnixMilli(cursor.TS).Format(time.RFC3339))
 	}
 
