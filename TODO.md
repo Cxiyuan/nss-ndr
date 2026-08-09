@@ -20,6 +20,15 @@
   - [x] 配置渲染引擎（内置模板 + 扁平化 policy）+ k8s API 下发（ConfigMap + 滚动重启）
   - [x] 规则管理并入（CRUD/启停/内置规则/热加载），detections 服务移除
   - [x] 部署到 10.44.77.250 并验证下发链路（NodePort 30603）
+- [x] **M5 Sigma 检测**
+  - [x] `logs-detections.alerts-so` 数据流/模板/pipeline（es-init）
+  - [x] manager Sigma 规则管理（SQLite CRUD/启停/导入/转换预览，UI 页）
+  - [x] Sigma→ES 查询转换器（网络类字段映射 + selection/condition 解析）
+  - [x] 检测调度器（按 schedule 定时执行，命中写告警，payload 对齐 SO）
+  - [x] 内置 5 条网络类 Sigma 规则（默认禁用）
+  - [x] xdr-push 扩展推送 detections.alerts（Webhook/死信）
+  - [x] 修复数据链路：zeek 各日志类型 pipeline、event.dataset keyword 映射、dns/http/tls 字段映射
+  - [x] 端到端验证：启用规则→执行→告警写入 detections 索引→Webhook 推送（18888 测试地址写死信）
 
 ## 部署验证（2026-08-09 已完成，10.44.77.250）
 
@@ -41,3 +50,4 @@
 - [ ] ES 版本/许可：Elasticsearch 9.3.3（默认）还是 OpenSearch
 - [ ] Zeek 轮转历史是否补采进 ES（默认只留档）
 - [ ] manager 配置初始化：部署后需在 UI 填写镜像口/Webhook 再首次下发（当前已用 API 写入）
+- [ ] Sigma 规则源扩展：支持从 SigmaHQ 仓库拉取/同步（当前内置 + 手动导入）
