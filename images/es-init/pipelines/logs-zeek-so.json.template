@@ -21,10 +21,69 @@
         "source": { "properties": { "ip": { "type": "ip" }, "port": { "type": "long" } } },
         "destination": { "properties": { "ip": { "type": "ip" }, "port": { "type": "long" } } },
         "network": { "properties": { "transport": { "type": "keyword" }, "protocol": { "type": "keyword" } } },
-        "dns": { "type": "object", "dynamic": true },
-        "http": { "type": "object", "dynamic": true },
-        "url": { "type": "object", "dynamic": true },
-        "tls": { "type": "object", "dynamic": true },
+        "dns": {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "keyword" },
+                "type": { "type": "keyword" }
+              }
+            },
+            "response_code": { "type": "keyword" },
+            "answers": { "type": "keyword" }
+          }
+        },
+        "url": {
+          "type": "object",
+          "properties": {
+            "full": { "type": "keyword" },
+            "domain": { "type": "keyword" }
+          }
+        },
+        "http": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "type": "object",
+              "properties": {
+                "method": { "type": "keyword" }
+              }
+            },
+            "response": {
+              "type": "object",
+              "properties": {
+                "status_code": { "type": "long" }
+              }
+            }
+          }
+        },
+        "user_agent": {
+          "type": "object",
+          "properties": {
+            "original": { "type": "keyword" }
+          }
+        },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "version": { "type": "keyword" },
+            "server": { "type": "object", "properties": { "name": { "type": "keyword" } } },
+            "ja3": { "type": "keyword" },
+            "ja3s": { "type": "keyword" },
+            "cipher": { "type": "keyword" }
+          }
+        },
+        "file": {
+          "type": "object",
+          "properties": {
+            "mime_type": { "type": "keyword" },
+            "name": { "type": "keyword" },
+            "source": { "type": "keyword" },
+            "hash": { "type": "object", "properties": { "md5": { "type": "keyword" } } }
+          }
+        },
         "message": { "type": "object", "enabled": false }
       }
     }
