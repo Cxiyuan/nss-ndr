@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nss-ndr-manager
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nss-ndr-manager
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nss-ndr-manager
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: nss-ndr-manager
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: nss-ndr-manager
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-ndr-manager
+  namespace: {{ .Release.Namespace }}
+  labels: {app: nss-ndr-manager}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels: {app: nss-ndr-manager}
+  template:
+    metadata:
+      labels: {app: nss-ndr-manager}
+    spec:
+      serviceAccountName: nss-ndr-manager
+      imagePullSecrets: {{ toYaml .Values.images.pullSecrets | nindent 8 }}
+      containers:
+        - name: ndr-manager
+          image: "{{ .Values.images.registry }}/nss-ndr-ndr-manager:{{ .Values.images.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: LISTEN_ADDR, value: ":8080"}
+          ports:
+            - {containerPort: 8080}
+          volumeMounts:
+            - {name: config, mountPath: /opt/so/conf, readOnly: true}
+            - {name: state, mountPath: /opt/so/state}
+            - {name: rules, mountPath: /opt/so/rules/suricata}
+            - {name: run, mountPath: /var/run/suricata}
+          {{- with .Values.resources.ndrManager }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - {name: config, configMap: {name: nss-ndr-config}}
+        - {name: state, hostPath: {path: /opt/so/state, type: DirectoryOrCreate}}
+        - {name: rules, hostPath: {path: /opt/so/rules/suricata, type: DirectoryOrCreate}}
+        - {name: run, hostPath: {path: /opt/so/run/suricata, type: DirectoryOrCreate}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nss-ndr-manager
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: NodePort
+  selector: {app: nss-ndr-manager}
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: {{ .Values.service.ndrManagerNodePort | default 30603 }}

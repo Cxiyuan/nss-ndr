@@ -1,0 +1,114 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nss-ndr-manager
+  namespace: nss-ndr
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nss-ndr-manager
+  namespace: nss-ndr
+rules:
+  # 配置下发：更新 ConfigMap
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # 配置下发：滚动重启组件
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments"]
+    verbs: ["get", "list", "watch", "patch"]
+  # 状态展示
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nss-ndr-manager
+  namespace: nss-ndr
+subjects:
+  - kind: ServiceAccount
+    name: nss-ndr-manager
+    namespace: nss-ndr
+roleRef:
+  kind: Role
+  name: nss-ndr-manager
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-ndr-manager
+  namespace: nss-ndr
+  labels:
+    app: nss-ndr-manager
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: nss-ndr-manager
+  template:
+    metadata:
+      labels:
+        app: nss-ndr-manager
+    spec:
+      serviceAccountName: nss-ndr-manager
+      containers:
+        - name: ndr-manager
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-manager
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: LISTEN_ADDR
+              value: ":8080"
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: config
+              mountPath: /opt/so/conf
+              readOnly: true
+            - name: state
+              mountPath: /opt/so/state
+            - name: rules
+              mountPath: /opt/so/rules/suricata
+            - name: run
+              mountPath: /var/run/suricata
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: nss-ndr-config
+        - name: state
+          hostPath:
+            path: /opt/so/state
+            type: DirectoryOrCreate
+        - name: rules
+          hostPath:
+            path: /opt/so/rules/suricata
+            type: DirectoryOrCreate
+        - name: run
+          hostPath:
+            path: /opt/so/run/suricata
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nss-ndr-manager
+  namespace: nss-ndr
+spec:
+  type: NodePort
+  selector:
+    app: nss-ndr-manager
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30603

@@ -1,6 +1,9 @@
 /images/*/bin/
 /images/*/detections
 /images/*/xdr-push
+/images/ndr-manager/web/dist/
+/web/node_modules/
+/web/dist/
 # 部署环境参数（不入库）
 /configs/probe.local.yaml
 /deploy/k3s/10-configmap.yaml
