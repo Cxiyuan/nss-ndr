@@ -89,6 +89,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "== 诊断：用户级包 =="
+          gh api "/user/packages/container/nss-ndr-${{ matrix.name }}" --jq '{name,visibility,package_type}' 2>&1 || true
+          echo "== 诊断：仓库关联包列表 =="
+          gh api "/repos/${{ github.repository }}/packages?package_type=container" --jq '.[] | .name + " => " + .visibility' 2>&1 || true
+          echo "== 尝试用户级 PATCH =="
           gh api --method PATCH "/user/packages/container/nss-ndr-${{ matrix.name }}" \
-            -f visibility=public && \
-          echo "包已公开: nss-ndr-${{ matrix.name }}"
+            -f visibility=public && echo "用户级公开成功" || echo "用户级 PATCH 失败"
