@@ -45,6 +45,21 @@ kubectl -n nss-ndr get pods
 - 固定部署版本：把 `deploy/k3s/kustomization.yaml` 中 `images[].newTag` 改为对应 git sha。
 - 前提：基础镜像 `ghcr.io/security-onion-solutions/so-suricata:3.1.0`、`so-zeek:3.1.0` 可被构建机拉取（public）。
 
+### k3s 拉取 GHCR 镜像
+
+GHCR 用户包默认**私有**，k3s 节点需要拉取凭据（DaemonSet 已引用 `imagePullSecrets: ghcr-pull`）：
+
+```bash
+# 在 k3s 节点上，用带 read:packages 权限的 PAT 创建 secret
+kubectl -n nss-ndr create secret docker-registry ghcr-pull \
+  --docker-server=ghcr.io \
+  --docker-username=<你的 GitHub 用户名> \
+  --docker-password=<PAT>
+```
+
+如需公开（跳过 secret），在 GitHub 网页打开对应 Package → Settings → Change visibility 设为 public，并删除
+DaemonSet 中的 `imagePullSecrets`。
+
 ## 许可说明
 
 - 设计参考 Security Onion 3.1.0（Elastic License 2.0）。本项目自研实现为主；
