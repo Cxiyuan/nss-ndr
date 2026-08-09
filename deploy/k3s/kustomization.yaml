@@ -28,7 +28,7 @@ images:
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-filebeat
     newTag: ec759f8362a7b2ecda1efed4d8a6a7cdf5639eb4
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-logstash
-    newTag: latest
+    newTag: 6208394f3b86557e236940f9ad3c982a21cca278
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-kibana
     newTag: ec759f8362a7b2ecda1efed4d8a6a7cdf5639eb4
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-xdr-push
