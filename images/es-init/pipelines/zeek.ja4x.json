@@ -1,0 +1,23 @@
+{
+  "description": "NSS-NDR zeek.ja4x",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "ja4x"
+      }
+    },
+    {
+      "json": {
+        "field": "message",
+        "target_field": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "pipeline": {
+        "name": "zeek.common"
+      }
+    }
+  ]
+}
