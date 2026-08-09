@@ -52,6 +52,20 @@ CREATE TABLE IF NOT EXISTS rules (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS sigma_rules (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  content     TEXT NOT NULL,
+  category    TEXT DEFAULT '',
+  product     TEXT DEFAULT '',
+  service     TEXT DEFAULT '',
+  level       TEXT DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'disabled',
+  schedule    TEXT NOT NULL DEFAULT '5m',
+  last_run_at TEXT DEFAULT '',
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `
 	if _, err := db.Exec(schema); err != nil {
 		return err

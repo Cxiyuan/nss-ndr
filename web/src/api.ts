@@ -38,6 +38,19 @@ export interface Rule {
   updated_at?: string;
 }
 
+export interface SigmaRule {
+  id?: string;
+  title: string;
+  content: string;
+  category?: string;
+  product?: string;
+  service?: string;
+  level?: string;
+  status?: string;
+  schedule?: string;
+  last_run_at?: string;
+}
+
 export const api = {
   health: () => req<any>("GET", "/api/health"),
   listSections: () => req<Section[]>("GET", "/api/configs"),
@@ -55,4 +68,12 @@ export const api = {
   setRuleEnabled: (id: string, enabled: boolean) =>
     req<any>("POST", `/api/rules/${id}/${enabled ? "enable" : "disable"}`),
   applyRules: () => req<any>("POST", "/api/rules/apply"),
+  listSigma: () => req<SigmaRule[]>("GET", "/api/sigma"),
+  createSigma: (r: SigmaRule) => req<SigmaRule>("POST", "/api/sigma", r),
+  updateSigma: (id: string, r: SigmaRule) => req<SigmaRule>("PUT", `/api/sigma/${id}`, r),
+  deleteSigma: (id: string) => req<any>("DELETE", `/api/sigma/${id}`),
+  setSigmaStatus: (id: string, status: string) =>
+    req<any>("POST", `/api/sigma/${id}/${status === "enabled" ? "enable" : "disable"}`),
+  runSigma: (id: string) => req<any>("POST", `/api/sigma/${id}/run`),
+  previewSigma: (id: string) => req<any>("GET", `/api/sigma/${id}/preview`),
 };

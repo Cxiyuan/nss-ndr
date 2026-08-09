@@ -107,7 +107,7 @@ func defaultConfig() FullConfig {
 	c.Xdr.TimeoutS = 10
 	c.Xdr.PushIntervalS = 2
 	c.Xdr.RetryMax = 5
-	c.Xdr.EventTypes = []string{"suricata.alert", "zeek.notice"}
+	c.Xdr.EventTypes = []string{"suricata.alert", "zeek.notice", "detections.alerts"}
 	return c
 }
 

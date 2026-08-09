@@ -1,0 +1,15 @@
+title: Suspicious DNS Query for Dynamic DNS Domain
+id: sigma-nss-001
+status: test
+level: medium
+logsource:
+  category: dns
+  product: zeek
+detection:
+  selection:
+    dns.query_name|contains: 
+      - "duckdns.org"
+      - "freedns.afraid.org"
+      - "no-ip.com"
+      - "dyndns.org"
+  condition: selection

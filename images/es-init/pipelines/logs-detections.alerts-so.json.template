@@ -1,0 +1,41 @@
+{
+  "index_patterns": ["logs-detections.alerts-so*"],
+  "data_stream": {},
+  "priority": 500,
+  "template": {
+    "settings": {
+      "index.lifecycle.name": "nss-ndr-logs",
+      "index.number_of_replicas": 0
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "tags": { "type": "keyword" },
+        "sigma_level": { "type": "keyword" },
+        "event": {
+          "properties": {
+            "kind": { "type": "keyword" },
+            "category": { "type": "keyword" },
+            "severity": { "type": "keyword" },
+            "module": { "type": "keyword" },
+            "dataset": { "type": "keyword" },
+            "severity_label": { "type": "keyword" }
+          }
+        },
+        "rule": {
+          "properties": {
+            "name": { "type": "keyword" },
+            "uuid": { "type": "keyword" },
+            "category": { "type": "keyword" },
+            "product": { "type": "keyword" },
+            "service": { "type": "keyword" }
+          }
+        },
+        "event_data": {
+          "type": "object",
+          "dynamic": true
+        }
+      }
+    }
+  }
+}

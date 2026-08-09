@@ -1,0 +1,18 @@
+title: Connection Attempt to Uncommon Port
+id: sigma-nss-004
+status: test
+level: low
+logsource:
+  category: network_connection
+  product: zeek
+detection:
+  selection:
+    network.transport: "tcp"
+  filter:
+    destination.port:
+      - 80
+      - 443
+      - 22
+      - 53
+      - 3389
+  condition: selection and not filter

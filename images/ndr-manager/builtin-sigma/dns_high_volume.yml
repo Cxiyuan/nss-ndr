@@ -1,0 +1,11 @@
+title: High Volume DNS Queries from Single Host
+id: sigma-nss-002
+status: test
+level: low
+logsource:
+  category: dns
+  product: zeek
+detection:
+  selection:
+    dns.question.type: "1"
+  condition: selection

@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/pages/configpage.tsx","./src/pages/dashboard.tsx","./src/pages/history.tsx","./src/pages/rules.tsx"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/pages/configpage.tsx","./src/pages/dashboard.tsx","./src/pages/history.tsx","./src/pages/rules.tsx","./src/pages/sigma.tsx"],"version":"5.9.3"}

@@ -53,7 +53,7 @@ func loadConfig() {
 		cfg.XDR.RetryMax = 5
 	}
 	if len(cfg.XDR.EventTypes) == 0 {
-		cfg.XDR.EventTypes = []string{"suricata.alert", "zeek.notice"}
+		cfg.XDR.EventTypes = []string{"suricata.alert", "zeek.notice", "detections.alerts"}
 	}
 }
 

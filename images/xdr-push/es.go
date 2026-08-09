@@ -81,7 +81,7 @@ func (p *Poller) Fetch(c Cursor) ([]Hit, *Cursor, error) {
 	}
 	data, _ := json.Marshal(body)
 
-	indexes := strings.Join([]string{"logs-suricata.alerts-so", "logs-zeek-so"}, ",")
+	indexes := strings.Join([]string{"logs-suricata.alerts-so", "logs-zeek-so", "logs-detections.alerts-so"}, ",")
 	req, err := http.NewRequest(http.MethodGet,
 		fmt.Sprintf("%s/%s/_search", p.host, indexes), bytes.NewReader(data))
 	if err != nil {

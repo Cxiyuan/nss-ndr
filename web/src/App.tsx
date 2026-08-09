@@ -3,6 +3,7 @@ import Dashboard from "./pages/Dashboard";
 import ConfigPage from "./pages/ConfigPage";
 import Rules from "./pages/Rules";
 import History from "./pages/History";
+import Sigma from "./pages/Sigma";
 
 const nav = [
   { to: "/", label: "总览", end: true },
@@ -12,6 +13,7 @@ const nav = [
   { to: "/config/elasticsearch", label: "Elasticsearch" },
   { to: "/config/xdr", label: "告警推送" },
   { to: "/rules", label: "规则管理" },
+  { to: "/sigma", label: "Sigma 检测" },
   { to: "/history", label: "历史与审计" },
 ];
 
@@ -42,6 +44,7 @@ export default function App() {
           <Route path="/config/elasticsearch" element={<ConfigPage section="elasticsearch" title="Elasticsearch 配置" />} />
           <Route path="/config/xdr" element={<ConfigPage section="xdr" title="告警推送配置" />} />
           <Route path="/rules" element={<Rules />} />
+          <Route path="/sigma" element={<Sigma />} />
           <Route path="/history" element={<History />} />
         </Routes>
       </main>

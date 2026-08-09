@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type apiConfigSection struct {
@@ -39,6 +40,17 @@ func registerAPI(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/rules/{id}/enable", apiSetRuleEnabled(true))
 	mux.HandleFunc("POST /api/rules/{id}/disable", apiSetRuleEnabled(false))
 	mux.HandleFunc("POST /api/rules/apply", apiApplyRules)
+
+	mux.HandleFunc("GET /api/sigma", apiListSigma)
+	mux.HandleFunc("POST /api/sigma", apiCreateSigma)
+	mux.HandleFunc("POST /api/sigma/import", apiImportSigma)
+	mux.HandleFunc("GET /api/sigma/{id}", apiGetSigma)
+	mux.HandleFunc("PUT /api/sigma/{id}", apiUpdateSigma)
+	mux.HandleFunc("DELETE /api/sigma/{id}", apiDeleteSigma)
+	mux.HandleFunc("POST /api/sigma/{id}/enable", apiSetSigmaStatus("enabled"))
+	mux.HandleFunc("POST /api/sigma/{id}/disable", apiSetSigmaStatus("disabled"))
+	mux.HandleFunc("POST /api/sigma/{id}/run", apiRunSigma)
+	mux.HandleFunc("GET /api/sigma/{id}/preview", apiPreviewSigma)
 }
 
 func apiHealth(w http.ResponseWriter, _ *http.Request) {
@@ -224,6 +236,128 @@ func apiApplyRules(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "规则已渲染，suricata 热加载触发"})
+}
+
+// Sigma handlers
+func apiListSigma(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, listSigmaRules())
+}
+
+func apiGetSigma(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	for _, rule := range listSigmaRules() {
+		if rule.ID == id {
+			writeJSON(w, http.StatusOK, rule)
+			return
+		}
+	}
+	writeErr(w, http.StatusNotFound, "Sigma 规则不存在")
+}
+
+func apiCreateSigma(w http.ResponseWriter, r *http.Request) {
+	var rule SigmaRule
+	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		writeErr(w, http.StatusBadRequest, "请求体解析失败")
+		return
+	}
+	if strings.TrimSpace(rule.Content) == "" {
+		writeErr(w, http.StatusBadRequest, "Sigma 规则内容不能为空")
+		return
+	}
+	if err := upsertSigmaRule(rule); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, rule)
+}
+
+func apiImportSigma(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "请求体解析失败")
+		return
+	}
+	if err := upsertSigmaRule(SigmaRule{Content: body.Content}); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func apiUpdateSigma(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var rule SigmaRule
+	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		writeErr(w, http.StatusBadRequest, "请求体解析失败")
+		return
+	}
+	rule.ID = id
+	if err := upsertSigmaRule(rule); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, rule)
+}
+
+func apiDeleteSigma(w http.ResponseWriter, r *http.Request) {
+	if err := deleteSigmaRule(r.PathValue("id")); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
+}
+
+func apiSetSigmaStatus(status string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := setSigmaRuleStatus(r.PathValue("id"), status); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": status})
+	}
+}
+
+func apiRunSigma(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var rule SigmaRule
+	for _, x := range listSigmaRules() {
+		if x.ID == id {
+			rule = x
+			break
+		}
+	}
+	if rule.ID == "" {
+		writeErr(w, http.StatusNotFound, "Sigma 规则不存在")
+		return
+	}
+	if err := executeSigmaRule(rule, 10*time.Minute); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "检测已执行"})
+}
+
+func apiPreviewSigma(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var rule SigmaRule
+	for _, x := range listSigmaRules() {
+		if x.ID == id {
+			rule = x
+			break
+		}
+	}
+	if rule.ID == "" {
+		writeErr(w, http.StatusNotFound, "Sigma 规则不存在")
+		return
+	}
+	sq, err := buildSigmaQuery(rule.Content)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, sq)
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

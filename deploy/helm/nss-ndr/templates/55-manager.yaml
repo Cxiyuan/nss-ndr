@@ -57,6 +57,9 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - {name: LISTEN_ADDR, value: ":8080"}
+            - {name: ES_HOST, value: "http://nss-elasticsearch:9200"}
+            - {name: ES_USERNAME, value: "xdr-push"}
+            - {name: ES_PASSWORD, valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: xdr-push-password}}}
           ports:
             - {containerPort: 8080}
           volumeMounts:

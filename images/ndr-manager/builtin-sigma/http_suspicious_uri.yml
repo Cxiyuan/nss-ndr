@@ -1,0 +1,15 @@
+title: Suspicious HTTP Request URI
+id: sigma-nss-005
+status: test
+level: medium
+logsource:
+  category: web
+  product: zeek
+detection:
+  selection:
+    url.full|contains:
+      - "cmd.exe"
+      - "powershell"
+      - "/etc/passwd"
+      - "eval("
+  condition: selection
