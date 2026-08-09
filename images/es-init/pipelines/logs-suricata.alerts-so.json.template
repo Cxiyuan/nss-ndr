@@ -6,6 +6,25 @@
     "settings": {
       "index.lifecycle.name": "nss-ndr-logs",
       "index.number_of_replicas": 0
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "event": {
+          "properties": {
+            "dataset": { "type": "keyword" },
+            "module": { "type": "keyword" },
+            "kind": { "type": "keyword" },
+            "category": { "type": "keyword" },
+            "type": { "type": "keyword" }
+          }
+        },
+        "source": { "properties": { "ip": { "type": "ip" }, "port": { "type": "long" } } },
+        "destination": { "properties": { "ip": { "type": "ip" }, "port": { "type": "long" } } },
+        "network": { "properties": { "transport": { "type": "keyword" }, "protocol": { "type": "keyword" } } },
+        "rule": { "type": "object", "dynamic": true },
+        "message": { "type": "object", "enabled": false }
+      }
     }
   }
 }

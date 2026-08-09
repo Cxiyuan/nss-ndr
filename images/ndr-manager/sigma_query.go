@@ -87,24 +87,24 @@ func buildSigmaQuery(content string) (*sigmaQuery, error) {
 	ds := ""
 	switch strings.ToLower(ls.Category) {
 	case "network_connection", "network":
-		ds = "conn"
+		ds = "zeek.conn"
 	case "dns":
-		ds = "dns"
+		ds = "zeek.dns"
 	case "web", "http":
-		ds = "http"
+		ds = "zeek.http"
 	case "tls", "ssl":
-		ds = "ssl"
+		ds = "zeek.ssl"
 	case "file":
-		ds = "files"
+		ds = "zeek.files"
 	}
 	if ds == "" {
 		switch strings.ToLower(ls.Service) {
 		case "dns":
-			ds = "dns"
+			ds = "zeek.dns"
 		case "http":
-			ds = "http"
+			ds = "zeek.http"
 		case "ssl", "tls":
-			ds = "ssl"
+			ds = "zeek.ssl"
 		}
 	}
 	if ds != "" {
