@@ -7,10 +7,19 @@ resources:
   - 20-pv-pvc.yaml
   - 30-suricata-daemonset.yaml
   - 31-zeek-daemonset.yaml
+  - 40-elasticsearch.yaml
+  - 41-kibana.yaml
+  - 42-filebeat-daemonset.yaml
 
 # 镜像 tag 覆盖：构建后把 newTag 改为对应 git sha 以固定版本
 images:
   - name: ghcr.io/cxiyuan/nss-ndr-suricata
     newTag: latest
   - name: ghcr.io/cxiyuan/nss-ndr-zeek
+    newTag: latest
+  - name: ghcr.io/cxiyuan/nss-ndr-es-init
+    newTag: latest
+  - name: ghcr.io/cxiyuan/nss-ndr-filebeat
+    newTag: latest
+  - name: ghcr.io/cxiyuan/nss-ndr-kibana
     newTag: latest

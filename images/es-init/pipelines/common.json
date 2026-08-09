@@ -1,0 +1,11 @@
+{
+  "description": "NSS-NDR common pipeline",
+  "processors": [
+    { "set": { "if": "ctx.event?.severity == 1", "field": "event.severity_label", "value": "low", "override": true } },
+    { "set": { "if": "ctx.event?.severity == 2", "field": "event.severity_label", "value": "medium", "override": true } },
+    { "set": { "if": "ctx.event?.severity == 3", "field": "event.severity_label", "value": "high", "override": true } },
+    { "set": { "if": "ctx.event?.severity == 4", "field": "event.severity_label", "value": "critical", "override": true } },
+    { "set": { "if": "ctx.event?.dataset != null && !ctx.event.dataset.contains('.')", "field": "event.dataset", "value": "{{event.module}}.{{event.dataset}}" } },
+    { "set": { "field": "event.ingested", "value": "{{@timestamp}}" } }
+  ]
+}

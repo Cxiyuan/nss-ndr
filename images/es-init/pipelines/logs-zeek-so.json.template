@@ -1,0 +1,11 @@
+{
+  "index_patterns": ["logs-zeek-so*"],
+  "data_stream": {},
+  "priority": 500,
+  "template": {
+    "settings": {
+      "index.lifecycle.name": "nss-ndr-logs",
+      "index.number_of_replicas": 0
+    }
+  }
+}

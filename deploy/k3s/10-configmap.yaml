@@ -295,6 +295,47 @@ data:
     \    local move = fmt(\"cp %s/%s %s && rm -f %s/%s\",\n                     FileExtract::prefix,\
     \ orig, dest, FileExtract::prefix, orig);\n    when [move] ( local mv = Exec::run([$cmd=move])\
     \ ) { }\n    f$info$extracted = dest;\n    }\n"
+  filebeat.yml: "# NSS-NDR filebeat 配置模板（由 render-configs.py 渲染，${VAR} 为占位符）\n\nfilebeat.inputs:\n\
+    \  - type: filestream\n    id: suricata-eve\n    enabled: true\n    paths:\n \
+    \     - /nsm/suricata/eve*.json\n    exclude_files:\n      - '\\.gz$'\n    parsers:\n\
+    \      - ndjson:\n          target: \"\"\n    processors:\n      - add_fields:\n\
+    \          target: event\n          fields:\n            category: network\n \
+    \           module: suricata\n\n  - type: filestream\n    id: zeek-logs\n    enabled:\
+    \ true\n    paths:\n      - /nsm/zeek/logs/current/*.log\n    exclude_files:\n\
+    \      - '(broker|capture_loss|cluster|conn-summary|console|ecat_arp_info|known_certs|known_hosts|known_services|loaded_scripts|ntp|ocsp|packet_filter|reporter|stats|stderr|stdout)(\\\
+    ..+)?\\.log$'\n    processors:\n      - dissect:\n          tokenizer: \"/nsm/zeek/logs/current/%{pipeline}.log\"\
+    \n          field: log.file.path\n          trim_chars: \".log\"\n          target_prefix:\
+    \ \"\"\n      - script:\n          lang: javascript\n          source: >\n   \
+    \         function process(event) {\n              var pl = event.Get(\"pipeline\"\
+    );\n              event.Put(\"@metadata.pipeline\", \"zeek.\" + pl);\n       \
+    \     }\n      - add_fields:\n          target: event\n          fields:\n   \
+    \         category: network\n            module: zeek\n      - add_tags:\n   \
+    \       tags: [\"ics\"]\n          when:\n            regexp:\n              pipeline:\
+    \ \"^bacnet|^bsap|^cip|^cotp|^dnp3|^ecat|^enip|^modbus|^opcua|^profinet|^s7comm\"\
+    \n\noutput.elasticsearch:\n  hosts: [\"${ES_HOST:https://nss-elasticsearch:9200}\"\
+    ]\n  username: \"${ES_USERNAME:}\"\n  password: \"${ES_PASSWORD:}\"\n  ssl.verification_mode:\
+    \ none\n  index: \"logs-nss-ndr\"\n\nsetup.template.enabled: false\nlogging.level:\
+    \ info\n"
+  kibana.yml: '# NSS-NDR Kibana 配置
+
+
+    server.host: "0.0.0.0"
+
+    server.port: 5601
+
+
+    elasticsearch.hosts: ["https://nss-elasticsearch:9200"]
+
+    elasticsearch.ssl.verificationMode: none
+
+    elasticsearch.username: "${ES_USERNAME:}"
+
+    elasticsearch.password: "${ES_PASSWORD:}"
+
+
+    logging.root.level: info
+
+    '
   bpf: ''
   all-rulesets.rules: ''
   sensor_id: nss-001

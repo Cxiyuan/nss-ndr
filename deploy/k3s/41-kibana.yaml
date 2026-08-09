@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-kibana
+  namespace: nss-ndr
+  labels:
+    app: nss-kibana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nss-kibana
+  template:
+    metadata:
+      labels:
+        app: nss-kibana
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: kibana
+          image: ghcr.io/cxiyuan/nss-ndr-kibana
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ES_USERNAME
+              value: ""
+            - name: ES_PASSWORD
+              value: ""
+          ports:
+            - containerPort: 5601
+          resources:
+            requests:
+              memory: 1Gi
+            limits:
+              memory: 1.5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nss-kibana
+  namespace: nss-ndr
+spec:
+  type: NodePort
+  selector:
+    app: nss-kibana
+  ports:
+    - port: 5601
+      targetPort: 5601
+      nodePort: 30601

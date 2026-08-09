@@ -17,7 +17,7 @@ scripts/                  # 配置渲染等开发工具
 ## 当前状态
 
 - [x] M0 骨架：引擎镜像 + k3s 清单 + 配置模板（本提交）
-- [ ] M1：filebeat + elasticsearch + kibana 本地检索闭环
+- [x] M1：filebeat + elasticsearch + kibana 本地检索闭环（镜像/清单/管道就绪，待部署验证）
 - [ ] M2：detections 规则管理 + xdr-push Webhook 推送
 - [ ] M3：全包清理（cleaner）+ 文件提取 + Helm Chart
 
@@ -41,9 +41,15 @@ kubectl -n nss-ndr get pods
 - 推送 `master` 分支或 `v*` tag 时，`.github/workflows/build-images.yml` 自动构建 Suricata/Zeek 镜像并推送到 GHCR：
   - `ghcr.io/cxiyuan/nss-ndr-suricata:latest` / `:<git-sha>` / `:<tag>`
   - `ghcr.io/cxiyuan/nss-ndr-zeek:latest` / `:<git-sha>` / `:<tag>`
+  - 另有 `nss-ndr-es-init`、`nss-ndr-filebeat`、`nss-ndr-kibana`（M1）
 - 也可在 GitHub Actions 页面手动触发（workflow_dispatch）。
 - 固定部署版本：把 `deploy/k3s/kustomization.yaml` 中 `images[].newTag` 改为对应 git sha。
 - 前提：基础镜像 `ghcr.io/security-onion-solutions/so-suricata:3.1.0`、`so-zeek:3.1.0` 可被构建机拉取（public）。
+
+### 部署前提（ES）
+
+- 节点需设置 `vm.max_map_count=262144`（`sysctl -w vm.max_map_count=262144`，写入 `/etc/sysctl.d/` 持久化）。
+- M1 使用 ES 官方镜像 `docker.elastic.co/elasticsearch/elasticsearch:9.3.3`，安全功能暂关闭（`xpack.security.enabled=false`），M2 引入认证。
 
 ### k3s 拉取 GHCR 镜像
 

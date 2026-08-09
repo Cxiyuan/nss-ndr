@@ -27,6 +27,11 @@ TEMPLATES = {
     "networks.cfg": "images/zeek/files/networks.cfg",
 }
 
+STATIC_CONFIGS = {
+    "filebeat.yml": "images/filebeat/filebeat.yml",
+    "kibana.yml": "images/kibana/kibana.yml",
+}
+
 POLICY_DIR = "images/zeek/files/policy/securityonion"
 
 
@@ -54,6 +59,14 @@ def render_policy():
             rel = os.path.relpath(os.path.join(root, name), base)
             with open(os.path.join(root, name), encoding="utf-8") as f:
                 data[f"policy/securityonion/{rel}"] = f.read()
+    return data
+
+
+def render_static():
+    data = {}
+    for key, rel in STATIC_CONFIGS.items():
+        with open(os.path.join(ROOT, rel), encoding="utf-8") as f:
+            data[key] = f.read()
     return data
 
 
@@ -92,6 +105,7 @@ def main():
 
     data = render_templates(ctx)
     data.update(render_policy())
+    data.update(render_static())
     data["bpf"] = probe.get("bpf", "")
     data["all-rulesets.rules"] = ""  # 默认空规则集
     data["sensor_id"] = probe["id"]

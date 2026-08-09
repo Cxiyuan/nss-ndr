@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-elasticsearch
+  namespace: nss-ndr
+  labels:
+    app: nss-elasticsearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nss-elasticsearch
+  template:
+    metadata:
+      labels:
+        app: nss-elasticsearch
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:9.3.3
+          env:
+            - name: node.name
+              value: nss-es
+            - name: cluster.name
+              value: nss-ndr
+            - name: discovery.type
+              value: single-node
+            - name: xpack.security.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: "-Xms2g -Xmx2g"
+            - name: ingest.geoip.downloader.enabled
+              value: "false"
+          ports:
+            - containerPort: 9200
+              name: http
+            - containerPort: 9300
+              name: transport
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+          resources:
+            requests:
+              memory: 3Gi
+            limits:
+              memory: 4Gi
+        # sidecar：ES 就绪后导入 ingest pipelines / ILM / 索引模板
+        - name: es-init
+          image: ghcr.io/cxiyuan/nss-ndr-es-init
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ES_URL
+              value: "http://localhost:9200"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nss-ndr-es-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nss-elasticsearch
+  namespace: nss-ndr
+spec:
+  selector:
+    app: nss-elasticsearch
+  ports:
+    - port: 9200
+      targetPort: 9200
+      name: http
+    - port: 9300
+      targetPort: 9300
+      name: transport

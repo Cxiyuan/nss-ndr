@@ -1,0 +1,17 @@
+{
+  "description": "NSS-NDR suricata.alert",
+  "processors": [
+    { "set": { "field": "event.dataset", "value": "alert" } },
+    { "set": { "field": "event.kind", "value": "alert" } },
+    { "set": { "field": "event.category", "value": ["network"] } },
+    { "set": { "field": "event.type", "value": ["intrusion_detection"] } },
+    { "rename": { "field": "message2.alert", "target_field": "rule", "ignore_missing": true } },
+    { "rename": { "field": "rule.signature", "target_field": "rule.name", "ignore_missing": true } },
+    { "rename": { "field": "rule.signature_id", "target_field": "rule.uuid", "ignore_missing": true } },
+    { "rename": { "field": "rule.category", "target_field": "rule.category", "ignore_missing": true } },
+    { "rename": { "field": "rule.severity", "target_field": "event.severity", "ignore_missing": true } },
+    { "rename": { "field": "message2.payload_printable", "target_field": "network.data.decoded", "ignore_missing": true } },
+    { "set": { "field": "_index", "value": "logs-suricata.alerts-so" } },
+    { "pipeline": { "name": "suricata.common" } }
+  ]
+}

@@ -27,6 +27,15 @@ jobs:
           - name: zeek
             context: images/zeek
             file: images/zeek/Dockerfile
+          - name: es-init
+            context: images/es-init
+            file: images/es-init/Dockerfile
+          - name: filebeat
+            context: images/filebeat
+            file: images/filebeat/Dockerfile
+          - name: kibana
+            context: images/kibana
+            file: images/kibana/Dockerfile
 
     steps:
       - name: Checkout

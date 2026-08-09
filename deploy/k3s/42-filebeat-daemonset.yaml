@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nss-filebeat
+  namespace: nss-ndr
+  labels:
+    app: nss-filebeat
+spec:
+  selector:
+    matchLabels:
+      app: nss-filebeat
+  template:
+    metadata:
+      labels:
+        app: nss-filebeat
+    spec:
+      tolerations:
+        - operator: Exists
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: filebeat
+          image: ghcr.io/cxiyuan/nss-ndr-filebeat
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ES_HOST
+              value: "https://nss-elasticsearch:9200"
+            - name: ES_USERNAME
+              value: ""
+            - name: ES_PASSWORD
+              value: ""
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/filebeat/filebeat.yml
+              subPath: filebeat.yml
+              readOnly: true
+            - name: nsm
+              mountPath: /nsm
+              readOnly: true
+            - name: data
+              mountPath: /usr/share/filebeat/data
+      volumes:
+        - name: config
+          configMap:
+            name: nss-ndr-config
+        - name: nsm
+          persistentVolumeClaim:
+            claimName: nss-ndr-nsm
+        - name: data
+          emptyDir: {}
