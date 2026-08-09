@@ -19,7 +19,9 @@ spec:
         - operator: Exists
       containers:
         - name: suricata
-          image: nss-ndr/suricata:0.1.0
+          # 由 GitHub Actions 构建并推送至 GHCR（见 .github/workflows/build-images.yml）
+          # tag 通过 kustomization.yaml 的 images 覆盖（默认 latest）
+          image: ghcr.io/cxiyuan/nss-ndr-suricata
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true

@@ -36,6 +36,15 @@ kubectl apply -k deploy/k3s/
 kubectl -n nss-ndr get pods
 ```
 
+## 镜像构建（GitHub Actions）
+
+- 推送 `master` 分支或 `v*` tag 时，`.github/workflows/build-images.yml` 自动构建 Suricata/Zeek 镜像并推送到 GHCR：
+  - `ghcr.io/cxiyuan/nss-ndr-suricata:latest` / `:<git-sha>` / `:<tag>`
+  - `ghcr.io/cxiyuan/nss-ndr-zeek:latest` / `:<git-sha>` / `:<tag>`
+- 也可在 GitHub Actions 页面手动触发（workflow_dispatch）。
+- 固定部署版本：把 `deploy/k3s/kustomization.yaml` 中 `images[].newTag` 改为对应 git sha。
+- 前提：基础镜像 `ghcr.io/security-onion-solutions/so-suricata:3.1.0`、`so-zeek:3.1.0` 可被构建机拉取（public）。
+
 ## 许可说明
 
 - 设计参考 Security Onion 3.1.0（Elastic License 2.0）。本项目自研实现为主；
