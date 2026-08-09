@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//go:embed templates
+//go:embed all:templates
 var tplFS embed.FS
 
 type renderedData struct {

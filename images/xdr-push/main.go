@@ -44,7 +44,7 @@ func loadConfig() {
 		log.Fatalf("probe.yaml 解析失败: %v", err)
 	}
 	if cfg.XDR.Webhook.URL == "" {
-		log.Fatal("xdr.webhook.url 未配置")
+		log.Printf("warn: xdr.webhook.url 未配置，推送暂停（本地仍留存告警）；请在 NDR 管理后台配置")
 	}
 	if cfg.XDR.PushIntervalS <= 0 {
 		cfg.XDR.PushIntervalS = 2
@@ -74,6 +74,10 @@ func main() {
 		if err != nil {
 			log.Printf("warn: 拉取告警失败: %v", err)
 		} else {
+			if cfg.XDR.Webhook.URL == "" {
+				log.Printf("warn: webhook 未配置，跳过 %d 条告警推送（本地已留存）", len(hits))
+				goto sleep
+			}
 			for _, h := range hits {
 				if err := client.Push(h); err != nil {
 					log.Printf("warn: 推送失败 %s: %v（写入死信）", h.ID, err)
@@ -85,6 +89,7 @@ func main() {
 				_ = saveCursor(cursor)
 			}
 		}
+	sleep:
 		time.Sleep(time.Duration(cfg.XDR.PushIntervalS) * time.Second)
 	}
 }
