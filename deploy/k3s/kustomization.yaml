@@ -18,18 +18,18 @@ resources:
 # 镜像 tag 覆盖：构建后把 newTag 改为对应 git sha 以固定版本
 images:
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-suricata
-    newTag: 01beaaf35213cdc7a00d1ce2e315efde3c235b67
+    newTag: 84b64e47c297536f7f6d92c6cc2392c4de6ef97c
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek
-    newTag: 01beaaf35213cdc7a00d1ce2e315efde3c235b67
+    newTag: 84b64e47c297536f7f6d92c6cc2392c4de6ef97c
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-es-init
-    newTag: 01beaaf35213cdc7a00d1ce2e315efde3c235b67
+    newTag: 84b64e47c297536f7f6d92c6cc2392c4de6ef97c
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-filebeat
-    newTag: 01beaaf35213cdc7a00d1ce2e315efde3c235b67
+    newTag: 84b64e47c297536f7f6d92c6cc2392c4de6ef97c
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-kibana
-    newTag: 01beaaf35213cdc7a00d1ce2e315efde3c235b67
+    newTag: 84b64e47c297536f7f6d92c6cc2392c4de6ef97c
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-detections
-    newTag: 01beaaf35213cdc7a00d1ce2e315efde3c235b67
+    newTag: 84b64e47c297536f7f6d92c6cc2392c4de6ef97c
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-xdr-push
-    newTag: 01beaaf35213cdc7a00d1ce2e315efde3c235b67
+    newTag: 84b64e47c297536f7f6d92c6cc2392c4de6ef97c
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-cleaner
-    newTag: 01beaaf35213cdc7a00d1ce2e315efde3c235b67
+    newTag: 84b64e47c297536f7f6d92c6cc2392c4de6ef97c
