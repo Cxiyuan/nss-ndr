@@ -4,6 +4,7 @@ metadata:
   name: nss-zeek
   namespace: {{ .Release.Namespace }}
 spec:
+  revisionHistoryLimit: 2
   selector:
     matchLabels: {app: nss-zeek}
   template:

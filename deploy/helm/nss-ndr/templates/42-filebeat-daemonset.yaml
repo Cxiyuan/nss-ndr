@@ -4,6 +4,7 @@ metadata:
   name: nss-filebeat
   namespace: {{ .Release.Namespace }}
 spec:
+  revisionHistoryLimit: 2
   selector:
     matchLabels: {app: nss-filebeat}
   template:

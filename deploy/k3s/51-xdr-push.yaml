@@ -7,6 +7,7 @@ metadata:
     app: nss-xdr-push
 spec:
   replicas: 1
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app: nss-xdr-push

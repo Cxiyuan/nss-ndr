@@ -6,6 +6,7 @@ metadata:
   labels:
     app: nss-filebeat
 spec:
+  revisionHistoryLimit: 2
   selector:
     matchLabels:
       app: nss-filebeat

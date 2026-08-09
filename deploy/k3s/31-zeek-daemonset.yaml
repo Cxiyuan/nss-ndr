@@ -6,6 +6,7 @@ metadata:
   labels:
     app: nss-zeek
 spec:
+  revisionHistoryLimit: 2
   selector:
     matchLabels:
       app: nss-zeek
