@@ -7,5 +7,5 @@ logsource:
   product: zeek
 detection:
   selection:
-    dns.question.type: "1"
+    dns.question.type: "A"
   condition: selection
