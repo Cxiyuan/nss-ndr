@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-xdr-push
+  namespace: nss-ndr
+  labels:
+    app: nss-xdr-push
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nss-xdr-push
+  template:
+    metadata:
+      labels:
+        app: nss-xdr-push
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: xdr-push
+          image: ghcr.io/cxiyuan/nss-ndr-xdr-push
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ES_HOST
+              value: "https://nss-elasticsearch:9200"
+          volumeMounts:
+            - name: config
+              mountPath: /opt/so/conf
+              readOnly: true
+            - name: state
+              mountPath: /opt/so/state
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: config
+          configMap:
+            name: nss-ndr-config
+        - name: state
+          hostPath:
+            path: /opt/so/state
+            type: DirectoryOrCreate

@@ -44,6 +44,10 @@ spec:
               readOnly: true
             - name: nsm
               mountPath: /nsm
+            - name: rules
+              mountPath: /etc/suricata/rules
+            - name: run
+              mountPath: /var/run/suricata
           resources:
             limits:
               cpu: "4"
@@ -58,3 +62,13 @@ spec:
         - name: nsm
           persistentVolumeClaim:
             claimName: nss-ndr-nsm
+        # 规则目录（detections 服务写入，suricata 读取）
+        - name: rules
+          hostPath:
+            path: /opt/so/rules/suricata
+            type: DirectoryOrCreate
+        # suricata unix command socket（detections 触发 reload）
+        - name: run
+          hostPath:
+            path: /opt/so/run/suricata
+            type: DirectoryOrCreate

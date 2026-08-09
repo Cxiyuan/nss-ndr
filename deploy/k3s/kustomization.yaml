@@ -10,6 +10,8 @@ resources:
   - 40-elasticsearch.yaml
   - 41-kibana.yaml
   - 42-filebeat-daemonset.yaml
+  - 50-detections.yaml
+  - 51-xdr-push.yaml
 
 # 镜像 tag 覆盖：构建后把 newTag 改为对应 git sha 以固定版本
 images:
@@ -22,4 +24,8 @@ images:
   - name: ghcr.io/cxiyuan/nss-ndr-filebeat
     newTag: latest
   - name: ghcr.io/cxiyuan/nss-ndr-kibana
+    newTag: latest
+  - name: ghcr.io/cxiyuan/nss-ndr-detections
+    newTag: latest
+  - name: ghcr.io/cxiyuan/nss-ndr-xdr-push
     newTag: latest

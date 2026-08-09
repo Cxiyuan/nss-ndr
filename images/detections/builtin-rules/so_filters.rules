@@ -1,0 +1,8 @@
+# NSS-NDR 内置规则集：元数据日志过滤（SO_FILTERS 等价实现，默认禁用）
+# 语法：config <proto> any any -> any any (匹配条件; config: logging disable, type tx, scope tx; sid:12000xx;)
+#
+# 示例：过滤 google.com 的 DNS 日志
+#config dns any any -> any any (dns.query; content:"google.com"; config: logging disable, type tx, scope tx; sid:1200000;)
+#
+# 示例：过滤某 HTTP host 的 http 日志
+#config http any any -> any any (http.host; content:"example.com"; config: logging disable, type tx, scope tx; sid:1200001;)

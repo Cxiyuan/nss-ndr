@@ -14,9 +14,7 @@ if [ -f "$CONF/suricata.yaml" ]; then
 fi
 [ -f "$CONF/threshold.conf" ] && cp -f "$CONF/threshold.conf" /etc/suricata/threshold.conf
 [ -f "$CONF/bpf" ] && cp -f "$CONF/bpf" /etc/suricata/bpf
-if [ -f "$CONF/all-rulesets.rules" ]; then
-  cp -f "$CONF/all-rulesets.rules" /etc/suricata/rules/all-rulesets.rules
-fi
+# 规则目录由 detections 服务管理（共享 hostPath /opt/so/rules/suricata）
 chown -R 940:940 /etc/suricata/rules
 
 AFPACKET=

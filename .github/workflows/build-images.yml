@@ -36,6 +36,12 @@ jobs:
           - name: kibana
             context: images/kibana
             file: images/kibana/Dockerfile
+          - name: detections
+            context: images/detections
+            file: images/detections/Dockerfile
+          - name: xdr-push
+            context: images/xdr-push
+            file: images/xdr-push/Dockerfile
 
     steps:
       - name: Checkout

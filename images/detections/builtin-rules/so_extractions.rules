@@ -1,0 +1,12 @@
+# NSS-NDR 内置规则集：文件提取（SO_EXTRACTIONS 等价实现，默认禁用）
+# filestore 提取文件到 /nsm/extracted，配合 Strelka 分析（M3）
+
+alert http any any -> any any (msg:"FILE pdf detected"; filemagic:"PDF document"; filestore; noalert; sid:1100000; rev:1;)
+alert smtp any any -> any any (msg:"FILE pdf detected"; filemagic:"PDF document"; filestore; noalert; sid:1100001; rev:1;)
+alert smb any any -> any any (msg:"FILE pdf detected"; filemagic:"PDF document"; filestore; noalert; sid:1100003; rev:1;)
+alert http any any -> any any (msg:"FILE EXE detected"; filemagic:"PE32 executable"; filestore; noalert; sid:1100004; rev:1;)
+alert smtp any any -> any any (msg:"FILE EXE detected"; filemagic:"PE32 executable"; filestore; noalert; sid:1100005; rev:1;)
+alert smb any any -> any any (msg:"FILE EXE detected"; filemagic:"PE32 executable"; filestore; noalert; sid:1100007; rev:1;)
+alert http any any -> any any (msg:"FILE ZIP detected"; filemagic:"Zip"; filestore; noalert; sid:1100012; rev:1;)
+alert smtp any any -> any any (msg:"FILE ZIP detected"; filemagic:"Zip"; filestore; noalert; sid:1100013; rev:1;)
+alert smb any any -> any any (msg:"FILE ZIP detected"; filemagic:"Zip"; filestore; noalert; sid:1100015; rev:1;)
