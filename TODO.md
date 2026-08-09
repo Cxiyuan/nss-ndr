@@ -29,6 +29,14 @@
   - [x] xdr-push 扩展推送 detections.alerts（Webhook/死信）
   - [x] 修复数据链路：zeek 各日志类型 pipeline、event.dataset keyword 映射、dns/http/tls 字段映射
   - [x] 端到端验证：启用规则→执行→告警写入 detections 索引→Webhook 推送（18888 测试地址写死信）
+- [x] **M6 数据总线管道（参照 SO 3.1.0）**
+  - [x] Logstash 双 pipeline（manager 5055 beats/TLS 接收 → redis 缓冲 → search 消费 → ES）
+  - [x] Redis 缓冲（list + 背压 + 批量）
+  - [x] filebeat 改 Lumberjack 输出（双向 TLS，client 证书）
+  - [x] data_stream 路由 + metadata.pipeline 指派 ES ingest pipeline
+  - [x] 自签 CA/证书（scripts/gen-certs.sh → Secret nss-ndr-certs）
+  - [x] zeek 全日志类型 pipeline 补齐（62 类）
+  - [x] 端到端验证：filebeat→logstash→redis→logstash→ES 全链路零错误
 
 ## 部署验证（2026-08-09 已完成，10.44.77.250）
 
