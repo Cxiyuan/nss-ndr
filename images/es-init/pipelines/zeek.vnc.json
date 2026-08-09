@@ -1,0 +1,23 @@
+{
+  "description": "NSS-NDR zeek.vnc",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "vnc"
+      }
+    },
+    {
+      "json": {
+        "field": "message",
+        "target_field": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "pipeline": {
+        "name": "zeek.common"
+      }
+    }
+  ]
+}

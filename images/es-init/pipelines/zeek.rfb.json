@@ -1,0 +1,23 @@
+{
+  "description": "NSS-NDR zeek.rfb",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "rfb"
+      }
+    },
+    {
+      "json": {
+        "field": "message",
+        "target_field": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "pipeline": {
+        "name": "zeek.common"
+      }
+    }
+  ]
+}

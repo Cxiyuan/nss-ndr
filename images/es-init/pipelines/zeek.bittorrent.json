@@ -1,0 +1,23 @@
+{
+  "description": "NSS-NDR zeek.bittorrent",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "bittorrent"
+      }
+    },
+    {
+      "json": {
+        "field": "message",
+        "target_field": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "pipeline": {
+        "name": "zeek.common"
+      }
+    }
+  ]
+}

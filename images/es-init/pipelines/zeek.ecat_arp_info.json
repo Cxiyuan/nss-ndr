@@ -1,0 +1,23 @@
+{
+  "description": "NSS-NDR zeek.ecat_arp_info",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "ecat_arp_info"
+      }
+    },
+    {
+      "json": {
+        "field": "message",
+        "target_field": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "pipeline": {
+        "name": "zeek.common"
+      }
+    }
+  ]
+}

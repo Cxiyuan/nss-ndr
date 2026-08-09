@@ -1,0 +1,23 @@
+{
+  "description": "NSS-NDR zeek.dhcp",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "dhcp"
+      }
+    },
+    {
+      "json": {
+        "field": "message",
+        "target_field": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "pipeline": {
+        "name": "zeek.common"
+      }
+    }
+  ]
+}

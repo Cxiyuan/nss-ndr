@@ -1,0 +1,23 @@
+{
+  "description": "NSS-NDR zeek.opcua",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "opcua"
+      }
+    },
+    {
+      "json": {
+        "field": "message",
+        "target_field": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "pipeline": {
+        "name": "zeek.common"
+      }
+    }
+  ]
+}

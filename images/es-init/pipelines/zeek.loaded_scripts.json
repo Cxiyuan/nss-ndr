@@ -1,0 +1,23 @@
+{
+  "description": "NSS-NDR zeek.loaded_scripts",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "loaded_scripts"
+      }
+    },
+    {
+      "json": {
+        "field": "message",
+        "target_field": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "pipeline": {
+        "name": "zeek.common"
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "description": "NSS-NDR zeek.ldap",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "ldap"
+      }
+    },
+    {
+      "json": {
+        "field": "message",
+        "target_field": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "pipeline": {
+        "name": "zeek.common"
+      }
+    }
+  ]
+}
