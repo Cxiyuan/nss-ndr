@@ -7,7 +7,7 @@ data:
   suricata.yaml: "# NSS-NDR Suricata 配置模板\n# 由 scripts/render-configs.py 从 probe.yaml\
     \ 渲染（${VAR} 为占位符）\n\n%YAML 1.1\n---\n\ndefault-log-dir: /var/log/suricata/\n\n\
     runmode: workers\nmax-pending-packets: 5000\ndefault-packet-size: 9014\n\nhost-mode:\
-    \ auto\n\naf-packet:\n  - interface: bond0\n    cluster-id: 59\n    cluster-type:\
+    \ auto\n\naf-packet:\n  - interface: enp5s0\n    cluster-id: 59\n    cluster-type:\
     \ cluster_flow\n    defrag: true\n    use-mmap: true\n    mmap-locked: false\n\
     \    threads: 4\n    tpacket-v3: true\n    ring-size: 5000\n    block-size: 69632\n\
     \    block-timeout: 10\n    use-emergency-flush: true\n    buffer-size: 32768\n\
@@ -145,7 +145,7 @@ data:
 
     host=localhost
 
-    interface=af_packet::bond0
+    interface=af_packet::enp5s0
 
     lb_method=custom
 
@@ -339,26 +339,26 @@ data:
   bpf: ''
   all-rulesets.rules: ''
   sensor_id: nss-001
-  interface: bond0
+  interface: enp5s0
   probe.yaml: "# NSS-NDR 探针配置文件（示例）\n# 修改后运行：python3 scripts/render-configs.py configs/probe.yaml\
     \ deploy/k3s/10-configmap.yaml\n\nprobe:\n  id: nss-001                 # 探针唯一标识（observer.name\
-    \ / 推送标记）\n  interface: bond0            # 镜像口（抓包网卡）\n  home_net:            \
-    \       # HOME_NET 地址组\n    - 10.0.0.0/8\n    - 192.168.0.0/16\n    - 172.16.0.0/12\n\
-    \  external_net: any           # EXTERNAL_NET\n  bpf: \"\"                   \
-    \  # 可选 BPF 过滤（如 \"not port 22\"）\n  min_free_gb: 20             # 磁盘低水位告警（GB）\n\
-    \  disk_pressure_threshold: 90 # /nsm 用量百分比，超过触发强制清理（兜底）\n  cleanup_interval:\
-    \ \"1h\"      # cleaner 扫描周期\n\nsuricata:\n  enabled: true\n  af_packet_threads:\
-    \ 4        # AF_PACKET worker 数\n  pcap:\n    enabled: true\n    file_size_mb:\
-    \ 1000        # 全包单文件大小\n    compression: none         # none | lz4\n    retention_days:\
-    \ 7         # 全包留存天数\n    storage_limit_gb: 500     # 全包目录存储上限（GB）\n  eve:\n \
-    \   retention_days: 7         # eve.json 留档天数\n\nzeek:\n  enabled: true\n  workers:\
-    \ 4                  # Zeek worker 数（AF_PACKET fanout）\n  buffer_size: 128*1024*1024\
-    \  # AF_PACKET 缓冲区\n  log_rotation_interval_s: 3600\n  history_retention_days:\
-    \ 30  # 轮转历史留档天数\n  extraction:\n    max_days: 7               # 提取文件留档天数\n\n\
-    elasticsearch:\n  heap_gb: 2\n  retention:\n    metadata_days: 60         # ES\
-    \ ILM：元数据\n    alerts_days: 365          # ES ILM：告警\n\ndetections:\n  default_ruleset:\
-    \ none       # 默认不加载任何规则（M2 启用）\n\nxdr:\n  webhook:\n    url: https://xdr.example.com/api/v1/alerts/webhook\
-    \   # XDR 接收地址（可改）\n    secret: \"\"                                         \
-    \ # 可选 HMAC 签名密钥\n  timeout_s: 10\n  push_interval_s: 2          # 告警轮询/推送周期\n\
-    \  retry_max: 5\n  event_types:                # 推送白名单\n    - suricata.alert\n\
-    \    - zeek.notice\n"
+    \ / 推送标记）\n  interface: enp5s0           # 镜像口（抓包网卡，本机为 enp5s0）\n  home_net: \
+    \                  # HOME_NET 地址组\n    - 10.0.0.0/8\n    - 192.168.0.0/16\n  \
+    \  - 172.16.0.0/12\n  external_net: any           # EXTERNAL_NET\n  bpf: \"\"\
+    \                     # 可选 BPF 过滤（如 \"not port 22\"）\n  min_free_gb: 20      \
+    \       # 磁盘低水位告警（GB）\n  disk_pressure_threshold: 90 # /nsm 用量百分比，超过触发强制清理（兜底）\n\
+    \  cleanup_interval: \"1h\"      # cleaner 扫描周期\n\nsuricata:\n  enabled: true\n\
+    \  af_packet_threads: 4        # AF_PACKET worker 数\n  pcap:\n    enabled: true\n\
+    \    file_size_mb: 1000        # 全包单文件大小\n    compression: none         # none\
+    \ | lz4\n    retention_days: 7         # 全包留存天数\n    storage_limit_gb: 500   \
+    \  # 全包目录存储上限（GB）\n  eve:\n    retention_days: 7         # eve.json 留档天数\n\nzeek:\n\
+    \  enabled: true\n  workers: 4                  # Zeek worker 数（AF_PACKET fanout）\n\
+    \  buffer_size: 128*1024*1024  # AF_PACKET 缓冲区\n  log_rotation_interval_s: 3600\n\
+    \  history_retention_days: 30  # 轮转历史留档天数\n  extraction:\n    max_days: 7    \
+    \           # 提取文件留档天数\n\nelasticsearch:\n  heap_gb: 2\n  retention:\n    metadata_days:\
+    \ 60         # ES ILM：元数据\n    alerts_days: 365          # ES ILM：告警\n\ndetections:\n\
+    \  default_ruleset: none       # 默认不加载任何规则（M2 启用）\n\nxdr:\n  webhook:\n    url:\
+    \ https://xdr.example.com/api/v1/alerts/webhook   # XDR 接收地址（可改）\n    secret:\
+    \ \"\"                                          # 可选 HMAC 签名密钥\n  timeout_s: 10\n\
+    \  push_interval_s: 2          # 告警轮询/推送周期\n  retry_max: 5\n  event_types:   \
+    \             # 推送白名单\n    - suricata.alert\n    - zeek.notice\n"

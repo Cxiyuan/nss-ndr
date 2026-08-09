@@ -3,7 +3,7 @@
 
 probe:
   id: nss-001                 # 探针唯一标识（observer.name / 推送标记）
-  interface: bond0            # 镜像口（抓包网卡）
+  interface: enp5s0           # 镜像口（抓包网卡，本机为 enp5s0）
   home_net:                   # HOME_NET 地址组
     - 10.0.0.0/8
     - 192.168.0.0/16
