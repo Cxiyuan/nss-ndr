@@ -30,7 +30,6 @@ filebeat.inputs:
             type: logs
             dataset: suricata.alerts
             namespace: so
-          override: true
 
   - type: filestream
     id: zeek-logs
@@ -63,7 +62,6 @@ filebeat.inputs:
             type: logs
             dataset: zeek
             namespace: so
-          override: true
       - add_tags:
           tags: ["ics"]
           when:
@@ -74,6 +72,8 @@ filebeat.inputs:
 output.logstash:
   hosts: ["${LOGSTASH_HOST:nss-logstash:5055}"]
   ssl.certificate_authorities: ["${LOGSTASH_CA:/etc/filebeat/certs/ca.crt}"]
+  ssl.certificate: "/etc/filebeat/certs/filebeat.crt"
+  ssl.key: "/etc/filebeat/certs/filebeat.key"
   ssl.verification_mode: full
   worker: 2
 
