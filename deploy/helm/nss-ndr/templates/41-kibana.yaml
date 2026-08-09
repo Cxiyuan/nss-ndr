@@ -17,9 +17,9 @@ spec:
           image: "{{ .Values.images.registry }}/nss-ndr-kibana:{{ .Values.images.tag }}"
           imagePullPolicy: IfNotPresent
           env:
-            - {name: ES_USERNAME, value: "kibana_system"}
-            - name: ES_PASSWORD
-              valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: kibana-password}}
+            - {name: ELASTICSEARCH_HOSTS, value: "http://nss-elasticsearch:9200"}
+            - {name: ELASTICSEARCH_USERNAME, value: "kibana_system"}
+            - {name: ELASTICSEARCH_PASSWORD, valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: kibana-password}}}
           ports:
             - {containerPort: 5601}
 ---

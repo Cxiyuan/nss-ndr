@@ -5,7 +5,6 @@ server.port: 5601
 
 elasticsearch.hosts: ["http://nss-elasticsearch:9200"]
 elasticsearch.ssl.verificationMode: none
-elasticsearch.username: "${ES_USERNAME:}"
-elasticsearch.password: "${ES_PASSWORD:}"
+# 认证由容器 env（ELASTICSEARCH_USERNAME/ELASTICSEARCH_PASSWORD）注入
 
 logging.root.level: info
