@@ -22,7 +22,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: ES_HOST
-              value: "https://nss-elasticsearch:9200"
+              value: "http://nss-elasticsearch:9200"
             - name: ES_USERNAME
               value: "filebeat"
             - name: ES_PASSWORD

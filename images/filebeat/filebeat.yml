@@ -50,7 +50,7 @@ filebeat.inputs:
               pipeline: "^bacnet|^bsap|^cip|^cotp|^dnp3|^ecat|^enip|^modbus|^opcua|^profinet|^s7comm"
 
 output.elasticsearch:
-  hosts: ["${ES_HOST:https://nss-elasticsearch:9200}"]
+  hosts: ["${ES_HOST:http://nss-elasticsearch:9200}"]
   username: "${ES_USERNAME:}"
   password: "${ES_PASSWORD:}"
   ssl.verification_mode: none

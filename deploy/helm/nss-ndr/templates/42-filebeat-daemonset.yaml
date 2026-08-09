@@ -17,7 +17,7 @@ spec:
           image: "{{ .Values.images.registry }}/nss-ndr-filebeat:{{ .Values.images.tag }}"
           imagePullPolicy: IfNotPresent
           env:
-            - {name: ES_HOST, value: "https://nss-elasticsearch:9200"}
+            - {name: ES_HOST, value: "http://nss-elasticsearch:9200"}
             - {name: ES_USERNAME, value: "filebeat"}
             - name: ES_PASSWORD
               valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: filebeat-password}}

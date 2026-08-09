@@ -3,7 +3,7 @@
 server.host: "0.0.0.0"
 server.port: 5601
 
-elasticsearch.hosts: ["https://nss-elasticsearch:9200"]
+elasticsearch.hosts: ["http://nss-elasticsearch:9200"]
 elasticsearch.ssl.verificationMode: none
 elasticsearch.username: "${ES_USERNAME:}"
 elasticsearch.password: "${ES_PASSWORD:}"

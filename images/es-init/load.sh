@@ -36,12 +36,28 @@ create_app_users() {
   }
   create_user() {
     local name=$1 pass=$2 roles=$3
-    curl -sk $CURL_AUTH -X POST "$ES_URL/_security/user/$name" \
+    local code
+    code=$(curl -sk $CURL_AUTH -X PUT "$ES_URL/_security/user/$name" \
       -H "Content-Type: application/json" \
       -d "{\"password\":\"$pass\",\"roles\":[\"$roles\"]}" \
-      -o /dev/null -w "%{http_code}" | grep -qE "^2[0-9]{2}$" \
-      && echo "$(date) - 已创建/更新用户 $name" \
-      || echo "$(date) - 创建用户 $name 失败"
+      -o /dev/null -w "%{http_code}")
+    case "$code" in
+      2*)
+        echo "$(date) - 已创建/更新用户 $name"
+        ;;
+      *)
+        # 内置保留用户（如 kibana_system）不能用 PUT 创建/更新，改用改密 API
+        code=$(curl -sk $CURL_AUTH -X POST "$ES_URL/_security/user/$name/_password" \
+          -H "Content-Type: application/json" \
+          -d "{\"password\":\"$pass\"}" \
+          -o /dev/null -w "%{http_code}")
+        if [ "$code" = "200" ]; then
+          echo "$(date) - 已设置保留用户 $name 密码"
+        else
+          echo "$(date) - 创建用户 $name 失败 (_password=$code)"
+        fi
+        ;;
+    esac
   }
   create_user filebeat "$FB_PASSWORD" superuser
   create_user kibana_system "$KIBANA_PASSWORD" kibana_system
