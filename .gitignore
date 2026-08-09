@@ -9,3 +9,4 @@
 /deploy/k3s/10-configmap.yaml
 # 部署机真实密码（部署时填写，勿入库）
 /deploy/k3s/25-secret.yaml
+web/tsconfig.tsbuildinfo
