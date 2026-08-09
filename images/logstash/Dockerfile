@@ -11,6 +11,5 @@ COPY images/logstash/logstash.yml /usr/share/logstash/config/logstash.yml
 COPY images/logstash/pipelines.yml /usr/share/logstash/config/pipelines.yml
 COPY images/logstash/pipelines/ /usr/share/logstash/pipelines/
 
-# 证书目录（由 k8s Secret 挂载）
-RUN mkdir -p /usr/share/logstash/certs && \
-    chown -R 1000:1000 /usr/share/logstash/config /usr/share/logstash/pipelines /usr/share/logstash/certs
+# 证书目录（由 k8s Secret 挂载；配置文件 644 权限 logstash 用户可读）
+RUN mkdir -p /usr/share/logstash/certs
