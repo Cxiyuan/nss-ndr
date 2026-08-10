@@ -1,5 +1,5 @@
 title: Suspicious HTTP Request URI
-id: sigma-nss-005
+id: 7f040f96-d846-4dd0-9411-c46186fad64e
 status: test
 level: medium
 logsource:

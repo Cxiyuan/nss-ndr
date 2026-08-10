@@ -1,5 +1,5 @@
 title: Suspicious DNS Query for Dynamic DNS Domain
-id: sigma-nss-001
+id: e343eba1-094f-4549-8428-203dc1c4f28d
 status: test
 level: medium
 logsource:

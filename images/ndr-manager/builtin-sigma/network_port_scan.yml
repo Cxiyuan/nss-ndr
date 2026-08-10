@@ -1,5 +1,5 @@
 title: Connection Attempt to Uncommon Port
-id: sigma-nss-004
+id: 904da9e2-11ce-4ade-8aab-6d7099395a31
 status: test
 level: low
 logsource:

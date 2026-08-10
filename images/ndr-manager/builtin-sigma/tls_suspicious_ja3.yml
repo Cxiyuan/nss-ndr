@@ -1,5 +1,5 @@
 title: Suspicious TLS Connection (Known Bad Cipher)
-id: sigma-nss-003
+id: 7cc5f183-3c9c-4e93-aa84-096166b5ce6e
 status: test
 level: medium
 logsource:

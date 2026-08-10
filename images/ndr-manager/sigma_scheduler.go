@@ -107,46 +107,39 @@ func executeSigmaRule(r SigmaRule, window time.Duration) error {
 	}
 	now := time.Now().UTC()
 	from := now.Add(-window)
-	filters := []any{
-		map[string]any{"range": map[string]any{"@timestamp": map[string]any{
+	body := map[string]any{
+		"query":  sq.EQL,
+		"filter": map[string]any{"range": map[string]any{"@timestamp": map[string]any{
 			"gte": from.Format(time.RFC3339Nano),
 			"lte": now.Format(time.RFC3339Nano),
 		}}},
-	}
-	if sq.Filter != nil {
-		filters = append(filters, sq.Filter)
-	}
-	filters = append(filters, sq.Query)
-	body := map[string]any{
 		"size": 100,
-		"query": map[string]any{"bool": map[string]any{"filter": filters}},
-		"sort": []any{map[string]any{"@timestamp": map[string]any{"order": "desc"}}},
 	}
 	data, err := esSigmaClient.do(http.MethodPost,
-		"/"+strings.Join(sq.Indexes, ",")+"/_search", body)
+		"/"+strings.Join(sq.Indexes, ",")+"/_eql/search", body)
 	if err != nil {
 		return err
 	}
 	var resp struct {
 		Hits struct {
-			Hits []struct {
+			Events []struct {
 				Source map[string]any `json:"_source"`
-			} `json:"hits"`
+			} `json:"events"`
 		} `json:"hits"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return err
 	}
-	if len(resp.Hits.Hits) == 0 {
+	if len(resp.Hits.Events) == 0 {
 		return nil
 	}
-	log.Printf("sigma: 规则 %s(%s) 命中 %d 条", r.ID, r.Title, len(resp.Hits.Hits))
-	for _, h := range resp.Hits.Hits {
+	log.Printf("sigma: 规则 %s(%s) 命中 %d 条", r.ID, r.Title, len(resp.Hits.Events))
+	for _, h := range resp.Hits.Events {
 		if err := writeSigmaAlert(r, h.Source); err != nil {
 			log.Printf("warn: sigma 告警写入失败: %v", err)
 		}
 	}
-	audit("sigma.hit", r.ID, fmt.Sprintf("%s 命中 %d 条", r.Title, len(resp.Hits.Hits)))
+	audit("sigma.hit", r.ID, fmt.Sprintf("%s 命中 %d 条", r.Title, len(resp.Hits.Events)))
 	return nil
 }
 
