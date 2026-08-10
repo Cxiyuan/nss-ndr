@@ -37,6 +37,8 @@
   - [x] 自签 CA/证书（scripts/gen-certs.sh → Secret nss-ndr-certs）
   - [x] zeek 全日志类型 pipeline 补齐（62 类）
   - [x] 端到端验证：filebeat→logstash→redis→logstash→ES 全链路零错误
+  - [x] 幂等机制（对齐 SO）：filebeat 生成稳定事件 ID（metadata._id），logstash create + document_id，重复事件 version_conflict 静默
+  - [x] 修复 suricata pipeline 根字段提取（filebeat ndjson 无 message），event.dataset 正确
 
 ## 部署验证（2026-08-09 已完成，10.44.77.250）
 
