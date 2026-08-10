@@ -29,6 +29,8 @@
   - [x] xdr-push 扩展推送 detections.alerts（Webhook/死信）
   - [x] 修复数据链路：zeek 各日志类型 pipeline、event.dataset keyword 映射、dns/http/tls 字段映射
   - [x] 端到端验证：启用规则→执行→告警写入 detections 索引→Webhook 推送（18888 测试地址写死信）
+  - [x] 转换器升级为 pySigma 标准做法（对齐 SO）：sigma CLI + 自定义字段映射管道，废弃自研转换器
+  - [x] 内置规则 id 改为标准 UUID，兼容通用 Sigma 规范（SigmaHQ）规则文件
 - [x] **M6 数据总线管道（参照 SO 3.1.0）**
   - [x] Logstash 双 pipeline（manager 5055 beats/TLS 接收 → redis 缓冲 → search 消费 → ES）
   - [x] Redis 缓冲（list + 背压 + 批量）
