@@ -22,8 +22,20 @@ filebeat.inputs:
           source: >
             function process(event) {
               var et = event.Get("event_type") || "other";
-              event.Put("@metadata.pipeline", et === "alert" ? "suricata.alert" : "suricata.common");
+              event.Put("metadata.pipeline", et === "alert" ? "suricata.alert" : "suricata.common");
+              var src = (event.Get("log.file.fingerprint") || "") + "|" + (event.Get("log.offset") || "");
+              var h = 5381;
+              for (var i = 0; i < src.length; i++) {
+                h = ((h << 5) + h + src.charCodeAt(i)) >>> 0;
+              }
+              event.Put("metadata._id", "nss-" + h.toString(16));
             }
+      - add_fields:
+          target: data_stream
+          fields:
+            type: logs
+            dataset: suricata.alerts
+            namespace: so
 
   - type: filestream
     id: zeek-logs
@@ -43,25 +55,39 @@ filebeat.inputs:
           source: >
             function process(event) {
               var pl = event.Get("pipeline");
-              event.Put("@metadata.pipeline", "zeek." + pl);
+              event.Put("metadata.pipeline", "zeek." + pl);
+              var src = (event.Get("log.file.fingerprint") || "") + "|" + (event.Get("log.offset") || "");
+              var h = 5381;
+              for (var i = 0; i < src.length; i++) {
+                h = ((h << 5) + h + src.charCodeAt(i)) >>> 0;
+              }
+              event.Put("metadata._id", "nss-" + h.toString(16));
             }
       - add_fields:
           target: event
           fields:
             category: network
             module: zeek
+      - add_fields:
+          target: data_stream
+          fields:
+            type: logs
+            dataset: zeek
+            namespace: so
       - add_tags:
           tags: ["ics"]
           when:
             regexp:
               pipeline: "^bacnet|^bsap|^cip|^cotp|^dnp3|^ecat|^enip|^modbus|^opcua|^profinet|^s7comm"
 
-output.elasticsearch:
-  hosts: ["${ES_HOST:http://nss-elasticsearch:9200}"]
-  username: "${ES_USERNAME:}"
-  password: "${ES_PASSWORD:}"
-  ssl.verification_mode: none
-  index: "logs-nss-ndr"
+# 数据总线：Lumberjack 输出到 Logstash（对齐 SO 架构）
+output.logstash:
+  hosts: ["${LOGSTASH_HOST:nss-logstash:5055}"]
+  ssl.certificate_authorities: ["${LOGSTASH_CA:/etc/filebeat/certs/ca.crt}"]
+  ssl.certificate: "/etc/filebeat/certs/filebeat.crt"
+  ssl.key: "/etc/filebeat/certs/filebeat.key"
+  ssl.verification_mode: full
+  worker: 2
 
 setup.template.enabled: false
 logging.level: info
