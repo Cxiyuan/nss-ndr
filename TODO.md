@@ -19,7 +19,8 @@
   - [x] Go API + SQLite 配置库（版本历史 + 审计日志）
   - [x] 配置渲染引擎（内置模板 + 扁平化 policy）+ k8s API 下发（ConfigMap + 滚动重启）
   - [x] 规则管理并入（CRUD/启停/内置规则/热加载），detections 服务移除
-  - [x] 部署到 10.44.77.250 并验证下发链路（NodePort 30603）
+- [x] 部署到 10.44.77.250 并验证下发链路（NodePort 30603）
+- [x] 2026-08-10 全新部署（删除旧命名空间/数据后重装最新版）：9 组件 Running、数据总线/幂等/Sigma(pySigma) 全部验证通过
 - [x] **M5 Sigma 检测**
   - [x] `logs-detections.alerts-so` 数据流/模板/pipeline（es-init）
   - [x] manager Sigma 规则管理（SQLite CRUD/启停/导入/转换预览，UI 页）
