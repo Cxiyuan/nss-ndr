@@ -1,25 +1,156 @@
 {
   "description": "NSS-NDR zeek.common",
   "processors": [
-    { "json": { "field": "message", "target_field": "message2", "ignore_failure": true } },
-    { "rename": { "field": "message2.uid", "target_field": "log.id.uid", "ignore_missing": true } },
-    { "dot_expander": { "field": "id.orig_h", "path": "message2", "ignore_failure": true } },
-    { "dot_expander": { "field": "id.orig_p", "path": "message2", "ignore_failure": true } },
-    { "dot_expander": { "field": "id.resp_h", "path": "message2", "ignore_failure": true } },
-    { "dot_expander": { "field": "id.resp_p", "path": "message2", "ignore_failure": true } },
-    { "rename": { "field": "message2.id.orig_h", "target_field": "source.ip", "ignore_missing": true } },
-    { "rename": { "field": "message2.id.orig_p", "target_field": "source.port", "ignore_missing": true } },
-    { "rename": { "field": "message2.id.resp_h", "target_field": "destination.ip", "ignore_missing": true } },
-    { "rename": { "field": "message2.id.resp_p", "target_field": "destination.port", "ignore_missing": true } },
-    { "rename": { "field": "message2.community_id", "target_field": "network.community_id", "ignore_missing": true } },
-    { "community_id": { "if": "ctx.network?.community_id == null" } },
-    { "set": { "if": "ctx.source?.ip != null", "field": "client.ip", "value": "{{source.ip}}" } },
-    { "set": { "if": "ctx.source?.port != null", "field": "client.port", "value": "{{source.port}}" } },
-    { "set": { "if": "ctx.destination?.ip != null", "field": "server.ip", "value": "{{destination.ip}}" } },
-    { "set": { "if": "ctx.destination?.port != null", "field": "server.port", "value": "{{destination.port}}" } },
-    { "set": { "field": "observer.name", "value": "{{agent.name}}", "ignore_failure": true } },
-    { "date": { "field": "message2.ts", "target_field": "@timestamp", "formats": ["ISO8601", "UNIX"], "ignore_failure": true } },
-    { "set": { "field": "_index", "value": "logs-zeek-so" } },
-    { "pipeline": { "name": "common" } }
+    {
+      "json": {
+        "field": "message",
+        "target_field": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.uid",
+        "target_field": "log.id.uid",
+        "ignore_missing": true
+      }
+    },
+    {
+      "dot_expander": {
+        "field": "id.orig_h",
+        "path": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "dot_expander": {
+        "field": "id.orig_p",
+        "path": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "dot_expander": {
+        "field": "id.resp_h",
+        "path": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "dot_expander": {
+        "field": "id.resp_p",
+        "path": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.id.orig_h",
+        "target_field": "source.ip",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.id.orig_p",
+        "target_field": "source.port",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.id.resp_h",
+        "target_field": "destination.ip",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.id.resp_p",
+        "target_field": "destination.port",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.community_id",
+        "target_field": "network.community_id",
+        "ignore_missing": true
+      }
+    },
+    {
+      "community_id": {
+        "if": "ctx.network?.community_id == null"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.source?.ip != null",
+        "field": "client.ip",
+        "value": "{{source.ip}}"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.source?.port != null",
+        "field": "client.port",
+        "value": "{{source.port}}"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.destination?.ip != null",
+        "field": "server.ip",
+        "value": "{{destination.ip}}"
+      }
+    },
+    {
+      "set": {
+        "if": "ctx.destination?.port != null",
+        "field": "server.port",
+        "value": "{{destination.port}}"
+      }
+    },
+    {
+      "set": {
+        "field": "observer.name",
+        "value": "{{agent.name}}",
+        "ignore_failure": true
+      }
+    },
+    {
+      "date": {
+        "field": "message2.ts",
+        "target_field": "@timestamp",
+        "formats": [
+          "ISO8601",
+          "UNIX"
+        ],
+        "ignore_failure": true
+      }
+    },
+    {
+      "set": {
+        "field": "_index",
+        "value": "logs-zeek-so"
+      }
+    },
+    {
+      "pipeline": {
+        "name": "common"
+      }
+    },
+    {
+      "remove": {
+        "field": "message2",
+        "ignore_missing": true
+      }
+    },
+    {
+      "remove": {
+        "field": "pipeline",
+        "ignore_missing": true
+      }
+    }
   ]
 }
