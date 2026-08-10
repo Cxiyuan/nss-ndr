@@ -22,7 +22,17 @@ filebeat.inputs:
           source: >
             function process(event) {
               var et = event.Get("event_type") || "other";
-              event.Put("@metadata.pipeline", et === "alert" ? "suricata.alert" : "suricata.common");
+              event.Put("metadata.pipeline", et === "alert" ? "suricata.alert" : "suricata.common");
+              var fp = event.Get("log.file.fingerprint") || "";
+              var off = event.Get("log.offset") || "";
+              event.Put("metadata._id", hashId(fp + "|" + off));
+            }
+            function hashId(s) {
+              var h = 5381;
+              for (var i = 0; i < s.length; i++) {
+                h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+              }
+              return "nss-" + h.toString(16);
             }
       - add_fields:
           target: data_stream
@@ -49,7 +59,17 @@ filebeat.inputs:
           source: >
             function process(event) {
               var pl = event.Get("pipeline");
-              event.Put("@metadata.pipeline", "zeek." + pl);
+              event.Put("metadata.pipeline", "zeek." + pl);
+              var fp = event.Get("log.file.fingerprint") || "";
+              var off = event.Get("log.offset") || "";
+              event.Put("metadata._id", hashId(fp + "|" + off));
+            }
+            function hashId(s) {
+              var h = 5381;
+              for (var i = 0; i < s.length; i++) {
+                h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+              }
+              return "nss-" + h.toString(16);
             }
       - add_fields:
           target: event
