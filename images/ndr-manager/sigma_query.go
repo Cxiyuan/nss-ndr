@@ -27,9 +27,11 @@ func buildSigmaQuery(content string) (*sigmaQuery, error) {
 	cmd := exec.Command("sigma", "convert", "-t", "eql",
 		"-p", sigmaPipeline, "/dev/stdin")
 	cmd.Stdin = bytes.NewReader([]byte(content))
-	out, err := cmd.CombinedOutput()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("sigma 转换失败: %v: %s", err, strings.TrimSpace(string(out)))
+		return nil, fmt.Errorf("sigma 转换失败: %v: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	eql := strings.TrimSpace(string(out))
 	if eql == "" {
