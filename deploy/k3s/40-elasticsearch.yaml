@@ -47,7 +47,7 @@ spec:
               mountPath: /usr/share/elasticsearch/data
           resources:
             requests:
-              memory: 3Gi
+              memory: 2Gi
             limits:
               memory: 4Gi
         # sidecar：ES 就绪后导入 ingest pipelines / ILM / 索引模板

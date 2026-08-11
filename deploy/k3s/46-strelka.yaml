@@ -235,14 +235,6 @@ spec:
       labels:
         app: nss-strelka-backend
     spec:
-      initContainers:
-        # YARA 规则编译：把 securityonion-yara 编译为 rules.compiled（参照 SO compile_yara）
-        - name: rules
-          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-rules
-          imagePullPolicy: IfNotPresent
-          volumeMounts:
-            - name: yara
-              mountPath: /compiled
       containers:
         - name: backend
           image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-backend
@@ -250,8 +242,8 @@ spec:
           command: ["strelka-backend"]
           resources:
             requests:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 200m
+              memory: 256Mi
             limits:
               cpu: "2"
               memory: 4Gi
@@ -274,8 +266,11 @@ spec:
                 path: passwords.dat
               - key: strelka_taste_yara
                 path: taste/taste.yara
+        # YARA 编译规则（宿主编译，参照 SO：/opt/so/conf/strelka/rules/compiled -> /etc/yara）
         - name: yara
-          emptyDir: {}
+          hostPath:
+            path: /opt/so/conf/strelka/rules/compiled
+            type: DirectoryOrCreate
 ---
 apiVersion: apps/v1
 kind: Deployment

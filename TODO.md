@@ -18,7 +18,7 @@
     - [x] filecheck（watchdog + SHA1 history 去重 + 搬入 unprocessed；history 定时清理）
     - [x] Strelka 六组件 k3s/Helm 清单（coordinator/gatekeeper redis + frontend/backend/
           filestream/manager，frontend 57314）
-    - [x] YARA 规则：securityonion-yara（固定提交）→ 编译 rules.compiled（initContainer）
+    - [x] YARA 规则：securityonion-yara（固定提交）→ 宿主编译 rules.compiled 只读挂载（同 SO）
     - [x] 数据链路：strelka.log → filebeat（metadata.pipeline=strelka.file）→ logstash → ES
           （strelka.file pipeline + logs-strelka-so 数据流模板 + ILM）
     - [x] cleaner 增加 processed/log 留存清理；磁盘压力兜底纳入 strelka 已扫描目录

@@ -158,17 +158,12 @@ spec:
       labels: {app: nss-strelka-backend}
     spec:
       imagePullSecrets: {{ toYaml .Values.images.pullSecrets | nindent 8 }}
-      initContainers:
-        - name: rules
-          image: "{{ .Values.images.registry }}/nss-ndr-strelka-rules:{{ .Values.images.tag }}"
-          volumeMounts:
-            - {name: yara, mountPath: /compiled}
       containers:
         - name: backend
           image: "{{ .Values.images.registry }}/nss-ndr-strelka-backend:{{ .Values.images.tag }}"
           command: ["strelka-backend"]
           resources:
-            requests: {cpu: 500m, memory: 512Mi}
+            requests: {cpu: 200m, memory: 256Mi}
             limits: {cpu: "2", memory: 4Gi}
           volumeMounts:
             - {name: config, mountPath: /etc/strelka, readOnly: true}
@@ -182,7 +177,10 @@ spec:
               - {key: strelka_logging.yaml, path: logging.yaml}
               - {key: strelka_passwords_dat, path: passwords.dat}
               - {key: strelka_taste_yara, path: taste/taste.yara}
-        - {name: yara, emptyDir: {}}
+        - name: yara
+          hostPath:
+            path: /opt/so/conf/strelka/rules/compiled
+            type: DirectoryOrCreate
 ---
 apiVersion: apps/v1
 kind: Deployment

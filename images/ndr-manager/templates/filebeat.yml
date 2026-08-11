@@ -6,8 +6,10 @@ filebeat.inputs:
     enabled: true
     paths:
       - /nsm/suricata/eve*.json
-    exclude_files:
-      - '\.gz$'
+    prospector:
+      scanner:
+        exclude_files:
+          - '\.gz$'
     parsers:
       - ndjson:
           target: ""
@@ -42,8 +44,10 @@ filebeat.inputs:
     enabled: true
     paths:
       - /nsm/zeek/logs/current/*.log
-    exclude_files:
-      - '(broker|capture_loss|cluster|conn-summary|console|ecat_arp_info|known_certs|known_hosts|known_services|loaded_scripts|ntp|ocsp|packet_filter|reporter|stats|stderr|stdout)(\..+)?\.log$'
+    prospector:
+      scanner:
+        exclude_files:
+          - '(broker|capture_loss|cluster|conn-summary|console|ecat_arp_info|known_certs|known_hosts|known_services|loaded_scripts|ntp|ocsp|packet_filter|reporter|stats|stderr|stdout)(\..+)?\.log$'
     processors:
       - dissect:
           tokenizer: "/nsm/zeek/logs/current/%{pipeline}.log"
@@ -87,8 +91,10 @@ filebeat.inputs:
     enabled: true
     paths:
       - /nsm/strelka/log/strelka.log
-    exclude_files:
-      - '\.gz$'
+    prospector:
+      scanner:
+        exclude_files:
+          - '\.gz$'
     processors:
       - add_fields:
           target: event
