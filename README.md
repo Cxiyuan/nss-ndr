@@ -13,6 +13,7 @@ images/
   strelka-manager/        # Strelka frontend / filestream / manager（target/strelka Go）
   strelka-rules/          # YARA 规则编译（initContainer，securityonion-yara）
   filecheck/              # Zeek 提取文件搬运 + SHA1 去重（filecheck）
+  kibana-init/            # Kibana NDR 看板自动导入（sidecar）
 deploy/k3s/               # k3s 清单（namespace/ConfigMap/PV/DaemonSet）
 configs/                  # 探针配置文件示例（probe.yaml）
 scripts/                  # 配置渲染等开发工具
@@ -26,6 +27,8 @@ scripts/                  # 配置渲染等开发工具
 - [x] M3：cleaner 全包/日志清理 + 阈值/抑制 + ES 认证加固 + Helm Chart
 - [x] M3b：文件提取 + Strelka（参照 SO 3.1.0：filecheck 搬运去重 + Strelka 六组件
   扫描集群 + strelka.file pipeline，k3s/Helm 双份清单就绪，待部署验证）
+- [x] M3c：Kibana NDR 看板（导出自 Security Onion 3.1.0，改名 NDR - * 并按本项目
+  ES 模板修复 .keyword 字段；kibana-init sidecar 部署后自动导入 41 个看板/195 对象）
 
 ## 快速开始（M0）
 
@@ -63,6 +66,7 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
   - 另有 `nss-ndr-detections`、`nss-ndr-xdr-push`（M2）
   - 另有 `nss-ndr-strelka-backend`、`nss-ndr-strelka-manager`、`nss-ndr-strelka-rules`、
     `nss-ndr-filecheck`（文件提取 + Strelka）
+  - 另有 `nss-ndr-kibana-init`（Kibana NDR 看板导入）
 - 也可在 GitHub Actions 页面手动触发（workflow_dispatch）。
 - 固定部署版本：把 `deploy/k3s/kustomization.yaml` 中 `images[].newTag` 改为对应 git sha。
 - 前提：基础镜像 `ghcr.io/security-onion-solutions/so-suricata:3.1.0`、`so-zeek:3.1.0` 可被构建机拉取（public）。

@@ -32,6 +32,8 @@ images:
     newTag: 7c747a12345291f499ec83a9900e79c240188e61
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-kibana
     newTag: 7c747a12345291f499ec83a9900e79c240188e61
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-kibana-init
+    newTag: 7c747a12345291f499ec83a9900e79c240188e61
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-xdr-push
     newTag: 7c747a12345291f499ec83a9900e79c240188e61
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-manager

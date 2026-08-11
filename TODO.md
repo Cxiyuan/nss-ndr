@@ -24,6 +24,13 @@
     - [x] cleaner 增加 processed/log 留存清理；磁盘压力兜底纳入 strelka 已扫描目录
     - [x] manager 增加 strelka 配置段（enabled / backend_replicas / 留存）+ UI 页
     - [ ] 部署验证：构建镜像并 pin newTag 后，k3s/Helm 实测端到端
+- [x] **M7 Kibana NDR 看板（复用 SO 模板）**
+  - [x] 从参考机 SO 3.1.0 导出 41 个核心看板（+154 关联对象，共 195 个）
+  - [x] 批量改名 `Security Onion - *` → `NDR - *`（322 处），修复 .keyword 字段（24 处）
+  - [x] 资产入库：images/kibana-init/files/dashboards.ndjson
+  - [x] kibana-init sidecar 自动导入（Kibana 就绪后 _import overwrite，失败重试）
+  - [x] 2026-08-11 重装后手工导入恢复（41 看板/195 对象 0 失败）
+  - [ ] kibana-init 镜像构建后随 CI 自动生效（当前部署机已手工导入，等价）
 - [x] **M4 统一配置管理后台（nss-ndr-manager）**
   - [x] React SPA（Web UI：总览/探针/Suricata/Zeek/ES/告警推送/规则/历史审计）
   - [x] Go API + SQLite 配置库（版本历史 + 审计日志）

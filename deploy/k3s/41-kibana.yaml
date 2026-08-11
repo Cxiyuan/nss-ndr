@@ -38,6 +38,25 @@ spec:
               memory: 256Mi
             limits:
               memory: 1.5Gi
+        # sidecar：Kibana 就绪后自动导入 NDR 看板（参照 SO saved_objects 做法）
+        - name: kibana-init
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-kibana-init
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KIBANA_URL
+              value: "http://localhost:5601"
+            - name: KIBANA_USERNAME
+              value: "elastic"
+            - name: KIBANA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: elastic-password
+          resources:
+            requests:
+              memory: 32Mi
+            limits:
+              memory: 128Mi
 ---
 apiVersion: v1
 kind: Service

@@ -23,6 +23,17 @@ spec:
             - {name: ELASTICSEARCH_PASSWORD, valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: kibana-password}}}
           ports:
             - {containerPort: 5601}
+        - name: kibana-init
+          image: "{{ .Values.images.registry }}/nss-ndr-kibana-init:{{ .Values.images.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: KIBANA_URL, value: "http://localhost:5601"}
+            - {name: KIBANA_USERNAME, value: "elastic"}
+            - name: KIBANA_PASSWORD
+              valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: elastic-password}}
+          resources:
+            requests: {memory: 32Mi}
+            limits: {memory: 128Mi}
 ---
 apiVersion: v1
 kind: Service

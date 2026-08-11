@@ -67,7 +67,7 @@ probeConfig:
 
 # 凭据（部署前修改）
 secrets:
-  elastic: CHANGE_ME_elastic
+  elastic: nss-ndr@2026
   filebeat: CHANGE_ME_filebeat
   kibana: CHANGE_ME_kibana
   xdrPush: CHANGE_ME_xdr
