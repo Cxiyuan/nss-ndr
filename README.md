@@ -74,8 +74,12 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
 ### 部署前提（ES）
 
 - 节点需设置 `vm.max_map_count=262144`（`sysctl -w vm.max_map_count=262144`，写入 `/etc/sysctl.d/` 持久化）。
-- M2/M3：ES 已启用 xpack security；部署前修改 `deploy/k3s/25-secret.yaml`（或 Helm
-  `values.secrets`）中的 4 个密码，es-init 会自动创建 filebeat / kibana_system / xdr-push 应用用户。
+- M2/M3：ES 已启用 xpack security；部署前生成凭据：
+  - k3s 路径：`bash scripts/gen-secret.sh`（elastic 默认 `nss-ndr@2026`，其余服务账号随机；
+    也可参照 `deploy/k3s/25-secret.yaml.example` 手工修改）
+  - Helm 路径：`values.secrets`（elastic 默认已固化 `nss-ndr@2026`）
+  - es-init 会自动创建 filebeat / kibana_system / xdr-push 应用用户。
+- Kibana/ES 登录账号：`elastic`，默认密码 `nss-ndr@2026`；NDR 看板由 kibana-init 自动导入。
 
 ### k3s 拉取 GHCR 镜像
 
