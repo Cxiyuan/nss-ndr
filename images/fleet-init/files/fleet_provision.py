@@ -82,14 +82,19 @@ def k8s_put_secret(data):
         "type": "Opaque",
         "stringData": data,
     }
-    req = urllib.request.Request(url, method="PUT", data=json.dumps(body).encode())
-    req.add_header("Authorization", "Bearer " + token)
-    req.add_header("Content-Type", "application/json")
-    try:
-        with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
-            return r.status
-    except urllib.error.HTTPError as e:
-        return e.code
+    # Secret 不存在时 PUT 返回 404，需先 POST 创建；已存在则 PUT 更新（幂等）
+    for method in ("POST", "PUT"):
+        req = urllib.request.Request(url, method=method, data=json.dumps(body).encode())
+        req.add_header("Authorization", "Bearer " + token)
+        req.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
+                return r.status
+        except urllib.error.HTTPError as e:
+            if method == "POST" and e.code == 409:
+                continue
+            return e.code
+    return 500
 
 
 def ca_fingerprint():
@@ -175,6 +180,10 @@ def main():
     code, resp = kib("/api/fleet/epm/packages/filestream")
     if code == 200:
         filestream_ver = resp.get("item", {}).get("version", "0.0.0")
+    fleet_server_ver = "0.0.0"
+    code, resp = kib("/api/fleet/epm/packages/fleet_server")
+    if code == 200:
+        fleet_server_ver = resp.get("item", {}).get("version", "0.0.0")
 
     # 6. 策略
     for pid, name, desc in (
@@ -202,7 +211,7 @@ def main():
             print(f"集成 {name} 已存在，跳过")
             continue
         pp["policy_id"] = FLEET_POLICY_ID if integ == "fleet-server.json" else POLICY_ID
-        pp["package"]["version"] = "0.0.0" if integ == "fleet-server.json" else filestream_ver
+        pp["package"]["version"] = fleet_server_ver if integ == "fleet-server.json" else filestream_ver
         code, resp = kib("/api/fleet/package_policies", "POST", pp)
         print(f"创建集成 {name}: HTTP {code} {str(resp)[:120]}")
 
