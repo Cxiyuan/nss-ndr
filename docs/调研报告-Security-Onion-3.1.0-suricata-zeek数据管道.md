@@ -265,7 +265,7 @@ flowchart LR
 | so-strelka-backend | `nss-strelka-backend`（replicas 可调） | YARA 规则由宿主编译（`/opt/so/conf/strelka/rules/compiled` 只读挂载，同 SO） |
 | so-strelka-filestream | `nss-strelka-filestream` | unprocessed → staging → 提交后转 processed |
 | so-strelka-manager | `nss-strelka-manager` | 经 coordinator 管理 backend |
-| elastic-agent strelka-logs 集成 | filebeat filestream input | tail strelka.log，`metadata.pipeline=strelka.file` |
+| elastic-agent strelka-logs 集成 | 本项目 elastic-agent filestream input | tail strelka.log，`@metadata.pipeline=strelka.file` |
 | salt 渲染的 `/opt/so/conf/strelka/*` | `nss-ndr-config` ConfigMap（`strelka_*` 键） | manager 下发时一并更新，滚动重启 |
 | salt cron 清理 history | filecheck 内嵌定时线程 + cleaner（processed/log） | 留存天数可在 probe.yaml 配 |
 

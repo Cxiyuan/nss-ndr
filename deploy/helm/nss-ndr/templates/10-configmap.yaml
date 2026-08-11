@@ -18,8 +18,8 @@ data:
 {{ include "nss.render" (dict "ctx" . "file" "configs/zeekctl.cfg") | indent 4 }}
   networks.cfg: |
 {{ include "nss.render" (dict "ctx" . "file" "configs/networks.cfg") | indent 4 }}
-  filebeat.yml: |
-{{ .Files.Get "configs/filebeat.yml" | indent 4 }}
+  agent.yml: |
+{{ .Files.Get "configs/agent.yml" | indent 4 }}
   kibana.yml: |
 {{ .Files.Get "configs/kibana.yml" | indent 4 }}
   strelka_backend.yaml: |

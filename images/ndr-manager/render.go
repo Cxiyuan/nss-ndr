@@ -64,7 +64,7 @@ func renderAll(c FullConfig) (*renderedData, error) {
 		"node.cfg":      "templates/node.cfg",
 		"zeekctl.cfg":   "templates/zeekctl.cfg",
 		"networks.cfg":  "templates/networks.cfg",
-		"filebeat.yml":  "templates/filebeat.yml",
+		"agent.yml":     "templates/agent.yml",
 		"kibana.yml":    "templates/kibana.yml",
 	}
 	for key, rel := range templates {

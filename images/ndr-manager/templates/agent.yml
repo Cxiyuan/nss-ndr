@@ -1,0 +1,144 @@
+# NSS-NDR Elastic Agent standalone 配置（对齐 SO 3.1.0 elastic-agent/filestream 集成）
+# 三个 filestream 输入：suricata-eve / zeek-logs / strelka-logs
+# 输出：Logstash 5055（Lumberjack + 双向 TLS，与 SO Fleet logstash output 一致）
+
+outputs:
+  default:
+    type: logstash
+    hosts: ["nss-logstash:5055"]
+    ssl:
+      certificate_authorities: ["/etc/elastic-agent/certs/ca.crt"]
+      certificate: "/etc/elastic-agent/certs/elastic-agent.crt"
+      key: "/etc/elastic-agent/certs/elastic-agent.key"
+      verification_mode: full
+
+agent:
+  monitoring:
+    enabled: false
+    logs: false
+    metrics: false
+  features: {}
+
+inputs:
+  # Suricata eve（对齐 SO suricata-logs 集成：ndjson 根解析 + 管道路由）
+  - type: filestream
+    id: filestream-filestream-suricata
+    name: suricata-logs
+    use_output: default
+    data_stream:
+      type: logs
+      dataset: suricata.alerts
+      namespace: so
+    streams:
+      - id: filestream-filestream-suricata-stream
+        data_stream:
+          dataset: suricata.alerts
+        paths:
+          - /nsm/suricata/eve*.json
+        prospector.scanner.exclude_files:
+          - '\.gz$'
+        parsers:
+          - ndjson:
+              target: ""
+        processors:
+          - add_fields:
+              target: event
+              fields:
+                category: network
+                module: suricata
+          - script:
+              lang: javascript
+              source: |
+                function process(event) {
+                  var et = event.Get("event_type") || "other";
+                  event.Put("@metadata.pipeline", et === "alert" ? "suricata.alert" : "suricata.common");
+                  var src = (event.Get("log.file.fingerprint") || "") + "|" + (event.Get("log.offset") || "");
+                  var h = 5381;
+                  for (var i = 0; i < src.length; i++) {
+                    h = ((h << 5) + h + src.charCodeAt(i)) >>> 0;
+                  }
+                  event.Put("metadata._id", "nss-" + h.toString(16));
+                }
+
+  # Zeek 协议日志（对齐 SO zeek-logs 集成：dissect 文件名 -> pipeline 路由 + ICS tag）
+  - type: filestream
+    id: filestream-filestream-zeek
+    name: zeek-logs
+    use_output: default
+    data_stream:
+      type: logs
+      dataset: zeek
+      namespace: so
+    streams:
+      - id: filestream-filestream-zeek-stream
+        data_stream:
+          dataset: zeek
+        paths:
+          - /nsm/zeek/logs/current/*.log
+        prospector.scanner.exclude_files:
+          - '(broker|capture_loss|cluster|conn-summary|console|ecat_arp_info|known_certs|known_hosts|known_services|loaded_scripts|ntp|ocsp|packet_filter|reporter|stats|stderr|stdout)(\..+)?\.log$'
+        processors:
+          - dissect:
+              tokenizer: "/nsm/zeek/logs/current/%{pipeline}.log"
+              field: log.file.path
+              trim_chars: ".log"
+              target_prefix: ""
+          - script:
+              lang: javascript
+              source: |
+                function process(event) {
+                  var pl = event.Get("pipeline");
+                  event.Put("@metadata.pipeline", "zeek." + pl);
+                  var src = (event.Get("log.file.fingerprint") || "") + "|" + (event.Get("log.offset") || "");
+                  var h = 5381;
+                  for (var i = 0; i < src.length; i++) {
+                    h = ((h << 5) + h + src.charCodeAt(i)) >>> 0;
+                  }
+                  event.Put("metadata._id", "nss-" + h.toString(16));
+                }
+          - add_fields:
+              target: event
+              fields:
+                category: network
+                module: zeek
+          - add_tags:
+              tags: ["ics"]
+              when:
+                regexp:
+                  pipeline: "^bacnet|^bsap|^cip|^cotp|^dnp3|^ecat|^enip|^modbus|^opcua|^profinet|^s7comm"
+
+  # Strelka 扫描结果（对齐 SO strelka-logs 集成：不解析 ndjson，整行交 ES pipeline）
+  - type: filestream
+    id: filestream-filestream-strelka
+    name: strelka-logs
+    use_output: default
+    data_stream:
+      type: logs
+      dataset: strelka
+      namespace: so
+    streams:
+      - id: filestream-filestream-strelka-stream
+        data_stream:
+          dataset: strelka
+        paths:
+          - /nsm/strelka/log/strelka.log
+        prospector.scanner.exclude_files:
+          - '\.gz$'
+        processors:
+          - add_fields:
+              target: event
+              fields:
+                category: file
+                module: strelka
+          - script:
+              lang: javascript
+              source: |
+                function process(event) {
+                  event.Put("@metadata.pipeline", "strelka.file");
+                  var src = (event.Get("log.file.fingerprint") || "") + "|" + (event.Get("log.offset") || "");
+                  var h = 5381;
+                  for (var i = 0; i < src.length; i++) {
+                    h = ((h << 5) + h + src.charCodeAt(i)) >>> 0;
+                  }
+                  event.Put("metadata._id", "nss-" + h.toString(16));
+                }

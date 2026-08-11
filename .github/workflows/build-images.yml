@@ -31,9 +31,9 @@ jobs:
           - name: es-init
             context: images/es-init
             file: images/es-init/Dockerfile
-          - name: filebeat
-            context: images/filebeat
-            file: images/filebeat/Dockerfile
+          - name: elastic-agent
+            context: images/elastic-agent
+            file: images/elastic-agent/Dockerfile
           - name: logstash
             context: .
             file: images/logstash/Dockerfile

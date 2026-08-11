@@ -10,7 +10,7 @@ resources:
   - 31-zeek-daemonset.yaml
   - 40-elasticsearch.yaml
   - 41-kibana.yaml
-  - 42-filebeat-daemonset.yaml
+  - 42-elastic-agent-daemonset.yaml
   - 44-logstash.yaml
   - 45-redis.yaml
   - 46-strelka.yaml
@@ -26,7 +26,7 @@ images:
     newTag: e6bb45f51955f11bf028278fee86e19645d337ae
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-es-init
     newTag: e6bb45f51955f11bf028278fee86e19645d337ae
-  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-filebeat
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-elastic-agent
     newTag: e6bb45f51955f11bf028278fee86e19645d337ae
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-logstash
     newTag: e6bb45f51955f11bf028278fee86e19645d337ae

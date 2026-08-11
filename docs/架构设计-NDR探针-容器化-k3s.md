@@ -25,7 +25,7 @@ flowchart LR
         ZLOG[("/nsm/zeek/logs/current/*.log")]
         SURPCAP[("/nsm/suripcap/*.pcap")]
         EXTRACT[("/nsm/zeek/extracted/")]
-        FB["filebeat<br/>(tail + 管道路由)"]
+        FB["elastic-agent<br/>(filestream + 管道路由)"]
         ES["elasticsearch<br/>单节点 + ingest pipelines"]
         KIB["kibana<br/>(检索/仪表盘)"]
         DET["detections 服务<br/>(规则管理 API + UI)"]
@@ -57,7 +57,7 @@ flowchart LR
 |---|---|---|---|
 | `so-suricata` | NIDS 检测 + eve.json + pcap-log 全包 | hostNetwork + privileged + DaemonSet | 基于 SO 镜像瘦身，AF_PACKET 抓包 |
 | `so-zeek` | 协议元数据 + 文件提取 | hostNetwork + privileged + DaemonSet | 基于 SO 镜像瘦身，JSON 日志 |
-| `filebeat` | 采集 eve/zeek 日志 → ES | Deployment（或 DaemonSet） | 动态 `@metadata.pipeline` 路由（同 SO） |
+| `elastic-agent` | 采集 eve/zeek/strelka 日志 → Logstash | DaemonSet（standalone） | 动态 `@metadata.pipeline` 路由（对齐 SO） |
 | `elasticsearch` | 本地元数据/告警存储 + ingest pipeline 归一化 | Deployment + LocalPV | 单节点，ILM 自动清理 |
 | `kibana` | 检索/仪表盘 | Deployment | 可选但建议保留 |
 | `detections` | 规则管理（CRUD/启停/阈值/自定义规则）+ 规则下发 | Deployment | 自研（Go/Python），含轻量 UI |
@@ -75,7 +75,7 @@ flowchart LR
    - suricata：eve.json 按小时轮转 `/nsm/eve-%Y-%m-%d-%H:%M.json`；pcap-log `%n/so-pcap.%t`（1000MB/个，多文件，可 LZ4）。
    - zeek：JSON 协议日志 `/nsm/zeek/logs/current/*.log`；文件提取 `/nsm/zeek/extracted/complete/`。
    - 详细落盘设计见 §4.3。
-3. **采集**：filebeat 监听 `/nsm/suricata/eve*.json` 与 `/nsm/zeek/logs/current/*.log`；Zeek 按文件名 JS 设 `@metadata.pipeline=zeek.<logname>`；Suricata 固定 `suricata.common`；ICS 日志自动打 `ics` tag。
+3. **采集**：elastic-agent（standalone）监听 `/nsm/suricata/eve*.json`、`/nsm/zeek/logs/current/*.log` 与 `/nsm/strelka/log/strelka.log`；Zeek 按文件名 JS 设 `@metadata.pipeline=zeek.<logname>`；Suricata 固定 `suricata.common`；ICS 日志自动打 `ics` tag。
 4. **归一化**：ES ingest pipeline（复用 SO 的 `zeek.*` / `suricata.*` / `strelka.file` / `common`），字段映射 ECS：`id.orig_h→source.ip`、`community_id→network.community_id`、`sensorname→observer.name`、`event.dataset=module.dataset` 等。
 5. **存储**：数据流（沿用 SO 命名）：
    - `logs-zeek-so`（Zeek 全部日志，`event.dataset=zeek.conn/...`）
@@ -133,12 +133,12 @@ flowchart LR
 
 | 数据 | 路径 | 轮转 | 压缩 | 采集方式 | 清理策略 |
 |---|---|---|---|---|---|
-| Suricata eve.json | `/nsm/suricata/eve-%Y-%m-%d-%H:%M.json` | 每小时（`rotate-interval: hour`） | 不压缩（filebeat 边读边走） | filebeat 匹配 `eve*.json`（含已轮转文件，排除 `.gz`） | 采集完成后按 `suricata.eve.retention_days`（默认 7）删除 |
+| Suricata eve.json | `/nsm/suricata/eve-%Y-%m-%d-%H:%M.json` | 每小时（`rotate-interval: hour`） | 不压缩（采集器边读边走） | elastic-agent 匹配 `eve*.json`（含已轮转文件，排除 `.gz`） | 采集完成后按 `suricata.eve.retention_days`（默认 7）删除 |
 | Suricata 运行日志 | 容器内 `/var/log/suricata/` | 容器日志滚动 | - | 不采集 | 随容器日志轮转 |
 | Suricata 全包 | `/nsm/suripcap/so-pcap.%t` | 单文件 `limit=1000MB`、`mode: multi` 自动续写 | 可选 LZ4 | 不采集（供 XDR 按需拉取/取证） | **三层保险**：① Suricata `max-files` 自限制（第一道）；② cleaner 双阈值（天数+容量）；③ 磁盘压力兜底（见 §5.9） |
-| Zeek 协议日志 | `/nsm/zeek/logs/current/*.log` | 每小时（`LogRotationInterval=3600`） | `CompressLogs=1` gzip 后移入历史目录 | filebeat 只 tail `current/*.log` | 历史目录按 `zeek.history_retention_days`（默认 30）清理 + 磁盘压力兜底 |
+| Zeek 协议日志 | `/nsm/zeek/logs/current/*.log` | 每小时（`LogRotationInterval=3600`） | `CompressLogs=1` gzip 后移入历史目录 | elastic-agent 只 tail `current/*.log` | 历史目录按 `zeek.history_retention_days`（默认 30）清理 + 磁盘压力兜底 |
 | Zeek 提取文件 | `/nsm/zeek/extracted/complete/<md5>.<ext>` | - | - | 不采集（交 Strelka 或留档） | 按 `zeek.extraction.max_days`（默认 7）清理 + 磁盘压力兜底 |
-| Zeek 运行日志 | `/nsm/zeek/logs/current/{reporter,stats,stderr,stdout}.log` | 随轮转 | gzip | **排除**（filebeat exclude_files） | 随历史目录清理 |
+| Zeek 运行日志 | `/nsm/zeek/logs/current/{reporter,stats,stderr,stdout}.log` | 随轮转 | gzip | **排除**（elastic-agent exclude_files） | 随历史目录清理 |
 | ES 索引数据 | `/nsm/elasticsearch/` | ILM rollover | - | - | ILM：hot→cold→delete（`metadata_days` 默认 60 / `alerts_days` 默认 365） |
 
 #### 4.3.3 磁盘规划建议
@@ -201,7 +201,7 @@ flowchart LR
 - 运行：`node.cfg` 多 worker（fanout 23）、`zeekctl.cfg` 轮转 1h + 压缩。
 - 文件提取：白名单可配，`FileExtract::default_limit` 9MB，输出 `/nsm/zeek/extracted/complete/<md5>.<ext>`。
 
-### 5.3 filebeat
+### 5.3 elastic-agent（standalone）
 
 - 与 ES 同版本（8.x/9.x 待定，见 §10）。配置两个 filestream input（eve、zeek），processor：dissect 文件名 → JS 设 `@metadata.pipeline` → add_fields（module/category）→ ICS tag。
 - 输出：直连本地 ES（https + 认证），`pipeline` 由 `@metadata.pipeline` 指定（同 SO 的 Logstash 输出语义）。
@@ -292,7 +292,7 @@ flowchart LR
 - 磁盘状态上报：每次运行将各挂载点/目录用量（`df -P`、`du -sb`）、剩余空间、触发动作写入 `logs-soc-so` 与状态页，供运维与 XDR 侧探针状态查询。
 - 清理对象与规则（全部来自探针配置文件）：
   - `/nsm/suripcap/`：按 `suricata.pcap.retention_days`（天数）与 `suricata.pcap.storage_limit_gb`（目录总量上限）**双阈值**，先按天、再按总量删除最旧文件（取先到者）。
-  - `/nsm/suricata/eve-*.json`：按 `suricata.eve.retention_days`（默认 7 天）删除已轮转且已被 filebeat 采集的旧文件。
+  - `/nsm/suricata/eve-*.json`：按 `suricata.eve.retention_days`（默认 7 天）删除已轮转且已被 elastic-agent 采集的旧文件。
   - `/nsm/zeek/logs/<rotated>/`：按 `zeek.history_retention_days`（默认 30 天）删除轮转历史（gz）。
   - `/nsm/zeek/extracted/`：按 `zeek.extraction.max_days`（默认 7 天）删除提取文件。
 - 逻辑：CronJob 按 `probe.cleanup_interval`（默认 1h）扫描，分两级：
@@ -381,7 +381,7 @@ xdr:
 
 ## 9. 扩展位（本期不做，设计预留）
 
-- Redis/Kafka 队列：多探针/高吞吐时在 filebeat 与 ES 之间插入（复用 SO 管道）。
+- Redis/Kafka 队列：多探针/高吞吐时在采集器与 ES 之间插入（复用 SO 管道）。
 - Fleet/Elastic Agent：需要中心化管理时启用。
 - 多探针管理面：规则统一下发、探针状态汇总（本期 detections 为单探针形态）。
 - Strelka 文件分析：文件提取后做 YARA/ClamAV（本期只提取不分析）。

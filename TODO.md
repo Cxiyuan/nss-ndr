@@ -31,6 +31,13 @@
   - [x] kibana-init sidecar 自动导入（Kibana 就绪后 _import overwrite，失败重试）
   - [x] 2026-08-11 重装后手工导入恢复（41 看板/195 对象 0 失败）
   - [ ] kibana-init 镜像构建后随 CI 自动生效（当前部署机已手工导入，等价）
+- [x] **M8 采集层对齐 SO：filebeat → Elastic Agent（standalone）**
+  - [x] 新增 elastic-agent 镜像（standalone agent.yml，policy 格式同 SO）
+  - [x] 三 filestream 输入：suricata-eve / zeek-logs / strelka-logs（含 exclude、dissect、
+        JS 管道路由与幂等事件 ID）
+  - [x] 输出 Lumberjack + 双向 TLS 到 Logstash 5055（对齐 SO Fleet logstash output）
+  - [x] k3s/Helm 清单、render/manager/CI 全部替换 filebeat
+  - [ ] 部署验证：构建镜像后实测数据链路（待 CI）
 - [x] **M4 统一配置管理后台（nss-ndr-manager）**
   - [x] React SPA（Web UI：总览/探针/Suricata/Zeek/ES/告警推送/规则/历史审计）
   - [x] Go API + SQLite 配置库（版本历史 + 审计日志）

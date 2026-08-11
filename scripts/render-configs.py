@@ -28,7 +28,7 @@ TEMPLATES = {
 }
 
 STATIC_CONFIGS = {
-    "filebeat.yml": "images/filebeat/filebeat.yml",
+    "agent.yml": "images/elastic-agent/files/agent.yml",
     "kibana.yml": "images/kibana/kibana.yml",
     # Strelka 文件分析（参照 SO 3.1.0 配置，ELv2 资产见 README 许可说明）
     "strelka_backend.yaml": "images/strelka-backend/files/backend.yaml",

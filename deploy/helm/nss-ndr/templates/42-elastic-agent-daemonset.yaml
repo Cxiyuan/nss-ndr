@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nss-elastic-agent
+  namespace: {{ .Release.Namespace }}
+spec:
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels: {app: nss-elastic-agent}
+  template:
+    metadata:
+      labels: {app: nss-elastic-agent}
+    spec:
+      tolerations: [{operator: Exists}]
+      imagePullSecrets: {{ toYaml .Values.images.pullSecrets | nindent 8 }}
+      containers:
+        - name: elastic-agent
+          image: "{{ .Values.images.registry }}/nss-ndr-elastic-agent:{{ .Values.images.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NSS_SENSORNAME
+              valueFrom: {configMapKeyRef: {name: nss-ndr-config, key: sensor_id}}
+          volumeMounts:
+            - {name: config, mountPath: /usr/share/elastic-agent/agent.yml, subPath: agent.yml, readOnly: true}
+            - {name: nsm, mountPath: /nsm, readOnly: true}
+            - {name: certs, mountPath: /etc/elastic-agent/certs, readOnly: true}
+            - {name: data, mountPath: /usr/share/elastic-agent/data}
+          resources:
+            requests: {memory: 256Mi}
+            limits: {memory: 1Gi}
+      volumes:
+        - {name: config, configMap: {name: nss-ndr-config}}
+        - {name: nsm, persistentVolumeClaim: {claimName: nss-ndr-nsm}}
+        - {name: certs, secret: {secretName: nss-ndr-certs}}
+        - {name: data, emptyDir: {}}

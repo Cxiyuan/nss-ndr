@@ -9,6 +9,7 @@ docs/                     # 设计文档（调研报告、架构设计）
 images/
   suricata/               # Suricata 8.0.5 镜像（NIDS + pcap-log）
   zeek/                   # Zeek 8.0.8 镜像（元数据 + 文件提取）
+  elastic-agent/          # Elastic Agent（standalone，对齐 SO 采集层）
   strelka-backend/        # Strelka 扫描 worker（YARA/exiftool/PE/PDF...，参照 SO）
   strelka-manager/        # Strelka frontend / filestream / manager（target/strelka Go）
   strelka-rules/          # YARA 规则编译（initContainer，securityonion-yara）
@@ -29,6 +30,8 @@ scripts/                  # 配置渲染等开发工具
   扫描集群 + strelka.file pipeline，k3s/Helm 双份清单就绪，待部署验证）
 - [x] M3c：Kibana NDR 看板（导出自 Security Onion 3.1.0，改名 NDR - * 并按本项目
   ES 模板修复 .keyword 字段；kibana-init sidecar 部署后自动导入 41 个看板/195 对象）
+- [x] M8：采集层切换 Elastic Agent（standalone，对齐 SO：同一 filestream 集成语义，
+  suricata/zeek/strelka 三输入 + Lumberjack/TLS 输出；替代独立 filebeat）
 
 ## 快速开始（M0）
 
@@ -62,7 +65,7 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
 - 推送 `master` 分支或 `v*` tag 时，`.github/workflows/build-images.yml` 自动构建 Suricata/Zeek 镜像并推送到 GHCR：
 - `ghcr.io/cxiyuan/nss-ndr/nss-ndr-suricata:latest` / `:<git-sha>` / `:<tag>`
 - `ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek:latest` / `:<git-sha>` / `:<tag>`
-  - 另有 `nss-ndr-es-init`、`nss-ndr-filebeat`、`nss-ndr-kibana`（M1）
+  - 另有 `nss-ndr-es-init`、`nss-ndr-elastic-agent`、`nss-ndr-kibana`（M1/M8）
   - 另有 `nss-ndr-detections`、`nss-ndr-xdr-push`（M2）
   - 另有 `nss-ndr-strelka-backend`、`nss-ndr-strelka-manager`、`nss-ndr-strelka-rules`、
     `nss-ndr-filecheck`（文件提取 + Strelka）
