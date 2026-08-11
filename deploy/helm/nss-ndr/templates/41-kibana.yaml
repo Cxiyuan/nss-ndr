@@ -21,6 +21,10 @@ spec:
             - {name: ELASTICSEARCH_HOSTS, value: "http://nss-elasticsearch:9200"}
             - {name: ELASTICSEARCH_USERNAME, value: "kibana_system"}
             - {name: ELASTICSEARCH_PASSWORD, valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: kibana-password}}}
+            # Kibana 加密 key（Fleet 等依赖 encrypted saved objects 的插件必需）
+            - {name: XPACK_SECURITY_ENCRYPTIONKEY, valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: kibana-encryption-key}}}
+            - {name: XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY, valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: kibana-encrypted-saved-objects-key}}}
+            - {name: XPACK_REPORTING_ENCRYPTIONKEY, valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: kibana-reporting-key}}}
           ports:
             - {containerPort: 5601}
         - name: kibana-init

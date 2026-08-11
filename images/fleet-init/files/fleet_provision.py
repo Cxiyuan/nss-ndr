@@ -109,7 +109,7 @@ def ensure_exists(api, item_id, create_method, create_body):
 def main():
     # 1. 等待 Kibana Fleet API
     for _ in range(60):
-        code, _ = kib("/api/fleet/settings")
+        code, _ = kib("/api/fleet/agent_policies")
         if code == 200:
             break
         print("等待 Kibana Fleet API...")
@@ -117,8 +117,12 @@ def main():
     else:
         raise SystemExit("Kibana Fleet API 不可用")
 
-    # 2. ES service token（fleet-server 认证 ES）
-    code, resp = kib("/api/fleet/service_tokens", "POST", {"name": "nss-fleet-server"})
+    # 1.5 Fleet 一次性初始化（创建默认输出/预配置；缺 encryption key 时会 400）
+    code, resp = kib("/api/fleet/setup", "POST", {})
+    print(f"Fleet setup: HTTP {code} {str(resp)[:100]}")
+
+    # 2. ES service token（fleet-server 认证 ES；9.x 由 Kibana 生成，无需 name）
+    code, resp = kib("/api/fleet/service_tokens", "POST", {})
     es_token = resp.get("value", "")
     if not es_token:
         # 幂等：token 已存在则无法再取回，直接继续（fleet-server 用旧 token）
@@ -157,10 +161,11 @@ def main():
         code, resp = kib("/api/fleet/outputs", "POST", output_body)
         print(f"创建 logstash 输出: HTTP {code} {str(resp)[:120]}")
 
-    # 5. 安装包
+    # 5. 安装包（GET 即使未安装也返回 200，需检查 status 才跳过）
     for pkg in ("filestream", "fleet_server"):
         code, resp = kib(f"/api/fleet/epm/packages/{pkg}")
-        if code != 200:
+        installed = resp.get("item", {}).get("status") == "installed" if code == 200 else False
+        if not installed:
             code, resp = kib(f"/api/fleet/epm/packages/{pkg}", "POST", {"force": True})
             print(f"安装包 {pkg}: HTTP {code} {str(resp)[:100]}")
         else:

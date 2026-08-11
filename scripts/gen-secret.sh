@@ -2,6 +2,7 @@
 # 生成 k3s 部署凭据 deploy/k3s/25-secret.yaml（gitignored，不入库）
 # - elastic 固定默认值 nss-ndr@2026（Kibana/ES 登录账号，与 Helm values.secrets 一致）
 # - filebeat / kibana_system / xdr-push / redis 随机生成（内部服务账号）
+# - Kibana 加密 key 随机生成（xpack.security/encryptedSavedObjects/reporting）
 # 已存在则不覆盖，避免误改在跑环境。
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -24,6 +25,9 @@ stringData:
   elastic-password: "nss-ndr@2026"
   filebeat-password: $(openssl rand -hex 16)
   kibana-password: $(openssl rand -hex 16)
+  kibana-encryption-key: $(openssl rand -hex 32)
+  kibana-encrypted-saved-objects-key: $(openssl rand -hex 32)
+  kibana-reporting-key: $(openssl rand -hex 32)
   xdr-push-password: $(openssl rand -hex 16)
   redis-password: $(openssl rand -hex 16)
 EOF

@@ -30,6 +30,22 @@ spec:
                 secretKeyRef:
                   name: nss-ndr-secrets
                   key: kibana-password
+            # Kibana 加密 key（Fleet 等依赖 encrypted saved objects 的插件必需，缺失时 Fleet API 返回 400）
+            - name: XPACK_SECURITY_ENCRYPTIONKEY
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: kibana-encryption-key
+            - name: XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: kibana-encrypted-saved-objects-key
+            - name: XPACK_REPORTING_ENCRYPTIONKEY
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: kibana-reporting-key
           ports:
             - containerPort: 5601
           resources:

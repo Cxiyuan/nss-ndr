@@ -70,6 +70,9 @@ secrets:
   elastic: nss-ndr@2026
   filebeat: CHANGE_ME_filebeat
   kibana: CHANGE_ME_kibana
+  kibanaEncryption: CHANGE_ME_kibana_encryption
+  kibanaEncryptedSavedObjects: CHANGE_ME_kibana_eso
+  kibanaReporting: CHANGE_ME_kibana_reporting
   xdrPush: CHANGE_ME_xdr
 
 service:
