@@ -13,7 +13,17 @@
   - [x] cleaner（全包/日志双阈值 + 磁盘压力兜底）
   - [x] Helm Chart 化
   - [x] ES 认证加固（xpack security + 应用用户）
-  - [ ] 文件提取 + Strelka（可选，延后）
+  - [x] 文件提取 + Strelka（参照 SO 3.1.0）
+    - [x] Zeek 提取策略（MIME 白名单 + 9MB 上限 + 完整性校验，M0 已随 zeek 镜像就绪）
+    - [x] filecheck（watchdog + SHA1 history 去重 + 搬入 unprocessed；history 定时清理）
+    - [x] Strelka 六组件 k3s/Helm 清单（coordinator/gatekeeper redis + frontend/backend/
+          filestream/manager，frontend 57314）
+    - [x] YARA 规则：securityonion-yara（固定提交）→ 编译 rules.compiled（initContainer）
+    - [x] 数据链路：strelka.log → filebeat（metadata.pipeline=strelka.file）→ logstash → ES
+          （strelka.file pipeline + logs-strelka-so 数据流模板 + ILM）
+    - [x] cleaner 增加 processed/log 留存清理；磁盘压力兜底纳入 strelka 已扫描目录
+    - [x] manager 增加 strelka 配置段（enabled / backend_replicas / 留存）+ UI 页
+    - [ ] 部署验证：构建镜像并 pin newTag 后，k3s/Helm 实测端到端
 - [x] **M4 统一配置管理后台（nss-ndr-manager）**
   - [x] React SPA（Web UI：总览/探针/Suricata/Zeek/ES/告警推送/规则/历史审计）
   - [x] Go API + SQLite 配置库（版本历史 + 审计日志）
@@ -52,6 +62,8 @@
 - [x] 告警闭环：注入测试告警 → xdr-push 查询命中 → Webhook 重试推送 → 失败写死信（18888 为测试地址）
 - [x] suricata unix socket 热加载通道（detections reload-rules）
 - [x] nss-ndr-manager 配置下发实测：保存 probe/xdr 配置 → ConfigMap 更新（interface=enp5s0）→ 7 组件滚动重启 → 审计记录
+- [ ] Strelka 端到端实测（待镜像构建）：zeek 提取 → filecheck → filestream → 扫描 →
+      strelka.log → ES logs-strelka-so → Kibana SOC Files 视图
 - [x] 部署机未改 k3s/rancher 配置；`vm.max_map_count` 本机已 1048576（满足 ES 要求），未做系统级修改
 - [ ] 清理阈值实测：cleaner 已跑（Completed），需观察 pcap 增长后按 retention/storage_limit 清理（M3 验收）
 - [ ] 接入真实 XDR Webhook 地址（替换 `probe.local.yaml` 中 18888 测试 URL 后重新渲染 ConfigMap）
@@ -64,3 +76,4 @@
 - [ ] Zeek 轮转历史是否补采进 ES（默认只留档）
 - [ ] manager 配置初始化：部署后需在 UI 填写镜像口/Webhook 再首次下发（当前已用 API 写入）
 - [ ] Sigma 规则源扩展：支持从 SigmaHQ 仓库拉取/同步（当前内置 + 手动导入）
+- [ ] YARA 规则源扩展：构建期固定 securityonion-yara 提交，后续可加 UI 同步/自定义规则

@@ -253,6 +253,25 @@ flowchart LR
 - 默认 Zeek 提取文件（MIME 白名单）→ `/nsm/zeek/extracted/complete/`；切 Suricata metadata 时走 `filestore` → `/nsm/extracted/`。
 - `so-strelka-filestream` 监控提取目录，把文件交给 `so-strelka-backend`（YARA、ClamAV、exiftool 等）扫描，结果 JSON 落 `/nsm/strelka/log/strelka.log`，被 Agent 收走 → `strelka.file` pipeline → SOC Files 视图。
 
+### 9.1 本项目落地（k3s，参照 SO 3.1.0）
+
+本项目以 k8s 原语等价复刻 SO 的"宿主进程 + docker"方案，详见 `deploy/k3s/46-strelka.yaml`：
+
+| SO 组件 | 本项目 k8s 组件 | 说明 |
+|---|---|---|
+| filecheck（host python + cron） | `nss-strelka-filecheck` Deployment | watchdog + SHA1 history 去重，history 清理内嵌线程 |
+| so-strelka-coordinator / gatekeeper | `nss-strelka-coordinator` / `nss-strelka-gatekeeper`（redis:7） | 任务分发（6380）/ 去重缓存（6381），数据落 `/nsm/strelka/coord-redis-data`、`gk-redis-data` |
+| so-strelka-frontend | `nss-strelka-frontend`（:57314） | 扫描结果 JSONL 写 `/nsm/strelka/log/strelka.log` |
+| so-strelka-backend | `nss-strelka-backend`（replicas 可调） | YARA 规则由 `nss-strelka-rules` initContainer 编译挂载 |
+| so-strelka-filestream | `nss-strelka-filestream` | unprocessed → staging → 提交后转 processed |
+| so-strelka-manager | `nss-strelka-manager` | 经 coordinator 管理 backend |
+| elastic-agent strelka-logs 集成 | filebeat filestream input | tail strelka.log，`metadata.pipeline=strelka.file` |
+| salt 渲染的 `/opt/so/conf/strelka/*` | `nss-ndr-config` ConfigMap（`strelka_*` 键） | manager 下发时一并更新，滚动重启 |
+| salt cron 清理 history | filecheck 内嵌定时线程 + cleaner（processed/log） | 留存天数可在 probe.yaml 配 |
+
+与 SO 的差异：Strelka 组件在 k8s 内以容器用户（939/1001）运行，目录权限由 initContainer 准备；
+`md_engine=SURICATA` 的提取路径变体暂未支持（本项目默认 Zeek 提取）。
+
 ---
 
 ## 10. 离线 PCAP 导入（so-import-pcap / sensoroni）

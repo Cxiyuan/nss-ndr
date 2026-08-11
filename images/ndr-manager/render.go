@@ -79,6 +79,24 @@ func renderAll(c FullConfig) (*renderedData, error) {
 		data[key] = s
 	}
 
+	// Strelka 静态配置（参照 SO 3.1.0 默认值，Coordinator/Frontend 为 k8s 服务名）
+	strelkaFiles := map[string]string{
+		"strelka_backend.yaml":    "templates/strelka/backend.yaml",
+		"strelka_logging.yaml":    "templates/strelka/logging.yaml",
+		"strelka_passwords_dat":   "templates/strelka/passwords.dat",
+		"strelka_taste_yara":      "templates/strelka/taste/taste.yara",
+		"strelka_frontend.yaml":   "templates/strelka/frontend.yaml",
+		"strelka_filestream.yaml": "templates/strelka/filestream.yaml",
+		"strelka_manager.yaml":    "templates/strelka/manager.yaml",
+	}
+	for key, rel := range strelkaFiles {
+		content, err := tplFS.ReadFile(rel)
+		if err != nil {
+			return nil, err
+		}
+		data[key] = string(content)
+	}
+
 	// zeek policy 脚本（扁平化 key，与 ConfigMap 约定一致）
 	_ = fs.WalkDir(tplFS, "templates/policy/securityonion", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

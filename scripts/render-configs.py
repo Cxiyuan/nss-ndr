@@ -30,6 +30,14 @@ TEMPLATES = {
 STATIC_CONFIGS = {
     "filebeat.yml": "images/filebeat/filebeat.yml",
     "kibana.yml": "images/kibana/kibana.yml",
+    # Strelka 文件分析（参照 SO 3.1.0 配置，ELv2 资产见 README 许可说明）
+    "strelka_backend.yaml": "images/strelka-backend/files/backend.yaml",
+    "strelka_logging.yaml": "images/strelka-backend/files/logging.yaml",
+    "strelka_passwords_dat": "images/strelka-backend/files/passwords.dat",
+    "strelka_taste_yara": "images/strelka-backend/files/taste/taste.yara",
+    "strelka_frontend.yaml": "images/strelka-manager/files/frontend.yaml",
+    "strelka_filestream.yaml": "images/strelka-manager/files/filestream.yaml",
+    "strelka_manager.yaml": "images/strelka-manager/files/manager.yaml",
 }
 
 POLICY_DIR = "images/zeek/files/policy/securityonion"

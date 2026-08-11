@@ -9,6 +9,10 @@ docs/                     # 设计文档（调研报告、架构设计）
 images/
   suricata/               # Suricata 8.0.5 镜像（NIDS + pcap-log）
   zeek/                   # Zeek 8.0.8 镜像（元数据 + 文件提取）
+  strelka-backend/        # Strelka 扫描 worker（YARA/exiftool/PE/PDF...，参照 SO）
+  strelka-manager/        # Strelka frontend / filestream / manager（target/strelka Go）
+  strelka-rules/          # YARA 规则编译（initContainer，securityonion-yara）
+  filecheck/              # Zeek 提取文件搬运 + SHA1 去重（filecheck）
 deploy/k3s/               # k3s 清单（namespace/ConfigMap/PV/DaemonSet）
 configs/                  # 探针配置文件示例（probe.yaml）
 scripts/                  # 配置渲染等开发工具
@@ -20,6 +24,8 @@ scripts/                  # 配置渲染等开发工具
 - [x] M1：filebeat + elasticsearch + kibana 本地检索闭环（镜像/清单/管道就绪，待部署验证）
 - [x] M2：detections 规则管理 + xdr-push Webhook 推送（镜像/清单就绪，待部署验证）
 - [x] M3：cleaner 全包/日志清理 + 阈值/抑制 + ES 认证加固 + Helm Chart
+- [x] M3b：文件提取 + Strelka（参照 SO 3.1.0：filecheck 搬运去重 + Strelka 六组件
+  扫描集群 + strelka.file pipeline，k3s/Helm 双份清单就绪，待部署验证）
 
 ## 快速开始（M0）
 
@@ -55,6 +61,8 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
 - `ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek:latest` / `:<git-sha>` / `:<tag>`
   - 另有 `nss-ndr-es-init`、`nss-ndr-filebeat`、`nss-ndr-kibana`（M1）
   - 另有 `nss-ndr-detections`、`nss-ndr-xdr-push`（M2）
+  - 另有 `nss-ndr-strelka-backend`、`nss-ndr-strelka-manager`、`nss-ndr-strelka-rules`、
+    `nss-ndr-filecheck`（文件提取 + Strelka）
 - 也可在 GitHub Actions 页面手动触发（workflow_dispatch）。
 - 固定部署版本：把 `deploy/k3s/kustomization.yaml` 中 `images[].newTag` 改为对应 git sha。
 - 前提：基础镜像 `ghcr.io/security-onion-solutions/so-suricata:3.1.0`、`so-zeek:3.1.0` 可被构建机拉取（public）。
@@ -81,4 +89,8 @@ kubectl -n nss-ndr create secret docker-registry ghcr-pull \
 
 - 设计参考 Security Onion 3.1.0（Elastic License 2.0）。本项目自研实现为主；
   若后续直接引入 SO 的 ingest pipeline/组件模板等资产，需按 ELv2 要求评估合规性（详见 `docs/架构设计-NDR探针-容器化-k3s.md` §10.2）。
+- Strelka 组件：控制面 Go 程序来自 `target/strelka`（Apache-2.0），扫描器 Python 包来自
+  `defensivedepth/strelka` 分支（派生自 target/strelka）；YARA 规则来自
+  `Security-Onion-Solutions/securityonion-yara`。backend/frontend/filestream 等配置与
+  镜像构建方式参照 SO 3.1.0（ELv2），仓库内已注明来源。
 - Suricata / Zeek 为 GPL-2.0 / BSD 系开源软件，按各自许可使用。

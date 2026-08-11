@@ -13,6 +13,7 @@ resources:
   - 42-filebeat-daemonset.yaml
   - 44-logstash.yaml
   - 45-redis.yaml
+  - 46-strelka.yaml
   - 51-xdr-push.yaml
   - 60-cleaner-cronjob.yaml
   - 55-manager.yaml
@@ -36,4 +37,12 @@ images:
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-manager
     newTag: ce3d54774567d75992772761c7e2db20cf8d2083
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-cleaner
+    newTag: ce3d54774567d75992772761c7e2db20cf8d2083
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-backend
+    newTag: ce3d54774567d75992772761c7e2db20cf8d2083
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-manager
+    newTag: ce3d54774567d75992772761c7e2db20cf8d2083
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-rules
+    newTag: ce3d54774567d75992772761c7e2db20cf8d2083
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-filecheck
     newTag: ce3d54774567d75992772761c7e2db20cf8d2083

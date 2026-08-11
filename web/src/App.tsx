@@ -12,6 +12,7 @@ const nav = [
   { to: "/config/zeek", label: "Zeek" },
   { to: "/config/elasticsearch", label: "Elasticsearch" },
   { to: "/config/xdr", label: "告警推送" },
+  { to: "/config/strelka", label: "Strelka" },
   { to: "/rules", label: "规则管理" },
   { to: "/sigma", label: "Sigma 检测" },
   { to: "/history", label: "历史与审计" },
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="/config/zeek" element={<ConfigPage section="zeek" title="Zeek 配置" />} />
           <Route path="/config/elasticsearch" element={<ConfigPage section="elasticsearch" title="Elasticsearch 配置" />} />
           <Route path="/config/xdr" element={<ConfigPage section="xdr" title="告警推送配置" />} />
+          <Route path="/config/strelka" element={<ConfigPage section="strelka" title="Strelka 文件分析" />} />
           <Route path="/rules" element={<Rules />} />
           <Route path="/sigma" element={<Sigma />} />
           <Route path="/history" element={<History />} />

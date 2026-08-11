@@ -1,0 +1,67 @@
+{
+  "index_patterns": ["logs-strelka-so*"],
+  "data_stream": {},
+  "priority": 500,
+  "template": {
+    "settings": {
+      "index.lifecycle.name": "nss-ndr-logs",
+      "index.number_of_replicas": 0
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "message": { "type": "object", "enabled": false },
+        "event": {
+          "properties": {
+            "kind": { "type": "keyword" },
+            "category": { "type": "keyword" },
+            "module": { "type": "keyword" },
+            "dataset": { "type": "keyword" },
+            "severity": { "type": "long" },
+            "severity_label": { "type": "keyword" }
+          }
+        },
+        "observer": { "properties": { "name": { "type": "keyword" } } },
+        "host": { "properties": { "name": { "type": "keyword" } } },
+        "file": {
+          "properties": {
+            "name": { "type": "keyword" },
+            "mime_type": { "type": "keyword" },
+            "source": { "type": "keyword" },
+            "size": { "type": "long" },
+            "depth": { "type": "long" },
+            "flavors": { "type": "object", "dynamic": true },
+            "hash": {
+              "properties": {
+                "md5": { "type": "keyword" },
+                "sha1": { "type": "keyword" },
+                "sha256": { "type": "keyword" }
+              }
+            }
+          }
+        },
+        "hash": {
+          "properties": {
+            "md5": { "type": "keyword" },
+            "sha1": { "type": "keyword" },
+            "sha256": { "type": "keyword" },
+            "ssdeep": { "type": "keyword" },
+            "tlsh": { "type": "keyword" }
+          }
+        },
+        "rule": {
+          "type": "object",
+          "dynamic": true,
+          "properties": {
+            "name": { "type": "keyword" },
+            "uuid": { "type": "keyword" },
+            "score": { "type": "long" }
+          }
+        },
+        "scan": { "type": "object", "dynamic": true },
+        "request": { "type": "object", "dynamic": true },
+        "exiftool": { "type": "object", "dynamic": true }
+      }
+    }
+  }
+}

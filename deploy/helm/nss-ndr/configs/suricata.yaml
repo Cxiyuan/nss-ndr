@@ -201,6 +201,10 @@ run-as:
   user: suricata
   group: suricata
 
+# detections 服务通过 unix socket 触发规则热加载（与 SO 3.1.0 一致）
+unix-command:
+  enabled: auto
+
 coredump:
   max-dump: unlimited
 

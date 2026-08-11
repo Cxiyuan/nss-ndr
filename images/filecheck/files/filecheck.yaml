@@ -1,0 +1,6 @@
+filecheck:
+  extract_path: /nsm/zeek/extracted/complete
+  historypath: /nsm/strelka/history
+  strelkapath: /nsm/strelka/unprocessed
+  logfile: /opt/so/log/strelka/filecheck.log
+  history_clean_days: 2

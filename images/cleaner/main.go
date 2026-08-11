@@ -36,6 +36,13 @@ type Config struct {
 			MaxDays int `yaml:"max_days"`
 		} `yaml:"extraction"`
 	} `yaml:"zeek"`
+	Strelka struct {
+		Enabled bool `yaml:"enabled"`
+		Retention struct {
+			ProcessedDays int `yaml:"processed_days"`
+			LogDays       int `yaml:"log_days"`
+		} `yaml:"retention"`
+	} `yaml:"strelka"`
 }
 
 const (
@@ -46,6 +53,8 @@ const (
 	suricataEv = nsmDir + "/suricata"
 	zeekLogs   = nsmDir + "/zeek/logs"
 	zeekExt    = nsmDir + "/zeek/extracted/complete"
+	strelkaProc = nsmDir + "/strelka/processed"
+	strelkaLog  = nsmDir + "/strelka/log"
 )
 
 var cfg Config
@@ -124,6 +133,16 @@ func cleanupRoutine() (int, int64, []string) {
 	delExt, ebytes := removeOldFiles(zeekExt, "*", cfg.Zeek.Extraction.MaxDays)
 	totalFiles += delExt
 	totalBytes += ebytes
+
+	// Strelka 已扫描文件与结果日志（history 由 filecheck 内部按天清理，参照 SO cron）
+	if cfg.Strelka.Enabled {
+		delProc, pbytes := removeOldFiles(strelkaProc, "*", cfg.Strelka.Retention.ProcessedDays)
+		totalFiles += delProc
+		totalBytes += pbytes
+		delLog, lbytes := removeOldFiles(strelkaLog, "strelka*.log*", cfg.Strelka.Retention.LogDays)
+		totalFiles += delLog
+		totalBytes += lbytes
+	}
 
 	// 全包：先按天数，再按总量上限
 	pcapDays := cfg.Suricata.Pcap.RetentionDays
@@ -230,11 +249,11 @@ func removeOldest(dir, pattern string) int64 {
 	return info.Size()
 }
 
-// cleanUnderPressure 磁盘压力兜底：循环删最旧，顺序 zeek 历史 → 提取 → 全包
+// cleanUnderPressure 磁盘压力兜底：循环删最旧，顺序 zeek 历史 → 提取 → strelka 已扫描 → 全包
 func cleanUnderPressure() {
 	for _, target := range []struct {
 		dir, pattern string
-	}{{zeekLogs, "*"}, {zeekExt, "*"}, {suripcap, "so-pcap.*"}} {
+	}{{zeekLogs, "*"}, {zeekExt, "*"}, {strelkaProc, "*"}, {suripcap, "so-pcap.*"}} {
 		for fsUsagePct(nsmDir) > cfg.Probe.DiskPressureThreshold {
 			var removed int64
 			if target.dir == zeekLogs {

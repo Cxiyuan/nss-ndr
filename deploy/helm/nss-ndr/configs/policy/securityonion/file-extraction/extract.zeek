@@ -4,7 +4,8 @@
 module NSSNDR;
 
 @load base/frameworks/files
-@load base/frameworks/exec
+# Zeek 8 中 exec 框架位于 base/utils/exec（base/frameworks/exec 不存在）
+@load base/utils/exec
 
 export {
     redef FileExtract::prefix = "/nsm/zeek/extracted/";

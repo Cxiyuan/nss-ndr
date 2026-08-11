@@ -22,6 +22,20 @@ data:
 {{ .Files.Get "configs/filebeat.yml" | indent 4 }}
   kibana.yml: |
 {{ .Files.Get "configs/kibana.yml" | indent 4 }}
+  strelka_backend.yaml: |
+{{ .Files.Get "configs/strelka/backend.yaml" | indent 4 }}
+  strelka_logging.yaml: |
+{{ .Files.Get "configs/strelka/logging.yaml" | indent 4 }}
+  strelka_passwords_dat: |
+{{ .Files.Get "configs/strelka/passwords.dat" | indent 4 }}
+  strelka_taste_yara: |
+{{ .Files.Get "configs/strelka/taste/taste.yara" | indent 4 }}
+  strelka_frontend.yaml: |
+{{ .Files.Get "configs/strelka/frontend.yaml" | indent 4 }}
+  strelka_filestream.yaml: |
+{{ .Files.Get "configs/strelka/filestream.yaml" | indent 4 }}
+  strelka_manager.yaml: |
+{{ .Files.Get "configs/strelka/manager.yaml" | indent 4 }}
   bpf: |
 {{ .Values.probeConfig.probe.bpf | indent 4 }}
   sensor_id: {{ .Values.probeConfig.probe.id }}

@@ -1,0 +1,414 @@
+# NSS-NDR Strelka 文件静态分析（参照 Security Onion 3.1.0 架构）
+#
+# 组件对应 SO：
+#   so-strelka-coordinator / so-strelka-gatekeeper -> redis（任务分发 / 去重缓存）
+#   so-strelka-frontend  -> gRPC 接收端（57314），结果 JSONL 写 /nsm/strelka/log/strelka.log
+#   so-strelka-backend   -> 扫描 worker（YARA/exiftool/PE/PDF...）
+#   so-strelka-filestream-> 监控 /nsm/strelka/unprocessed 提交扫描
+#   so-strelka-manager   -> 通过 coordinator 管理 backend
+#   filecheck            -> Zeek 提取文件搬运 + SHA1 去重（SO 用 host python + cron）
+#
+# 数据流：zeek extract -> filecheck -> unprocessed -> filestream -> frontend
+#         -> backend 扫描 -> 结果写 strelka.log -> filebeat -> ES(strelka.file)
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-strelka-coordinator
+  namespace: nss-ndr
+  labels:
+    app: nss-strelka-coordinator
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: nss-strelka-coordinator
+  template:
+    metadata:
+      labels:
+        app: nss-strelka-coordinator
+    spec:
+      initContainers:
+        - name: prepare-data
+          image: docker.io/library/busybox:1.36
+          command:
+            - sh
+            - -c
+            - mkdir -p /nsm/strelka/coord-redis-data && chown -R 999:999 /nsm/strelka/coord-redis-data
+          volumeMounts:
+            - name: nsm
+              mountPath: /nsm
+      containers:
+        - name: redis
+          image: docker.io/library/redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          args:
+            - "redis-server"
+            - "--appendonly"
+            - "yes"
+            - "--dir"
+            - "/nsm/strelka/coord-redis-data"
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: nsm
+              mountPath: /nsm
+      volumes:
+        - name: nsm
+          persistentVolumeClaim:
+            claimName: nss-ndr-nsm
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nss-strelka-coordinator
+  namespace: nss-ndr
+spec:
+  selector:
+    app: nss-strelka-coordinator
+  ports:
+    - port: 6380
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-strelka-gatekeeper
+  namespace: nss-ndr
+  labels:
+    app: nss-strelka-gatekeeper
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: nss-strelka-gatekeeper
+  template:
+    metadata:
+      labels:
+        app: nss-strelka-gatekeeper
+    spec:
+      initContainers:
+        - name: prepare-data
+          image: docker.io/library/busybox:1.36
+          command:
+            - sh
+            - -c
+            - mkdir -p /nsm/strelka/gk-redis-data && chown -R 999:999 /nsm/strelka/gk-redis-data
+          volumeMounts:
+            - name: nsm
+              mountPath: /nsm
+      containers:
+        - name: redis
+          image: docker.io/library/redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          args:
+            - "redis-server"
+            - "--appendonly"
+            - "yes"
+            - "--dir"
+            - "/nsm/strelka/gk-redis-data"
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: nsm
+              mountPath: /nsm
+      volumes:
+        - name: nsm
+          persistentVolumeClaim:
+            claimName: nss-ndr-nsm
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nss-strelka-gatekeeper
+  namespace: nss-ndr
+spec:
+  selector:
+    app: nss-strelka-gatekeeper
+  ports:
+    - port: 6381
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-strelka-frontend
+  namespace: nss-ndr
+  labels:
+    app: nss-strelka-frontend
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: nss-strelka-frontend
+  template:
+    metadata:
+      labels:
+        app: nss-strelka-frontend
+    spec:
+      initContainers:
+        - name: prepare-dirs
+          image: docker.io/library/busybox:1.36
+          command:
+            - sh
+            - -c
+            - mkdir -p /nsm/strelka/log && chown -R 939:939 /nsm/strelka/log
+          volumeMounts:
+            - name: nsm
+              mountPath: /nsm
+      containers:
+        - name: frontend
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-manager
+          imagePullPolicy: IfNotPresent
+          command: ["strelka-frontend"]
+          ports:
+            - containerPort: 57314
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/strelka
+              readOnly: true
+            - name: nsm
+              mountPath: /nsm
+      volumes:
+        - name: config
+          configMap:
+            name: nss-ndr-config
+            items:
+              - key: strelka_frontend.yaml
+                path: frontend.yaml
+        - name: nsm
+          persistentVolumeClaim:
+            claimName: nss-ndr-nsm
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nss-strelka-frontend
+  namespace: nss-ndr
+spec:
+  selector:
+    app: nss-strelka-frontend
+  ports:
+    - port: 57314
+      targetPort: 57314
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-strelka-backend
+  namespace: nss-ndr
+  labels:
+    app: nss-strelka-backend
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: nss-strelka-backend
+  template:
+    metadata:
+      labels:
+        app: nss-strelka-backend
+    spec:
+      initContainers:
+        # YARA 规则编译：把 securityonion-yara 编译为 rules.compiled（参照 SO compile_yara）
+        - name: rules
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-rules
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: yara
+              mountPath: /compiled
+      containers:
+        - name: backend
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-backend
+          imagePullPolicy: IfNotPresent
+          command: ["strelka-backend"]
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/strelka
+              readOnly: true
+            - name: yara
+              mountPath: /etc/yara
+      volumes:
+        - name: config
+          configMap:
+            name: nss-ndr-config
+            items:
+              - key: strelka_backend.yaml
+                path: backend.yaml
+              - key: strelka_logging.yaml
+                path: logging.yaml
+              - key: strelka_passwords_dat
+                path: passwords.dat
+              - key: strelka_taste_yara
+                path: taste/taste.yara
+        - name: yara
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-strelka-filestream
+  namespace: nss-ndr
+  labels:
+    app: nss-strelka-filestream
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: nss-strelka-filestream
+  template:
+    metadata:
+      labels:
+        app: nss-strelka-filestream
+    spec:
+      initContainers:
+        - name: prepare-dirs
+          image: docker.io/library/busybox:1.36
+          command:
+            - sh
+            - -c
+            - mkdir -p /nsm/strelka/unprocessed /nsm/strelka/staging /nsm/strelka/processed && chown -R 939:939 /nsm/strelka/unprocessed /nsm/strelka/staging /nsm/strelka/processed
+          volumeMounts:
+            - name: nsm
+              mountPath: /nsm
+      containers:
+        - name: filestream
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-manager
+          imagePullPolicy: IfNotPresent
+          command: ["strelka-filestream"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/strelka
+              readOnly: true
+            - name: nsm
+              mountPath: /nsm
+      volumes:
+        - name: config
+          configMap:
+            name: nss-ndr-config
+            items:
+              - key: strelka_filestream.yaml
+                path: filestream.yaml
+        - name: nsm
+          persistentVolumeClaim:
+            claimName: nss-ndr-nsm
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-strelka-manager
+  namespace: nss-ndr
+  labels:
+    app: nss-strelka-manager
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: nss-strelka-manager
+  template:
+    metadata:
+      labels:
+        app: nss-strelka-manager
+    spec:
+      containers:
+        - name: manager
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-manager
+          imagePullPolicy: IfNotPresent
+          command: ["strelka-manager"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/strelka
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: nss-ndr-config
+            items:
+              - key: strelka_manager.yaml
+                path: manager.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-strelka-filecheck
+  namespace: nss-ndr
+  labels:
+    app: nss-strelka-filecheck
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: nss-strelka-filecheck
+  template:
+    metadata:
+      labels:
+        app: nss-strelka-filecheck
+    spec:
+      containers:
+        - name: filecheck
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-filecheck
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 512Mi
+          volumeMounts:
+            - name: nsm
+              mountPath: /nsm
+      volumes:
+        - name: nsm
+          persistentVolumeClaim:
+            claimName: nss-ndr-nsm

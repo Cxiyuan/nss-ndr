@@ -49,6 +49,18 @@ jobs:
           - name: cleaner
             context: images/cleaner
             file: images/cleaner/Dockerfile
+          - name: strelka-backend
+            context: images/strelka-backend
+            file: images/strelka-backend/Dockerfile
+          - name: strelka-manager
+            context: images/strelka-manager
+            file: images/strelka-manager/Dockerfile
+          - name: strelka-rules
+            context: images/strelka-rules
+            file: images/strelka-rules/Dockerfile
+          - name: filecheck
+            context: images/filecheck
+            file: images/filecheck/Dockerfile
 
     steps:
       - name: Checkout

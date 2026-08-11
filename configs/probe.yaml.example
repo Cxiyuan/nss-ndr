@@ -37,6 +37,14 @@ zeek:
   extraction:
     max_days: 7               # 提取文件留档天数
 
+strelka:
+  enabled: true               # Strelka 文件静态分析（M3 延后项，参照 SO 3.1.0）
+  backend_replicas: 1         # 扫描 worker 副本数
+  retention:
+    processed_days: 30        # 已扫描文件留档天数
+    history_days: 2           # 去重 history 记录保留天数
+    log_days: 30              # 扫描结果日志留档天数
+
 elasticsearch:
   heap_gb: 2
   retention:

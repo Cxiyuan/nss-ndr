@@ -1,0 +1,24 @@
+server: :57314
+coordinator:
+  addr: nss-strelka-coordinator:6380
+  db: 0
+gatekeeper:
+  addr: nss-strelka-gatekeeper:6381
+  db: 0
+  ttl: 1h
+response:
+  log: /nsm/strelka/log/strelka.log
+broker:
+  bootstrap: ''
+  protocol: ''
+  certlocation: ''
+  keylocation: ''
+  calocation: ''
+  topic: ''
+  s3redundancy: false
+s3:
+  accesskey: ''
+  secretkey: ''
+  bucketName: ''
+  region: ''
+  endpoint: ''

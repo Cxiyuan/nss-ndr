@@ -4,7 +4,8 @@ module NSSNDR;
 
 export {
     ## 探针标识（由环境变量 NSS_SENSORNAME 注入）
-    const sensorname = "" &redef;
+    # const 不可运行时赋值，用 global 以便 zeek_init 注入环境变量
+    global sensorname = "" &redef;
 
     redef record Conn::Info += {
         sensorname: string &log &optional;

@@ -20,6 +20,7 @@ var sectionMeta = map[string]string{
 	cfgZeek:         "Zeek：worker 数 / 缓冲 / 轮转间隔 / 历史与提取留存",
 	cfgElasticsearch: "Elasticsearch：堆内存 / ILM 元数据与告警留存天数",
 	cfgXdr:          "告警推送：Webhook URL / HMAC / 重试 / 推送事件白名单",
+	cfgStrelka:      "Strelka：文件分析开关 / 扫描 worker 数 / 已扫描与日志留存",
 }
 
 func registerAPI(mux *http.ServeMux) {
@@ -68,7 +69,7 @@ func apiGetFullConfig(w http.ResponseWriter, _ *http.Request) {
 
 func apiListSections(w http.ResponseWriter, _ *http.Request) {
 	out := []apiConfigSection{}
-	for _, key := range []string{cfgProbe, cfgSuricata, cfgZeek, cfgElasticsearch, cfgXdr} {
+	for _, key := range []string{cfgProbe, cfgSuricata, cfgZeek, cfgElasticsearch, cfgXdr, cfgStrelka} {
 		val, _ := getSection(key)
 		out = append(out, apiConfigSection{Key: key, Value: val, Describe: sectionMeta[key]})
 	}

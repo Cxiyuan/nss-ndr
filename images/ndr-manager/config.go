@@ -12,11 +12,12 @@ import (
 
 // 组件配置分组（configs 表的 key）
 const (
-	cfgProbe        = "probe"
-	cfgSuricata     = "suricata"
-	cfgZeek         = "zeek"
+	cfgProbe         = "probe"
+	cfgSuricata      = "suricata"
+	cfgZeek          = "zeek"
 	cfgElasticsearch = "elasticsearch"
-	cfgXdr          = "xdr"
+	cfgXdr           = "xdr"
+	cfgStrelka       = "strelka"
 )
 
 // FullConfig 是 probe.yaml 的完整结构（渲染与展示用）
@@ -55,6 +56,15 @@ type FullConfig struct {
 			MaxDays int `yaml:"max_days"`
 		} `yaml:"extraction"`
 	} `yaml:"zeek"`
+	Strelka struct {
+		Enabled         bool `yaml:"enabled"`
+		BackendReplicas int  `yaml:"backend_replicas"`
+		Retention       struct {
+			ProcessedDays int `yaml:"processed_days"`
+			HistoryDays   int `yaml:"history_days"`
+			LogDays       int `yaml:"log_days"`
+		} `yaml:"retention"`
+	} `yaml:"strelka"`
 	Elasticsearch struct {
 		HeapGB    int `yaml:"heap_gb"`
 		Retention struct {
@@ -100,6 +110,11 @@ func defaultConfig() FullConfig {
 	c.Zeek.LogRotationIntervalS = 3600
 	c.Zeek.HistoryRetentionDays = 30
 	c.Zeek.Extraction.MaxDays = 7
+	c.Strelka.Enabled = true
+	c.Strelka.BackendReplicas = 1
+	c.Strelka.Retention.ProcessedDays = 30
+	c.Strelka.Retention.HistoryDays = 2
+	c.Strelka.Retention.LogDays = 30
 	c.Elasticsearch.HeapGB = 2
 	c.Elasticsearch.Retention.MetadataDays = 60
 	c.Elasticsearch.Retention.AlertsDays = 365
@@ -112,7 +127,7 @@ func defaultConfig() FullConfig {
 }
 
 func ensureDefaults() error {
-	for _, key := range []string{cfgProbe, cfgSuricata, cfgZeek, cfgElasticsearch, cfgXdr} {
+	for _, key := range []string{cfgProbe, cfgSuricata, cfgZeek, cfgElasticsearch, cfgXdr, cfgStrelka} {
 		var exists int
 		err := db.QueryRow("SELECT 1 FROM configs WHERE key=?", key).Scan(&exists)
 		if err == nil {
@@ -143,6 +158,8 @@ func marshalSection(key string, c FullConfig) (string, error) {
 		v = c.Suricata
 	case cfgZeek:
 		v = c.Zeek
+	case cfgStrelka:
+		v = c.Strelka
 	case cfgElasticsearch:
 		v = c.Elasticsearch
 	case cfgXdr:
@@ -175,6 +192,8 @@ func loadFull() (FullConfig, error) {
 			target = &c.Suricata
 		case cfgZeek:
 			target = &c.Zeek
+		case cfgStrelka:
+			target = &c.Strelka
 		case cfgElasticsearch:
 			target = &c.Elasticsearch
 		case cfgXdr:

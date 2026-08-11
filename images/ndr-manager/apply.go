@@ -117,7 +117,8 @@ func applyConfig(comment string) error {
 		}
 		restarted = append(restarted, ds)
 	}
-	for _, dep := range []string{"nss-elasticsearch", "nss-kibana", "nss-xdr-push", "nss-ndr-manager"} {
+	for _, dep := range []string{"nss-elasticsearch", "nss-kibana", "nss-xdr-push", "nss-ndr-manager",
+		"nss-strelka-frontend", "nss-strelka-backend", "nss-strelka-filestream", "nss-strelka-manager", "nss-strelka-filecheck"} {
 		if err := rolloutRestart("deployments", dep); err != nil {
 			return fmt.Errorf("重启 %s 失败: %w", dep, err)
 		}

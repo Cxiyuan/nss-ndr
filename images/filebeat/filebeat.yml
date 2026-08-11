@@ -80,6 +80,40 @@ filebeat.inputs:
             regexp:
               pipeline: "^bacnet|^bsap|^cip|^cotp|^dnp3|^ecat|^enip|^modbus|^opcua|^profinet|^s7comm"
 
+  # Strelka 扫描结果（参照 SO：filestream 集成 tail /nsm/strelka/log/strelka.log，
+  # 不解析 ndjson，整行留 message 交给 ES strelka.file pipeline 归一化）
+  - type: filestream
+    id: strelka-logs
+    enabled: true
+    paths:
+      - /nsm/strelka/log/strelka.log
+    exclude_files:
+      - '\.gz$'
+    processors:
+      - add_fields:
+          target: event
+          fields:
+            category: file
+            module: strelka
+      - script:
+          lang: javascript
+          source: >
+            function process(event) {
+              event.Put("metadata.pipeline", "strelka.file");
+              var src = (event.Get("log.file.fingerprint") || "") + "|" + (event.Get("log.offset") || "");
+              var h = 5381;
+              for (var i = 0; i < src.length; i++) {
+                h = ((h << 5) + h + src.charCodeAt(i)) >>> 0;
+              }
+              event.Put("metadata._id", "nss-" + h.toString(16));
+            }
+      - add_fields:
+          target: data_stream
+          fields:
+            type: logs
+            dataset: strelka
+            namespace: so
+
 # 数据总线：Lumberjack 输出到 Logstash（对齐 SO 架构）
 output.logstash:
   hosts: ["${LOGSTASH_HOST:nss-logstash:5055}"]

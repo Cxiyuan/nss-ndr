@@ -40,6 +40,13 @@ probeConfig:
     history_retention_days: 30
     extraction:
       max_days: 7
+  strelka:
+    enabled: true
+    backend_replicas: 1
+    retention:
+      processed_days: 30
+      history_days: 2
+      log_days: 30
   elasticsearch:
     heap_gb: 2
     retention:

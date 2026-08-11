@@ -1,1 +1,1 @@
-@load extract
+@load ./extract

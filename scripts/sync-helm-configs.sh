@@ -9,4 +9,13 @@ cp images/zeek/files/local.zeek images/zeek/files/node.cfg \
 cp images/zeek/files/policy/securityonion/*.zeek "$DEST/policy/securityonion/"
 cp images/zeek/files/policy/securityonion/file-extraction/* "$DEST/policy/securityonion/file-extraction/"
 cp images/filebeat/filebeat.yml images/kibana/kibana.yml "$DEST/"
+mkdir -p "$DEST/strelka/taste"
+cp images/strelka-backend/files/backend.yaml \
+   images/strelka-backend/files/logging.yaml \
+   images/strelka-backend/files/passwords.dat \
+   images/strelka-manager/files/frontend.yaml \
+   images/strelka-manager/files/filestream.yaml \
+   images/strelka-manager/files/manager.yaml \
+   "$DEST/strelka/"
+cp images/strelka-backend/files/taste/taste.yara "$DEST/strelka/taste/taste.yara"
 echo "已同步到 $DEST"
