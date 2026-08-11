@@ -103,3 +103,15 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      # 发布门禁：kibana-init 镜像必须内置 NDR 看板（195 个 saved objects），
+      # 缺文件/行数不对直接让构建失败，确保看板随版本发行
+      - name: Verify NDR dashboards bundled in image
+        if: matrix.name == 'kibana-init'
+        run: |
+          IMG="${REGISTRY}/${OWNER_LC}/${GITHUB_REPOSITORY#*/}/nss-ndr-kibana-init:${GITHUB_SHA}"
+          docker run --rm --entrypoint /bin/sh "$IMG" -c \
+            'test -s /opt/kibana-init/dashboards.ndjson && \
+             [ "$(grep -c "\"type\":" /opt/kibana-init/dashboards.ndjson)" = "195" ] && \
+             tail -1 /opt/kibana-init/dashboards.ndjson | grep -q exportedCount && \
+             echo "dashboards OK: 195 saved objects bundled in image"'
