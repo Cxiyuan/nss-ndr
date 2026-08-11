@@ -1,0 +1,47 @@
+{
+  "package": {
+    "name": "filestream",
+    "version": ""
+  },
+  "name": "suricata-logs",
+  "namespace": "so",
+  "description": "Suricata integration (NSS-NDR)",
+  "policy_id": "nss-ndr",
+  "vars": {},
+  "inputs": {
+    "filestream-filestream": {
+      "enabled": true,
+      "streams": {
+        "filestream.filestream": {
+          "enabled": true,
+          "vars": {
+            "paths": [
+              "/nsm/suricata/eve*.json"
+            ],
+            "compression_gzip": false,
+            "use_logs_stream": false,
+            "data_stream.dataset": "suricata.alerts",
+            "pipeline": "",
+            "parsers": "- ndjson:\n    target: \"\"\n",
+            "exclude_files": [
+              "\\.gz$"
+            ],
+            "include_files": [],
+            "processors": "- add_fields:\n    target: event\n    fields:\n      category: network\n      module: suricata\n- script:\n    lang: javascript\n    source: |\n      function process(event) {\n        var et = event.Get(\"event_type\") || \"other\";\n        event.Put(\"@metadata.pipeline\", et === \"alert\" ? \"suricata.alert\" : \"suricata.common\");\n        var src = (event.Get(\"log.file.fingerprint\") || \"\") + \"|\" + (event.Get(\"log.offset\") || \"\");\n        var h = 5381;\n        for (var i = 0; i < src.length; i++) { h = ((h << 5) + h + src.charCodeAt(i)) >>> 0; }\n        event.Put(\"metadata._id\", \"nss-\" + h.toString(16));\n      }\n",
+            "tags": [],
+            "recursive_glob": true,
+            "clean_inactive": -1,
+            "harvester_limit": 0,
+            "fingerprint": true,
+            "fingerprint_offset": 0,
+            "file_identity_native": true,
+            "exclude_lines": [],
+            "include_lines": [],
+            "delete_enabled": false
+          }
+        }
+      }
+    }
+  },
+  "force": true
+}

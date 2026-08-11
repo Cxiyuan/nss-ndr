@@ -34,6 +34,9 @@ jobs:
           - name: elastic-agent
             context: images/elastic-agent
             file: images/elastic-agent/Dockerfile
+          - name: fleet-init
+            context: images/fleet-init
+            file: images/fleet-init/Dockerfile
           - name: logstash
             context: .
             file: images/logstash/Dockerfile

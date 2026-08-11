@@ -38,6 +38,14 @@
   - [x] 输出 Lumberjack + 双向 TLS 到 Logstash 5055（对齐 SO Fleet logstash output）
   - [x] k3s/Helm 清单、render/manager/CI 全部替换 filebeat
   - [ ] 部署验证：构建镜像后实测数据链路（待 CI）
+- [x] **M9 补齐 Fleet（对齐 SO 3.1.0）**
+  - [x] Fleet Server Deployment（elastic-agent fleet-server 模式，8220，服务端证书）
+  - [x] fleet-init Job：ES service token / Fleet host / logstash 输出（双向 TLS）/
+        策略（FleetServer-nss + nss-ndr）/ filestream×3 集成 / enrollment token →
+        写 Secret nss-fleet-enrollment
+  - [x] elastic-agent 改 Fleet 接入（FLEET_URL + token + CA fingerprint）
+  - [x] gen-certs 增加 fleet-server 服务端证书（SAN nss-fleet-server）
+  - [ ] 部署验证：fleet-server 上线 + agent 自动接入 + 策略下发后数据链路实测（待 CI）
 - [x] **M4 统一配置管理后台（nss-ndr-manager）**
   - [x] React SPA（Web UI：总览/探针/Suricata/Zeek/ES/告警推送/规则/历史审计）
   - [x] Go API + SQLite 配置库（版本历史 + 审计日志）

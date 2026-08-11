@@ -14,6 +14,7 @@ resources:
   - 44-logstash.yaml
   - 45-redis.yaml
   - 46-strelka.yaml
+  - 47-fleet.yaml
   - 51-xdr-push.yaml
   - 60-cleaner-cronjob.yaml
   - 55-manager.yaml
@@ -27,6 +28,8 @@ images:
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-es-init
     newTag: e6bb45f51955f11bf028278fee86e19645d337ae
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-elastic-agent
+    newTag: e6bb45f51955f11bf028278fee86e19645d337ae
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-fleet-init
     newTag: e6bb45f51955f11bf028278fee86e19645d337ae
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-logstash
     newTag: e6bb45f51955f11bf028278fee86e19645d337ae

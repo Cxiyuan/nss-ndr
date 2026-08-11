@@ -19,7 +19,7 @@ spec:
         - operator: Exists
       containers:
         - name: elastic-agent
-          # 由 GitHub Actions 构建并推送至 GHCR（standalone 模式，对齐 SO elastic-agent）
+          # Fleet 托管模式（对齐 SO）：配置/集成由 Fleet 下发，仅需 URL + 令牌
           image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-elastic-agent
           imagePullPolicy: IfNotPresent
           env:
@@ -28,16 +28,21 @@ spec:
                 configMapKeyRef:
                   name: nss-ndr-config
                   key: sensor_id
+            - name: FLEET_URL
+              value: "https://nss-fleet-server:8220"
+            - name: FLEET_ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: nss-fleet-enrollment
+                  key: enrollment_token
+            - name: FLEET_CA_TRUSTED_FINGERPRINT
+              valueFrom:
+                secretKeyRef:
+                  name: nss-fleet-enrollment
+                  key: ca_fingerprint
           volumeMounts:
-            - name: config
-              mountPath: /usr/share/elastic-agent/agent.yml
-              subPath: agent.yml
-              readOnly: true
             - name: nsm
               mountPath: /nsm
-              readOnly: true
-            - name: certs
-              mountPath: /etc/elastic-agent/certs
               readOnly: true
             - name: data
               mountPath: /usr/share/elastic-agent/data
@@ -47,14 +52,8 @@ spec:
             limits:
               memory: 1Gi
       volumes:
-        - name: config
-          configMap:
-            name: nss-ndr-config
         - name: nsm
           persistentVolumeClaim:
             claimName: nss-ndr-nsm
-        - name: certs
-          secret:
-            secretName: nss-ndr-certs
         - name: data
           emptyDir: {}

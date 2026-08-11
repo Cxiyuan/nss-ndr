@@ -13,7 +13,7 @@ distinguished_name = dn
 req_extensions = ext
 [dn]
 [ext]
-subjectAltName = DNS:nss-logstash,DNS:localhost,IP:127.0.0.1
+subjectAltName = DNS:nss-logstash,DNS:nss-fleet-server,DNS:localhost,IP:127.0.0.1
 EOF
 
 echo "== 生成 CA =="
@@ -33,12 +33,20 @@ openssl req -new -key "$DIR/elastic-agent.key" -out "$DIR/elastic-agent.csr" -su
 openssl x509 -req -in "$DIR/elastic-agent.csr" -CA "$DIR/ca.crt" -CAkey "$DIR/ca.key" -CAcreateserial \
   -out "$DIR/elastic-agent.crt" -days 3650 -sha256
 
+echo "== 生成 fleet-server 服务端证书 =="
+openssl genrsa -out "$DIR/fleet-server.key" 2048 2>/dev/null
+openssl req -new -key "$DIR/fleet-server.key" -out "$DIR/fleet-server.csr" -subj "/CN=nss-fleet-server" -config "$CNF"
+openssl x509 -req -in "$DIR/fleet-server.csr" -CA "$DIR/ca.crt" -CAkey "$DIR/ca.key" -CAcreateserial \
+  -out "$DIR/fleet-server.crt" -days 3650 -sha256 -extfile "$CNF" -extensions ext
+
 kubectl -n "$NS" create secret generic nss-ndr-certs \
   --from-file=ca.crt="$DIR/ca.crt" \
   --from-file=logstash.crt="$DIR/logstash.crt" \
   --from-file=logstash.key="$DIR/logstash.key" \
   --from-file=elastic-agent.crt="$DIR/elastic-agent.crt" \
   --from-file=elastic-agent.key="$DIR/elastic-agent.key" \
+  --from-file=fleet-server.crt="$DIR/fleet-server.crt" \
+  --from-file=fleet-server.key="$DIR/fleet-server.key" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 rm -rf "$DIR"

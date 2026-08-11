@@ -58,6 +58,7 @@ flowchart LR
 | `so-suricata` | NIDS 检测 + eve.json + pcap-log 全包 | hostNetwork + privileged + DaemonSet | 基于 SO 镜像瘦身，AF_PACKET 抓包 |
 | `so-zeek` | 协议元数据 + 文件提取 | hostNetwork + privileged + DaemonSet | 基于 SO 镜像瘦身，JSON 日志 |
 | `elastic-agent` | 采集 eve/zeek/strelka 日志 → Logstash | DaemonSet（standalone） | 动态 `@metadata.pipeline` 路由（对齐 SO） |
+| `fleet-server` | Fleet Server（agent 策略/令牌/输出下发） | Deployment（8220） | 对齐 SO Fleet 托管；fleet-init 自动供给 |
 | `elasticsearch` | 本地元数据/告警存储 + ingest pipeline 归一化 | Deployment + LocalPV | 单节点，ILM 自动清理 |
 | `kibana` | 检索/仪表盘 | Deployment | 可选但建议保留 |
 | `detections` | 规则管理（CRUD/启停/阈值/自定义规则）+ 规则下发 | Deployment | 自研（Go/Python），含轻量 UI |
@@ -75,7 +76,7 @@ flowchart LR
    - suricata：eve.json 按小时轮转 `/nsm/eve-%Y-%m-%d-%H:%M.json`；pcap-log `%n/so-pcap.%t`（1000MB/个，多文件，可 LZ4）。
    - zeek：JSON 协议日志 `/nsm/zeek/logs/current/*.log`；文件提取 `/nsm/zeek/extracted/complete/`。
    - 详细落盘设计见 §4.3。
-3. **采集**：elastic-agent（standalone）监听 `/nsm/suricata/eve*.json`、`/nsm/zeek/logs/current/*.log` 与 `/nsm/strelka/log/strelka.log`；Zeek 按文件名 JS 设 `@metadata.pipeline=zeek.<logname>`；Suricata 固定 `suricata.common`；ICS 日志自动打 `ics` tag。
+3. **采集**：elastic-agent（Fleet 托管）监听 `/nsm/suricata/eve*.json`、`/nsm/zeek/logs/current/*.log` 与 `/nsm/strelka/log/strelka.log`；集成由 Fleet 策略下发（filestream），Zeek 按文件名 JS 设 `@metadata.pipeline=zeek.<logname>`；Suricata 固定 `suricata.common`；ICS 日志自动打 `ics` tag。
 4. **归一化**：ES ingest pipeline（复用 SO 的 `zeek.*` / `suricata.*` / `strelka.file` / `common`），字段映射 ECS：`id.orig_h→source.ip`、`community_id→network.community_id`、`sensorname→observer.name`、`event.dataset=module.dataset` 等。
 5. **存储**：数据流（沿用 SO 命名）：
    - `logs-zeek-so`（Zeek 全部日志，`event.dataset=zeek.conn/...`）

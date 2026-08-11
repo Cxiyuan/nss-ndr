@@ -10,6 +10,7 @@ images/
   suricata/               # Suricata 8.0.5 镜像（NIDS + pcap-log）
   zeek/                   # Zeek 8.0.8 镜像（元数据 + 文件提取）
   elastic-agent/          # Elastic Agent（standalone，对齐 SO 采集层）
+  fleet-init/             # Fleet 供给（输出/策略/集成/令牌，对齐 SO so-elastic-fleet-setup）
   strelka-backend/        # Strelka 扫描 worker（YARA/exiftool/PE/PDF...，参照 SO）
   strelka-manager/        # Strelka frontend / filestream / manager（target/strelka Go）
   strelka-rules/          # YARA 规则编译（initContainer，securityonion-yara）
@@ -32,6 +33,8 @@ scripts/                  # 配置渲染等开发工具
   ES 模板修复 .keyword 字段；kibana-init sidecar 部署后自动导入 41 个看板/195 对象）
 - [x] M8：采集层切换 Elastic Agent（standalone，对齐 SO：同一 filestream 集成语义，
   suricata/zeek/strelka 三输入 + Lumberjack/TLS 输出；替代独立 filebeat）
+- [x] M9：补齐 Fleet（对齐 SO）：Fleet Server + Fleet 托管 elastic-agent，
+  fleet-init 自动供给 logstash 输出 / 策略 / filestream 集成 / 令牌
 
 ## 快速开始（M0）
 
@@ -70,6 +73,7 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
   - 另有 `nss-ndr-strelka-backend`、`nss-ndr-strelka-manager`、`nss-ndr-strelka-rules`、
     `nss-ndr-filecheck`（文件提取 + Strelka）
   - 另有 `nss-ndr-kibana-init`（Kibana NDR 看板导入）
+  - 另有 `nss-ndr-elastic-agent`、`nss-ndr-fleet-init`（采集 + Fleet）
 - 也可在 GitHub Actions 页面手动触发（workflow_dispatch）。
 - 固定部署版本：把 `deploy/k3s/kustomization.yaml` 中 `images[].newTag` 改为对应 git sha。
 - 前提：基础镜像 `ghcr.io/security-onion-solutions/so-suricata:3.1.0`、`so-zeek:3.1.0` 可被构建机拉取（public）。

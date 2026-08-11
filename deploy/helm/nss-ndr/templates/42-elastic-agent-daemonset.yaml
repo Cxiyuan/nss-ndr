@@ -20,16 +20,17 @@ spec:
           env:
             - name: NSS_SENSORNAME
               valueFrom: {configMapKeyRef: {name: nss-ndr-config, key: sensor_id}}
+            - {name: FLEET_URL, value: "https://nss-fleet-server:8220"}
+            - name: FLEET_ENROLLMENT_TOKEN
+              valueFrom: {secretKeyRef: {name: nss-fleet-enrollment, key: enrollment_token}}
+            - name: FLEET_CA_TRUSTED_FINGERPRINT
+              valueFrom: {secretKeyRef: {name: nss-fleet-enrollment, key: ca_fingerprint}}
           volumeMounts:
-            - {name: config, mountPath: /usr/share/elastic-agent/agent.yml, subPath: agent.yml, readOnly: true}
             - {name: nsm, mountPath: /nsm, readOnly: true}
-            - {name: certs, mountPath: /etc/elastic-agent/certs, readOnly: true}
             - {name: data, mountPath: /usr/share/elastic-agent/data}
           resources:
             requests: {memory: 256Mi}
             limits: {memory: 1Gi}
       volumes:
-        - {name: config, configMap: {name: nss-ndr-config}}
         - {name: nsm, persistentVolumeClaim: {claimName: nss-ndr-nsm}}
-        - {name: certs, secret: {secretName: nss-ndr-certs}}
         - {name: data, emptyDir: {}}
