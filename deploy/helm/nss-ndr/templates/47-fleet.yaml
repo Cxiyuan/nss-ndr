@@ -1,3 +1,7 @@
+# NSS-NDR Fleet（对齐 SO 3.1.0：Fleet Server + Fleet 托管 elastic-agent）
+# 供给顺序与 SO so-elastic-fleet-setup 一致：ES 输出临时默认 -> fleet_server 集成
+# -> FleetServer 策略输出钉 ES -> Logstash 恢复默认；fleet-server 需 FLEET_URL/FLEET_CA；
+# 不得挂载 /usr/share/elastic-agent/data（遮蔽镜像内二进制软链）。
 ---
 apiVersion: v1
 kind: ServiceAccount

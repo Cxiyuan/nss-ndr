@@ -9,7 +9,7 @@ docs/                     # 设计文档（调研报告、架构设计）
 images/
   suricata/               # Suricata 8.0.5 镜像（NIDS + pcap-log）
   zeek/                   # Zeek 8.0.8 镜像（元数据 + 文件提取）
-  elastic-agent/          # Elastic Agent（standalone，对齐 SO 采集层）
+  elastic-agent/          # Elastic Agent（Fleet 托管，对齐 SO 采集层）
   fleet-init/             # Fleet 供给（输出/策略/集成/令牌，对齐 SO so-elastic-fleet-setup）
   strelka-backend/        # Strelka 扫描 worker（YARA/exiftool/PE/PDF...，参照 SO）
   strelka-manager/        # Strelka frontend / filestream / manager（target/strelka Go）
@@ -31,10 +31,11 @@ scripts/                  # 配置渲染等开发工具
   扫描集群 + strelka.file pipeline，k3s/Helm 双份清单就绪，待部署验证）
 - [x] M3c：Kibana NDR 看板（导出自 Security Onion 3.1.0，改名 NDR - * 并按本项目
   ES 模板修复 .keyword 字段；kibana-init sidecar 部署后自动导入 41 个看板/195 对象）
-- [x] M8：采集层切换 Elastic Agent（standalone，对齐 SO：同一 filestream 集成语义，
-  suricata/zeek/strelka 三输入 + Lumberjack/TLS 输出；替代独立 filebeat）
+- [x] M8：采集层切换 Elastic Agent（对齐 SO filestream 集成语义：suricata/zeek/strelka
+  三输入 + Logstash 输出；替代独立 filebeat）
 - [x] M9：补齐 Fleet（对齐 SO）：Fleet Server + Fleet 托管 elastic-agent，
-  fleet-init 自动供给 logstash 输出 / 策略 / filestream 集成 / 令牌
+  fleet-init 自动供给输出/策略/filestream 集成/令牌/Secret；FleetServer 策略输出钉 ES、
+  数据策略走 Logstash（与 SO 完全一致，basic license 可行）；41 个 NDR 看板随镜像发布
 
 ## 快速开始（M0）
 
@@ -87,6 +88,38 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
   - Helm 路径：`values.secrets`（elastic 默认已固化 `nss-ndr@2026`）
   - es-init 会自动创建 filebeat / kibana_system / xdr-push 应用用户。
 - Kibana/ES 登录账号：`elastic`，默认密码 `nss-ndr@2026`；NDR 看板由 kibana-init 自动导入。
+
+### Fleet 部署说明（M9）
+
+```bash
+# 证书（fleet-server / elastic-agent / logstash 双向 TLS 共用同一 CA）
+bash scripts/gen-certs.sh
+# 渲染 ConfigMap + 生成 Secret 后整体应用
+python3 scripts/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
+bash scripts/gen-secret.sh
+kubectl apply -k deploy/k3s/
+```
+
+启动顺序与供给：
+
+1. ES/Kibana 就绪后，`fleet-init` Job 自动执行供给（幂等，可重复跑）：
+   - 创建 ES 输出 `grid-elasticsearch` 与 Logstash 输出 `so-manager_logstash`（5055，mTLS）
+   - 对齐 SO 顺序：ES 输出临时设为全局默认 → 创建 `fleet_server` 集成 →
+     把 FleetServer 策略输出钉到 ES（此时等于默认，basic license 不拦按策略覆盖）→
+     Logstash 恢复全局默认；数据策略 `nss-ndr` 走 Logstash，FleetServer 走 ES
+   - 创建 suricata/zeek/strelka 三个 filestream 集成、enrollment token，
+     写 Secret `nss-fleet-enrollment`（es_service_token / enrollment_token / ca_fingerprint）
+2. `fleet-server` 用 Secret 中的 service token 启动（容器必需 `FLEET_URL` 自注册 + `FLEET_CA` 信任）。
+3. `elastic-agent` DaemonSet 用 enrollment token 接入（容器模式**必须 `FLEET_ENROLL=1`**，
+   否则以 standalone 跑默认配置不注册；`FLEET_CA` 指向挂载的 CA 证书）。
+
+关键注意（产品部署通用，非环境特例）：
+
+- 不得把卷挂载到 `/usr/share/elastic-agent/data`：官方镜像该目录含二进制本体
+  （`elastic-agent` 是到 `data/elastic-agent-*/elastic-agent` 的软链），挂空目录会启动失败（127）。
+- 策略须启用 `monitoring_enabled: ["logs"]`，否则 agent 监控组件回退到容器内置默认
+  ES 输出（`http:9200`）报 DNS 错误；启用后监控走 Logstash（`use_output: so-manager_logstash`）。
+- 首次部署按上述顺序由 Job 自动完成；重装时先删干净再应用（参考部署机清理流程）。
 
 ### k3s 拉取 GHCR 镜像
 

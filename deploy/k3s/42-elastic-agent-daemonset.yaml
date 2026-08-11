@@ -19,7 +19,10 @@ spec:
         - operator: Exists
       containers:
         - name: elastic-agent
-          # Fleet 托管模式（对齐 SO）：配置/集成由 Fleet 下发，仅需 URL + 令牌
+          # Fleet 托管模式（对齐 SO）：配置/集成由 Fleet 下发。
+          # 容器模式必需 FLEET_ENROLL=1（否则以 standalone 跑默认配置不注册）、
+          # FLEET_URL + FLEET_ENROLLMENT_TOKEN + FLEET_CA（信任 Fleet Server 证书）。
+          # 注意：不能把卷挂到 /usr/share/elastic-agent/data（会遮蔽镜像内二进制软链）。
           image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-elastic-agent
           imagePullPolicy: IfNotPresent
           env:

@@ -8,7 +8,7 @@ cp images/zeek/files/local.zeek images/zeek/files/node.cfg \
    images/zeek/files/zeekctl.cfg images/zeek/files/networks.cfg "$DEST/"
 cp images/zeek/files/policy/securityonion/*.zeek "$DEST/policy/securityonion/"
 cp images/zeek/files/policy/securityonion/file-extraction/* "$DEST/policy/securityonion/file-extraction/"
-cp images/elastic-agent/files/agent.yml images/kibana/kibana.yml "$DEST/"
+cp images/kibana/kibana.yml "$DEST/"
 mkdir -p "$DEST/strelka/taste"
 cp images/strelka-backend/files/backend.yaml \
    images/strelka-backend/files/logging.yaml \

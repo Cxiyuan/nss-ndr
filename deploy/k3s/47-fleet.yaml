@@ -3,6 +3,13 @@
 # 启动顺序依赖：
 #   ES/Kibana 就绪 -> fleet-init Job 供给（输出/策略/集成/令牌，写 Secret nss-fleet-enrollment）
 #   -> fleet-server 用 es_service_token 启动 -> elastic-agent 用 enrollment_token 接入
+#
+# 供给顺序与 SO so-elastic-fleet-setup 一致（basic license 下按策略覆盖输出会被拒）：
+#   ES 输出临时设为全局默认 -> 创建 fleet_server 集成 -> 把 FleetServer 策略输出钉到 ES
+#   -> Logstash 恢复为全局默认（数据策略走 logstash，FleetServer 走 ES）。
+#
+# fleet-server 容器必需：FLEET_SERVER_ENABLE + FLEET_URL（自注册）+ FLEET_CA（TLS 信任）；
+# 不得挂载 /usr/share/elastic-agent/data（遮蔽镜像内二进制软链）。
 
 ---
 apiVersion: v1

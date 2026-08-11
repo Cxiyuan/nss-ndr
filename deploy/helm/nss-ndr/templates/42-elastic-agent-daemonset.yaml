@@ -15,6 +15,8 @@ spec:
       imagePullSecrets: {{ toYaml .Values.images.pullSecrets | nindent 8 }}
       containers:
         - name: elastic-agent
+          # Fleet 托管模式（对齐 SO）：必需 FLEET_ENROLL=1 + FLEET_URL + 令牌 + FLEET_CA；
+          # 不得挂载 /usr/share/elastic-agent/data（遮蔽镜像内二进制软链）。
           image: "{{ .Values.images.registry }}/nss-ndr-elastic-agent:{{ .Values.images.tag }}"
           imagePullPolicy: IfNotPresent
           env:

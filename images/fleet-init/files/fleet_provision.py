@@ -137,6 +137,16 @@ def policy_has_integration(policy_id, name):
     return name in [p.get("name") for p in resp.get("item", {}).get("package_policies", [])]
 
 
+def fleet_server_output_pinned():
+    """FleetServer 策略输出是否已钉到 ES（对齐 SO：策略 data/monitoring 均走 ES 输出）"""
+    code, resp = kib(f"/api/fleet/agent_policies/{FLEET_POLICY_ID}")
+    if code != 200:
+        return False
+    item = resp.get("item", {})
+    return (item.get("data_output_id") == ES_OUTPUT_ID
+            and item.get("monitoring_output_id") == ES_OUTPUT_ID)
+
+
 def main():
     # 1. 等待 Kibana Fleet API
     for _ in range(60):
@@ -241,10 +251,10 @@ def main():
     existing = [p.get("name") for p in resp.get("item", {}).get("package_policies", [])] if code == 200 else []
 
     # 7.1 fleet_server 集成：对齐 SO 顺序，临时把 ES 输出设为全局默认
+    # 自愈：集成已存在但策略输出未钉到 ES（如历史半成品状态）时同样修复
     fleet_server_exists = policy_has_integration(FLEET_POLICY_ID, "fleet_server-nss")
-    if fleet_server_exists:
-        print("fleet_server 集成已存在，跳过默认输出切换")
-    else:
+    need_pin = (not fleet_server_exists) or (not fleet_server_output_pinned())
+    if need_pin:
         # 临时把 ES 输出设为全局默认（fleet_server 集成要求策略输出为 elasticsearch）
         set_output_default(ES_OUTPUT_ID, {
             "name": ES_OUTPUT_ID,
@@ -253,6 +263,8 @@ def main():
             "is_default": True,
             "is_default_monitoring": True,
         })
+    else:
+        print("fleet_server 集成已存在且策略输出已钉 ES，跳过默认输出切换")
 
     integ_order = ["fleet-server.json", "suricata-logs.json", "zeek-logs.json", "strelka-logs.json"]
     for integ in integ_order:
@@ -271,7 +283,7 @@ def main():
         print(f"创建集成 {name}: HTTP {code} {str(resp)[:120]}")
 
     # 7.2 fleet_server 集成创建成功后，把 FleetServer 策略输出钉到 ES（此刻 ES 是默认，绕过 license 检查）
-    if not fleet_server_exists:
+    if need_pin:
         code, resp = kib(f"/api/fleet/agent_policies/{FLEET_POLICY_ID}", "PUT", {
             "name": FLEET_POLICY_ID,
             "description": "Fleet Server",

@@ -31,21 +31,25 @@
   - [x] kibana-init sidecar 自动导入（Kibana 就绪后 _import overwrite，失败重试）
   - [x] 2026-08-11 重装后手工导入恢复（41 看板/195 对象 0 失败）
   - [ ] kibana-init 镜像构建后随 CI 自动生效（当前部署机已手工导入，等价）
-- [x] **M8 采集层对齐 SO：filebeat → Elastic Agent（standalone）**
-  - [x] 新增 elastic-agent 镜像（standalone agent.yml，policy 格式同 SO）
+- [x] **M8 采集层对齐 SO：filebeat → Elastic Agent（Fleet 托管）**
+  - [x] 新增 elastic-agent 镜像（官方 docker.elastic.co/elastic-agent/elastic-agent，Fleet 托管）
   - [x] 三 filestream 输入：suricata-eve / zeek-logs / strelka-logs（含 exclude、dissect、
         JS 管道路由与幂等事件 ID）
-  - [x] 输出 Lumberjack + 双向 TLS 到 Logstash 5055（对齐 SO Fleet logstash output）
+  - [x] 输出 Logstash 5055（mTLS，Fleet logstash output 语义，对齐 SO）
   - [x] k3s/Helm 清单、render/manager/CI 全部替换 filebeat
-  - [ ] 部署验证：构建镜像后实测数据链路（待 CI）
+  - [x] 部署验证：数据链路实测（zeek/suricata 经 elastic-agent → Logstash → ES 入库）
 - [x] **M9 补齐 Fleet（对齐 SO 3.1.0）**
   - [x] Fleet Server Deployment（elastic-agent fleet-server 模式，8220，服务端证书）
   - [x] fleet-init Job：ES service token / Fleet host / logstash 输出（双向 TLS）/
         策略（FleetServer-nss + nss-ndr）/ filestream×3 集成 / enrollment token →
         写 Secret nss-fleet-enrollment
-  - [x] elastic-agent 改 Fleet 接入（FLEET_URL + token + CA fingerprint）
+  - [x] elastic-agent 改 Fleet 接入（FLEET_ENROLL=1 + FLEET_URL + token + FLEET_CA 路径）
   - [x] gen-certs 增加 fleet-server 服务端证书（SAN nss-fleet-server）
-  - [ ] 部署验证：fleet-server 上线 + agent 自动接入 + 策略下发后数据链路实测（待 CI）
+  - [x] 部署验证：fleet-server/agent 双在线 + 策略下发 + 数据链路实测（2026-08-11，45e7f3e）
+  - [x] 产品化修复（2026-08-11）：fleet-init 输出顺序对齐 SO（ES 临时默认→fleet_server 集成→
+        策略钉 ES→logstash 恢复默认）、Secret 写集合路径、移除 data 卷挂载（遮蔽二进制软链）、
+        FLEET_ENROLL/FLEET_URL/FLEET_CA 补齐、monitoring 走 logstash、自愈钉输出、
+        清理 standalone agent.yml 死配置
 - [x] **M4 统一配置管理后台（nss-ndr-manager）**
   - [x] React SPA（Web UI：总览/探针/Suricata/Zeek/ES/告警推送/规则/历史审计）
   - [x] Go API + SQLite 配置库（版本历史 + 审计日志）

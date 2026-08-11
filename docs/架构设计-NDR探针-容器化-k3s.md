@@ -57,7 +57,7 @@ flowchart LR
 |---|---|---|---|
 | `so-suricata` | NIDS 检测 + eve.json + pcap-log 全包 | hostNetwork + privileged + DaemonSet | 基于 SO 镜像瘦身，AF_PACKET 抓包 |
 | `so-zeek` | 协议元数据 + 文件提取 | hostNetwork + privileged + DaemonSet | 基于 SO 镜像瘦身，JSON 日志 |
-| `elastic-agent` | 采集 eve/zeek/strelka 日志 → Logstash | DaemonSet（standalone） | 动态 `@metadata.pipeline` 路由（对齐 SO） |
+| `elastic-agent` | 采集 eve/zeek/strelka 日志 → Logstash | DaemonSet（Fleet 托管） | Fleet 策略下发 filestream 集成，`@metadata.pipeline` 路由（对齐 SO） |
 | `fleet-server` | Fleet Server（agent 策略/令牌/输出下发） | Deployment（8220） | 对齐 SO Fleet 托管；fleet-init 自动供给 |
 | `elasticsearch` | 本地元数据/告警存储 + ingest pipeline 归一化 | Deployment + LocalPV | 单节点，ILM 自动清理 |
 | `kibana` | 检索/仪表盘 | Deployment | 可选但建议保留 |
@@ -65,7 +65,9 @@ flowchart LR
 | `xdr-push` | 消费新告警 → 推送 XDR，重试/去重/断点 | Deployment | 自研（Go），见 §6.3 |
 | `cleaner` | 按配置阈值清理全包/过期日志/提取文件 | CronJob | 留存天数 + 存储上限双阈值，见 §5.9 |
 
-> 说明：单机探针规模小，**不引入 Fleet Server、Logstash、Redis 队列**（保留扩展位，见 §9）；告警推送由 `xdr-push` 轮询 ES 实现，简化链路。
+> 说明：采集链路与 SO 一致——elastic-agent（Fleet 托管）→ Logstash（5055，mTLS）→
+> Redis 队列 → Logstash → ES；FleetServer 策略输出钉 ES、数据策略走 Logstash
+> （basic license 下按 SO 顺序供给实现，见 §5.3）。告警推送由 `xdr-push` 轮询 ES 实现。
 
 ## 4. 数据管道设计
 
@@ -202,10 +204,24 @@ flowchart LR
 - 运行：`node.cfg` 多 worker（fanout 23）、`zeekctl.cfg` 轮转 1h + 压缩。
 - 文件提取：白名单可配，`FileExtract::default_limit` 9MB，输出 `/nsm/zeek/extracted/complete/<md5>.<ext>`。
 
-### 5.3 elastic-agent（standalone）
+### 5.3 elastic-agent（Fleet 托管）
 
-- 与 ES 同版本（8.x/9.x 待定，见 §10）。配置两个 filestream input（eve、zeek），processor：dissect 文件名 → JS 设 `@metadata.pipeline` → add_fields（module/category）→ ICS tag。
-- 输出：直连本地 ES（https + 认证），`pipeline` 由 `@metadata.pipeline` 指定（同 SO 的 Logstash 输出语义）。
+- 与 ES 同版本（9.3.3，见 §10）。镜像直接用官方
+  `docker.elastic.co/elastic-agent/elastic-agent:9.3.3`（SO 同款，不做 standalone 配置覆盖）。
+- 形态：Fleet 托管。`fleet-init` Job 对齐 SO `so-elastic-fleet-setup` 供给：
+  1. 创建 ES 输出 `grid-elasticsearch` 与 Logstash 输出 `so-manager_logstash`（5055，双向 TLS）；
+  2. **ES 输出临时设为全局默认** → 创建 `fleet_server` 集成 → PUT 把 FleetServer 策略
+     `data_output_id/monitoring_output_id` 钉到 ES（此刻等于默认，basic license 不拦）→
+     Logstash 恢复为全局默认；
+  3. 创建 `nss-ndr` 数据策略（`monitoring_enabled: ["logs"]`）+ suricata/zeek/strelka
+     三个 filestream 集成，数据与 agent 监控均走 Logstash 输出。
+- 集成语义（对齐 SO filestream）：suricata `eve*.json`、zeek `current/*.log`
+  （dissect 文件名 → JS 设 `@metadata.pipeline=zeek.<logname>` → module/category → ICS tag）、
+  strelka `strelka.log`。
+- 容器运行要点（产品通用）：必须设 `FLEET_ENROLL=1`（否则以 standalone 跑镜像默认配置、
+  不注册 Fleet）；`FLEET_CA` 指向挂载的 CA；**不得把卷挂到 `/usr/share/elastic-agent/data`**
+  （官方镜像 `elastic-agent` 是指向 `data/elastic-agent-*/elastic-agent` 的软链，
+  挂空目录会 127 启动失败）。
 
 ### 5.4 elasticsearch
 
@@ -383,7 +399,7 @@ xdr:
 ## 9. 扩展位（本期不做，设计预留）
 
 - Redis/Kafka 队列：多探针/高吞吐时在采集器与 ES 之间插入（复用 SO 管道）。
-- Fleet/Elastic Agent：需要中心化管理时启用。
+- ~~Fleet/Elastic Agent~~：已启用（M9，见 §5.3），剩余为多探针管理面扩展。
 - 多探针管理面：规则统一下发、探针状态汇总（本期 detections 为单探针形态）。
 - Strelka 文件分析：文件提取后做 YARA/ClamAV（本期只提取不分析）。
 - 离线 pcap 导入（so-import-pcap 思路）。
