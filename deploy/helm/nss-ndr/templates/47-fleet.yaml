@@ -46,12 +46,14 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - {name: FLEET_SERVER_ENABLE, value: "true"}
+            - {name: FLEET_URL, value: "https://nss-fleet-server:8220"}
             - {name: FLEET_SERVER_ELASTICSEARCH_HOST, value: "http://nss-elasticsearch:9200"}
             - name: FLEET_SERVER_SERVICE_TOKEN
               valueFrom: {secretKeyRef: {name: nss-fleet-enrollment, key: es_service_token}}
             - {name: FLEET_SERVER_POLICY_ID, value: "FleetServer-nss"}
             - {name: FLEET_SERVER_CERT, value: "/etc/elastic-agent/certs/fleet-server.crt"}
             - {name: FLEET_SERVER_CERT_KEY, value: "/etc/elastic-agent/certs/fleet-server.key"}
+            - {name: FLEET_CA, value: "/etc/elastic-agent/certs/ca.crt"}
             - {name: FLEET_SERVER_HOST, value: "0.0.0.0"}
             - {name: FLEET_SERVER_PORT, value: "8220"}
           ports:
@@ -61,10 +63,8 @@ spec:
             limits: {memory: 1Gi}
           volumeMounts:
             - {name: certs, mountPath: /etc/elastic-agent/certs, readOnly: true}
-            - {name: data, mountPath: /usr/share/elastic-agent/data}
       volumes:
         - {name: certs, secret: {secretName: nss-ndr-certs}}
-        - {name: data, emptyDir: {}}
 ---
 apiVersion: v1
 kind: Service

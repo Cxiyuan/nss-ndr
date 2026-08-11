@@ -5,11 +5,18 @@
   1. 等待 Kibana Fleet API 就绪
   2. 创建 ES service token（fleet-server 用）
   3. 创建 Fleet Server host（https://nss-fleet-server:8220）
-  4. 创建 Logstash 输出（grid-logstash，hosts nss-logstash:5055，双向 TLS）
+  4. 创建 ES 输出（grid-elasticsearch）与 Logstash 输出（grid-logstash）
   5. 安装 filestream / fleet_server 包
-  6. 创建 FleetServer 策略 + fleet_server 集成；创建 nss-ndr 策略 + 三个 filestream 集成
-  7. 创建 nss-ndr enrollment token
-  8. 写入 Secret（es_service_token / enrollment_token / ca_fingerprint）
+  6. 创建 FleetServer 策略 + nss-ndr 策略
+  7. 对齐 SO 顺序：临时把 ES 输出设为全局默认 -> 创建 fleet_server 集成
+     -> 把 FleetServer 策略输出钉到 ES（此时等于默认，绕过 license 限制）
+     -> 恢复 Logstash 为全局默认 -> 创建三个 filestream 集成
+  8. 创建 nss-ndr enrollment token
+  9. 写入 Secret（es_service_token / enrollment_token / ca_fingerprint）
+
+为什么切换默认输出：fleet_server 集成要求策略使用 elasticsearch 输出；
+在 basic license 下按策略覆盖输出会被拒（需 platinum），但把目标输出临时
+设为全局默认后再 PUT data_output_id 可以绕过该检查（SO 同款实现）。
 """
 
 import base64
@@ -33,6 +40,8 @@ LOGSTASH_KEY = os.path.join(CERT_DIR, "elastic-agent.key")
 POLICY_ID = os.environ.get("POLICY_ID", "nss-ndr")
 FLEET_POLICY_ID = os.environ.get("FLEET_POLICY_ID", "FleetServer-nss")
 INTEGRATIONS = os.environ.get("INTEGRATIONS_DIR", "/opt/fleet-init/integrations")
+ES_OUTPUT_ID = os.environ.get("ES_OUTPUT_ID", "grid-elasticsearch")
+LOGSTASH_OUTPUT_ID = os.environ.get("LOGSTASH_OUTPUT_ID", "so-manager_logstash")
 
 SA_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 SA_CA_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
@@ -74,7 +83,8 @@ def kib(path, method="GET", body=None, retry=3):
 
 def k8s_put_secret(data):
     ctx, token = k8s_ctx()
-    url = f"https://kubernetes.default.svc/api/v1/namespaces/{NAMESPACE}/secrets/{SECRET_NAME}"
+    base = f"https://kubernetes.default.svc/api/v1/namespaces/{NAMESPACE}/secrets"
+    item_url = f"{base}/{SECRET_NAME}"
     body = {
         "apiVersion": "v1",
         "kind": "Secret",
@@ -83,7 +93,9 @@ def k8s_put_secret(data):
         "stringData": data,
     }
     # Secret 不存在时 PUT 返回 404，需先 POST 创建；已存在则 PUT 更新（幂等）
+    # 注意：POST 必须打到集合路径 /secrets（item 路径 POST 返回 405）
     for method in ("POST", "PUT"):
+        url = base if method == "POST" else item_url
         req = urllib.request.Request(url, method=method, data=json.dumps(body).encode())
         req.add_header("Authorization", "Bearer " + token)
         req.add_header("Content-Type", "application/json")
@@ -109,6 +121,20 @@ def ensure_exists(api, item_id, create_method, create_body):
         return
     code, resp = kib(api, create_method, create_body)
     print(f"创建 {api}/{item_id}: HTTP {code} {str(resp)[:120]}")
+
+
+def set_output_default(output_id, body):
+    """把输出设为全局默认（PUT 不携带 version，9.x 不接受 version 字段）"""
+    code, resp = kib(f"/api/fleet/outputs/{output_id}", "PUT", body)
+    print(f"设置输出 {output_id} 为默认: HTTP {code} {str(resp)[:120]}")
+    return code
+
+
+def policy_has_integration(policy_id, name):
+    code, resp = kib(f"/api/fleet/agent_policies/{policy_id}")
+    if code != 200:
+        return False
+    return name in [p.get("name") for p in resp.get("item", {}).get("package_policies", [])]
 
 
 def main():
@@ -143,12 +169,22 @@ def main():
          "host_urls": ["https://nss-fleet-server:8220"]},
     )
 
-    # 4. Logstash 输出（默认输出，双向 TLS）
+    # 4. 输出：ES 输出（临时默认用，fleet_server 集成要求）+ Logstash 输出（最终默认，双向 TLS）
+    es_output_body = {
+        "id": ES_OUTPUT_ID,
+        "name": ES_OUTPUT_ID,
+        "type": "elasticsearch",
+        "hosts": [os.environ.get("ES_HOST", "http://nss-elasticsearch:9200")],
+        "is_default": False,
+        "is_default_monitoring": False,
+    }
+    ensure_exists("/api/fleet/outputs", ES_OUTPUT_ID, "POST", es_output_body)
+
     logstash_crt = open(LOGSTASH_CRT).read()
     logstash_key = open(LOGSTASH_KEY).read()
     logstash_ca = open(CA_CRT).read()
     output_body = {
-        "id": "so-manager_logstash",
+        "id": LOGSTASH_OUTPUT_ID,
         "name": "grid-logstash",
         "type": "logstash",
         "hosts": ["nss-logstash:5055"],
@@ -159,9 +195,9 @@ def main():
         "secrets": {"ssl": {"key": logstash_key}},
         "proxy_id": None,
     }
-    code, _ = kib("/api/fleet/outputs/so-manager_logstash")
+    code, _ = kib(f"/api/fleet/outputs/{LOGSTASH_OUTPUT_ID}")
     if code == 200:
-        print("输出 so-manager_logstash 已存在，跳过")
+        print(f"输出 {LOGSTASH_OUTPUT_ID} 已存在，跳过")
     else:
         code, resp = kib("/api/fleet/outputs", "POST", output_body)
         print(f"创建 logstash 输出: HTTP {code} {str(resp)[:120]}")
@@ -196,24 +232,65 @@ def main():
             continue
         code, resp = kib("/api/fleet/agent_policies", "POST",
                          {"id": pid, "name": name, "description": desc,
-                          "namespace": "default", "monitoring_enabled": [],
+                          "namespace": "default", "monitoring_enabled": ["logs"],
                           "inactivity_timeout": 1209600, "is_protected": False})
         print(f"创建策略 {pid}: HTTP {code} {str(resp)[:100]}")
 
     # 7. 集成（package policies）
     code, resp = kib(f"/api/fleet/agent_policies/{POLICY_ID}")
     existing = [p.get("name") for p in resp.get("item", {}).get("package_policies", [])] if code == 200 else []
-    for integ in ("fleet-server.json", "suricata-logs.json", "zeek-logs.json", "strelka-logs.json"):
+
+    # 7.1 fleet_server 集成：对齐 SO 顺序，临时把 ES 输出设为全局默认
+    fleet_server_exists = policy_has_integration(FLEET_POLICY_ID, "fleet_server-nss")
+    if fleet_server_exists:
+        print("fleet_server 集成已存在，跳过默认输出切换")
+    else:
+        # 临时把 ES 输出设为全局默认（fleet_server 集成要求策略输出为 elasticsearch）
+        set_output_default(ES_OUTPUT_ID, {
+            "name": ES_OUTPUT_ID,
+            "type": "elasticsearch",
+            "hosts": [os.environ.get("ES_HOST", "http://nss-elasticsearch:9200")],
+            "is_default": True,
+            "is_default_monitoring": True,
+        })
+
+    integ_order = ["fleet-server.json", "suricata-logs.json", "zeek-logs.json", "strelka-logs.json"]
+    for integ in integ_order:
         with open(os.path.join(INTEGRATIONS, integ)) as f:
             pp = json.load(f)
         name = pp.get("name")
         if name in existing:
             print(f"集成 {name} 已存在，跳过")
             continue
+        if integ == "fleet-server.json" and fleet_server_exists:
+            print(f"集成 {name} 已存在于 {FLEET_POLICY_ID}，跳过")
+            continue
         pp["policy_id"] = FLEET_POLICY_ID if integ == "fleet-server.json" else POLICY_ID
         pp["package"]["version"] = fleet_server_ver if integ == "fleet-server.json" else filestream_ver
         code, resp = kib("/api/fleet/package_policies", "POST", pp)
         print(f"创建集成 {name}: HTTP {code} {str(resp)[:120]}")
+
+    # 7.2 fleet_server 集成创建成功后，把 FleetServer 策略输出钉到 ES（此刻 ES 是默认，绕过 license 检查）
+    if not fleet_server_exists:
+        code, resp = kib(f"/api/fleet/agent_policies/{FLEET_POLICY_ID}", "PUT", {
+            "name": FLEET_POLICY_ID,
+            "description": "Fleet Server",
+            "namespace": "default",
+            "monitoring_enabled": ["logs"],
+            "inactivity_timeout": 1209600,
+            "data_output_id": ES_OUTPUT_ID,
+            "monitoring_output_id": ES_OUTPUT_ID,
+        })
+        print(f"钉住 FleetServer 策略输出到 {ES_OUTPUT_ID}: HTTP {code} {str(resp)[:120]}")
+
+    # 7.3 恢复 Logstash 为全局默认（数据采集策略默认走 logstash）
+    set_output_default(LOGSTASH_OUTPUT_ID, {
+        "name": "grid-logstash",
+        "type": "logstash",
+        "hosts": ["nss-logstash:5055"],
+        "is_default": True,
+        "is_default_monitoring": True,
+    })
 
     # 8. enrollment token
     code, resp = kib("/api/fleet/enrollment_api_keys", "POST", {"policy_id": POLICY_ID})

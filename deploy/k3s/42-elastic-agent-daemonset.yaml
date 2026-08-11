@@ -28,6 +28,8 @@ spec:
                 configMapKeyRef:
                   name: nss-ndr-config
                   key: sensor_id
+            - name: FLEET_ENROLL
+              value: "1"
             - name: FLEET_URL
               value: "https://nss-fleet-server:8220"
             - name: FLEET_ENROLLMENT_TOKEN
@@ -35,17 +37,15 @@ spec:
                 secretKeyRef:
                   name: nss-fleet-enrollment
                   key: enrollment_token
-            - name: FLEET_CA_TRUSTED_FINGERPRINT
-              valueFrom:
-                secretKeyRef:
-                  name: nss-fleet-enrollment
-                  key: ca_fingerprint
+            - name: FLEET_CA
+              value: "/etc/elastic-agent/certs/ca.crt"
           volumeMounts:
             - name: nsm
               mountPath: /nsm
               readOnly: true
-            - name: data
-              mountPath: /usr/share/elastic-agent/data
+            - name: certs
+              mountPath: /etc/elastic-agent/certs
+              readOnly: true
           resources:
             requests:
               memory: 256Mi
@@ -55,5 +55,6 @@ spec:
         - name: nsm
           persistentVolumeClaim:
             claimName: nss-ndr-nsm
-        - name: data
-          emptyDir: {}
+        - name: certs
+          secret:
+            secretName: nss-ndr-certs
