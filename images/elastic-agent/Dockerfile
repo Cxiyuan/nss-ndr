@@ -1,8 +1,9 @@
-# NSS-NDR Elastic Agent 采集器（standalone 模式，对齐 SO 3.1.0 的 elastic-agent）
-# 与 SO 相同的 filestream 集成语义：zeek-logs / suricata-logs / strelka-logs，
-# 输出 Lumberjack(TLS) 到 Logstash 5055；配置由 ConfigMap 覆盖。
+# NSS-NDR Elastic Agent 采集器（Fleet 托管模式，对齐 SO 3.1.0 的 elastic-agent）
+# 基础镜像路径与 SO 一致：docker.elastic.co/elastic-agent/elastic-agent
 
-FROM docker.elastic.co/beats/elastic-agent:9.3.3
+ARG VERSION=9.3.3
+
+FROM docker.elastic.co/elastic-agent/elastic-agent:$VERSION
 
 LABEL maintainer="NSS-NDR"
 LABEL description="elastic-agent collector for NSS-NDR probe (standalone, aligned with Security Onion)"
