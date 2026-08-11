@@ -19,7 +19,7 @@ while true; do
     -u "$USER:$PASS" -H 'kbn-xsrf: true' \
     -F "file=@$FILE;type=application/ndjson" \
     "$URL/api/saved_objects/_import?overwrite=true")
-  if [ "$code" = "200" ] && grep -q '"errors":\[\]' /tmp/import.json; then
+  if [ "$code" = "200" ] && grep -q '"success":true' /tmp/import.json; then
     echo "[kibana-init] 看板导入成功: $(grep -o '"successCount":[0-9]*' /tmp/import.json)"
     break
   fi
