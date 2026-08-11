@@ -128,6 +128,8 @@ spec:
           image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-fleet-init
           imagePullPolicy: IfNotPresent
           env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
             - name: KIBANA_URL
               value: "http://nss-kibana:5601"
             - name: ES_USER
