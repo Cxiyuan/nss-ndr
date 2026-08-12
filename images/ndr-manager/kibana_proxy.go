@@ -46,7 +46,8 @@ func (p *kibanaReverseProxy) ensureLogin() error {
 			"password": pass,
 		},
 	})
-	req, err := http.NewRequest(http.MethodPost, kibanaInternalBase+"/internal/security/login", bytes.NewReader(body))
+	// Kibana 开启 rewriteBasePath 后，内部端点一律带 /kibana 前缀访问
+	req, err := http.NewRequest(http.MethodPost, kibanaInternalBase+"/kibana/internal/security/login", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
