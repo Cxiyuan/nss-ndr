@@ -64,6 +64,7 @@ func renderAll(c FullConfig) (*renderedData, error) {
 		"node.cfg":      "templates/node.cfg",
 		"zeekctl.cfg":   "templates/zeekctl.cfg",
 		"networks.cfg":  "templates/networks.cfg",
+		"config.zeek":   "templates/config.zeek",
 		"kibana.yml":    "templates/kibana.yml",
 	}
 	for key, rel := range templates {
@@ -96,8 +97,9 @@ func renderAll(c FullConfig) (*renderedData, error) {
 		data[key] = string(content)
 	}
 
-	// zeek policy 脚本（扁平化 key，与 ConfigMap 约定一致）
-	_ = fs.WalkDir(tplFS, "templates/policy/securityonion", func(path string, d fs.DirEntry, err error) error {
+	// zeek policy 脚本（扁平化 key，与 ConfigMap 约定一致：
+	// policy_<顶层目录>_<相对路径，/ 替换为 _>，挂载时由 DaemonSet items[].path 还原）
+	_ = fs.WalkDir(tplFS, "templates/policy", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -108,8 +110,13 @@ func renderAll(c FullConfig) (*renderedData, error) {
 		if rerr != nil {
 			return rerr
 		}
-		rel := strings.TrimPrefix(path, "templates/policy/securityonion/")
-		data["policy_securityonion_"+strings.ReplaceAll(rel, "/", "_")] = string(content)
+		rel := strings.TrimPrefix(path, "templates/policy/")
+		top, rest, found := strings.Cut(rel, "/")
+		key := "policy_" + top + "_" + strings.ReplaceAll(rest, "/", "_")
+		if !found {
+			key = "policy_" + top
+		}
+		data[key] = string(content)
 		return nil
 	})
 
