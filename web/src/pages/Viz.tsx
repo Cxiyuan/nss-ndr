@@ -7,7 +7,7 @@ const KIBANA_URL =
 
 export default function Viz() {
   return (
-    <div>
+    <div className="viz-page">
       <div className="row between">
         <h2>可视化分析</h2>
         <p className="hint">NDR-Home 总览看板（Kibana，最近 24 小时）</p>
