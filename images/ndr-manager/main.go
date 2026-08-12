@@ -29,6 +29,9 @@ func main() {
 	if err := ensureDefaults(); err != nil {
 		log.Fatalf("默认配置初始化失败: %v", err)
 	}
+	if err := ensureAdmin(); err != nil {
+		log.Fatalf("管理员账号初始化失败: %v", err)
+	}
 	if err := store.LoadRules(); err != nil {
 		log.Printf("warn: 规则加载失败: %v", err)
 	}

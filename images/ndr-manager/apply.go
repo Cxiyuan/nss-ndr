@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -109,6 +110,15 @@ func applyConfig(comment string) error {
 	}
 	audit("config.apply", configMapName, comment)
 
+	// 1.5 资源限制下发（幂等，UI 资源表单保存后随 apply 生效）
+	if err := applyResources(); err != nil {
+		return fmt.Errorf("资源限制下发失败: %w", err)
+	}
+	// 1.6 ES 堆内存下发（幂等）
+	if err := applyESHeap(); err != nil {
+		return fmt.Errorf("ES 堆内存下发失败: %w", err)
+	}
+
 	// 2. 滚动重启受影响 workload（DaemonSet 需重建 pod 加载新配置）
 	restarted := []string{}
 	for _, ds := range []string{"nss-suricata", "nss-zeek", "nss-elastic-agent"} {
@@ -117,14 +127,135 @@ func applyConfig(comment string) error {
 		}
 		restarted = append(restarted, ds)
 	}
-	for _, dep := range []string{"nss-elasticsearch", "nss-kibana", "nss-xdr-push", "nss-ndr-manager",
-		"nss-strelka-frontend", "nss-strelka-backend", "nss-strelka-filestream", "nss-strelka-manager", "nss-strelka-filecheck"} {
+	for _, dep := range []string{"nss-elasticsearch", "nss-kibana", "nss-logstash", "nss-redis",
+		"nss-fleet-server", "nss-xdr-push", "nss-ndr-manager",
+		"nss-strelka-frontend", "nss-strelka-backend", "nss-strelka-filestream",
+		"nss-strelka-manager", "nss-strelka-filecheck"} {
 		if err := rolloutRestart("deployments", dep); err != nil {
 			return fmt.Errorf("重启 %s 失败: %w", dep, err)
 		}
 		restarted = append(restarted, dep)
 	}
 	audit("rollout.restart", strings.Join(restarted, ","), comment)
+	return nil
+}
+
+// applyResources 把资源限制表单值 patch 到各 workload 的容器 resources
+func applyResources() error {
+	res, err := loadResources()
+	if err != nil {
+		return err
+	}
+	comps := make([]string, 0, len(resourceTargets))
+	for k := range resourceTargets {
+		comps = append(comps, k)
+	}
+	sort.Strings(comps)
+	for _, comp := range comps {
+		raw, ok := res[comp]
+		if !ok {
+			continue
+		}
+		rs, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		target := resourceTargets[comp]
+		kind, name, container := target[0], target[1], target[2]
+		if err := patchContainerResources(kind, name, container, rs); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// patchContainerResources strategic merge patch 容器 resources
+func patchContainerResources(kind, name, container string, resources map[string]any) error {
+	patch := map[string]any{
+		"spec": map[string]any{
+			"template": map[string]any{
+				"spec": map[string]any{
+					"containers": []any{
+						map[string]any{
+							"name":      container,
+							"resources": resources,
+						},
+					},
+				},
+			},
+		},
+	}
+	data, _ := json.Marshal(patch)
+	req, err := http.NewRequest(http.MethodPatch,
+		k8sClient.baseURL+fmt.Sprintf("/apis/apps/v1/namespaces/%s/%s/%s", namespace, kind, name),
+		bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+k8sClient.token)
+	req.Header.Set("Content-Type", "application/strategic-merge-patch+json")
+	resp, err := k8sClient.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("patch %s/%s: %d %s", kind, name, resp.StatusCode, string(b))
+	}
+	audit("resources.patch", name, "")
+	return nil
+}
+
+// applyESHeap 按 elasticsearch.heap_gb patch ES_JAVA_OPTS
+func applyESHeap() error {
+	c, err := loadFull()
+	if err != nil {
+		return err
+	}
+	heap := c.Elasticsearch.HeapGB
+	if heap <= 0 {
+		heap = 2
+	}
+	val := fmt.Sprintf("-Xms%dg -Xmx%dg", heap, heap)
+	patch := map[string]any{
+		"spec": map[string]any{
+			"template": map[string]any{
+				"spec": map[string]any{
+					"containers": []any{
+						map[string]any{
+							"name": "elasticsearch",
+							"env": []any{
+								map[string]any{
+									"name":  "ES_JAVA_OPTS",
+									"value": val,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	data, _ := json.Marshal(patch)
+	req, err := http.NewRequest(http.MethodPatch,
+		k8sClient.baseURL+fmt.Sprintf("/apis/apps/v1/namespaces/%s/deployments/nss-elasticsearch", namespace),
+		bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+k8sClient.token)
+	req.Header.Set("Content-Type", "application/strategic-merge-patch+json")
+	resp, err := k8sClient.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("patch ES_JAVA_OPTS: %d %s", resp.StatusCode, string(b))
+	}
+	audit("elasticsearch.heap", "nss-elasticsearch", val)
 	return nil
 }
 

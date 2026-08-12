@@ -66,6 +66,11 @@ CREATE TABLE IF NOT EXISTS sigma_rules (
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS users (
+  username      TEXT PRIMARY KEY,
+  password_hash TEXT NOT NULL,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `
 	if _, err := db.Exec(schema); err != nil {
 		return err

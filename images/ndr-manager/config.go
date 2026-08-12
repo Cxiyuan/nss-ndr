@@ -18,6 +18,8 @@ const (
 	cfgElasticsearch = "elasticsearch"
 	cfgXdr           = "xdr"
 	cfgStrelka       = "strelka"
+	cfgDetections    = "detections"
+	cfgResources     = "resources"
 )
 
 // FullConfig 是 probe.yaml 的完整结构（渲染与展示用）
@@ -127,7 +129,7 @@ func defaultConfig() FullConfig {
 }
 
 func ensureDefaults() error {
-	for _, key := range []string{cfgProbe, cfgSuricata, cfgZeek, cfgElasticsearch, cfgXdr, cfgStrelka} {
+	for _, key := range []string{cfgProbe, cfgSuricata, cfgZeek, cfgElasticsearch, cfgXdr, cfgStrelka, cfgDetections, cfgResources} {
 		var exists int
 		err := db.QueryRow("SELECT 1 FROM configs WHERE key=?", key).Scan(&exists)
 		if err == nil {
@@ -164,6 +166,10 @@ func marshalSection(key string, c FullConfig) (string, error) {
 		v = c.Elasticsearch
 	case cfgXdr:
 		v = c.Xdr
+	case cfgDetections:
+		v = c.Detections
+	case cfgResources:
+		return "", errors.New("resources 不参与 FullConfig 序列化")
 	default:
 		return "", errors.New("未知配置分组: " + key)
 	}
@@ -198,6 +204,8 @@ func loadFull() (FullConfig, error) {
 			target = &c.Elasticsearch
 		case cfgXdr:
 			target = &c.Xdr
+		case cfgDetections:
+			target = &c.Detections
 		default:
 			continue
 		}

@@ -9,7 +9,7 @@ COPY web/ .
 RUN npm run build
 
 # 阶段2：Go 后端构建
-FROM golang:1.23-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 COPY images/ndr-manager/go.mod images/ndr-manager/go.sum ./
 RUN go mod download

@@ -1,11 +1,38 @@
 const base = "";
 
+let token = localStorage.getItem("ndr_token") || "";
+
+export function setToken(t: string) {
+  token = t;
+  localStorage.setItem("ndr_token", t);
+}
+
+export function clearToken() {
+  token = "";
+  localStorage.removeItem("ndr_token");
+}
+
+export function isAuthed() {
+  return !!token;
+}
+
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = body
+    ? { "Content-Type": "application/json" }
+    : {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   const resp = await fetch(base + path, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
+  if (resp.status === 401) {
+    clearToken();
+    if (window.location.pathname !== "/login") {
+      window.location.assign("/login");
+    }
+    throw new Error("登录已过期，请重新登录");
+  }
   if (!resp.ok) {
     let msg = resp.statusText;
     try {
@@ -51,8 +78,43 @@ export interface SigmaRule {
   last_run_at?: string;
 }
 
+export interface ConfigField {
+  key: string;
+  label: string;
+  type: string;
+  group: string;
+  order: number;
+  help?: string;
+  unit?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: string[];
+  default?: any;
+  value?: any;
+}
+
+export interface ConfigGroup {
+  key: string;
+  label: string;
+  order: number;
+}
+
+export interface ConfigSchema {
+  groups: ConfigGroup[];
+  fields: ConfigField[];
+}
+
 export const api = {
+  login: (username: string, password: string) =>
+    req<any>("POST", "/api/login", { username, password }),
+  logout: () => req<any>("POST", "/api/logout"),
+  changePassword: (old_password: string, new_password: string) =>
+    req<any>("POST", "/api/password", { old_password, new_password }),
   health: () => req<any>("GET", "/api/health"),
+  configSchema: () => req<ConfigSchema>("GET", "/api/config/schema"),
+  saveFormConfig: (fields: Record<string, any>, comment: string) =>
+    req<any>("PUT", "/api/config", { fields, comment }),
   listSections: () => req<Section[]>("GET", "/api/configs"),
   getSection: (key: string) => req<Section>("GET", `/api/configs/${key}`),
   saveSection: (key: string, value: string, comment: string) =>
