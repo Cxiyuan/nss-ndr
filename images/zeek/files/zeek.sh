@@ -21,7 +21,11 @@ if [ -d "$CONF/policy/cve-2020-0601" ]; then
   mkdir -p /opt/zeek/share/zeek/policy/cve-2020-0601
   cp -rf "$CONF/policy/cve-2020-0601/." /opt/zeek/share/zeek/policy/cve-2020-0601/
 fi
-chown -R 937:937 /opt/zeek/share/zeek/site /opt/zeek/etc /opt/zeek/share/zeek/policy/securityonion /opt/zeek/share/zeek/policy/cve-2020-0601
+if [ -d "$CONF/policy/intel" ]; then
+  mkdir -p /opt/zeek/share/zeek/policy/intel
+  cp -rf "$CONF/policy/intel/." /opt/zeek/share/zeek/policy/intel/
+fi
+chown -R 937:937 /opt/zeek/share/zeek/site /opt/zeek/etc /opt/zeek/share/zeek/policy/securityonion /opt/zeek/share/zeek/policy/cve-2020-0601 /opt/zeek/share/zeek/policy/intel
 
 # 抓包能力（AF_PACKET 需要）
 setcap cap_net_raw,cap_net_admin=eip /opt/zeek/bin/zeek

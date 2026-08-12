@@ -21,6 +21,8 @@ COPY files/policy/securityonion/ /opt/zeek/share/zeek/policy/securityonion/
 COPY files/config.zeek  /opt/zeek/share/zeek/site/packages/ja4/config.zeek
 # CVE-2020-0601 证书策略（对齐 SO）
 COPY files/policy/cve-2020-0601/ /opt/zeek/share/zeek/policy/cve-2020-0601/
-RUN chown -R 937:937 /opt/zeek/share/zeek/site /opt/zeek/etc /opt/zeek/share/zeek/policy/securityonion /opt/zeek/share/zeek/policy/cve-2020-0601
+# Intel 框架加载器 + 空情报文件（对齐 SO）
+COPY files/policy/intel/ /opt/zeek/share/zeek/policy/intel/
+RUN chown -R 937:937 /opt/zeek/share/zeek/site /opt/zeek/etc /opt/zeek/share/zeek/policy/securityonion /opt/zeek/share/zeek/policy/cve-2020-0601 /opt/zeek/share/zeek/policy/intel
 
 ENTRYPOINT ["/usr/local/sbin/zeek.sh"]

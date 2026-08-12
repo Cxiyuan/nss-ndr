@@ -82,6 +82,10 @@ spec:
                 path: policy/cve-2020-0601/cve-2020-0601.zeek
               - key: policy_cve-2020-0601_COPYING
                 path: policy/cve-2020-0601/COPYING
+              - key: policy_intel___load__.zeek
+                path: policy/intel/__load__.zeek
+              - key: policy_intel_intel.dat
+                path: policy/intel/intel.dat
         - name: nsm
           persistentVolumeClaim:
             claimName: nss-ndr-nsm
