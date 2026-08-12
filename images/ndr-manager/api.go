@@ -32,7 +32,10 @@ func registerAPI(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/logout", requireAuth(apiLogout))
 	mux.HandleFunc("POST /api/password", requireAuth(apiChangePassword))
 	// Kibana 看板代理（iframe 同源嵌入，自动维护 Kibana 会话）
-	mux.Handle("/kibana/", requireAuth(kibanaProxy.ServeHTTP))
+	// 按具体方法注册，避免与 SPA 兜底路由 "GET /" 冲突（Go 1.22+ ServeMux 规则）
+	for _, m := range []string{"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"} {
+		mux.Handle(m+" /kibana/", requireAuth(kibanaProxy.ServeHTTP))
+	}
 	mux.HandleFunc("GET /api/config", requireAuth(apiGetFullConfig))
 	mux.HandleFunc("GET /api/config/schema", requireAuth(apiConfigSchema))
 	mux.HandleFunc("PUT /api/config", requireAuth(apiSaveFormConfig))
