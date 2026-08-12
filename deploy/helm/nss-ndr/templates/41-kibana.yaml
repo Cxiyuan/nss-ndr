@@ -27,6 +27,9 @@ spec:
             - {name: XPACK_REPORTING_ENCRYPTIONKEY, valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: kibana-reporting-key}}}
           ports:
             - {containerPort: 5601}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1.5Gi}
         - name: kibana-init
           image: "{{ .Values.images.registry }}/nss-ndr-kibana-init:{{ .Values.images.tag }}"
           imagePullPolicy: IfNotPresent
@@ -36,8 +39,8 @@ spec:
             - name: KIBANA_PASSWORD
               valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: elastic-password}}
           resources:
-            requests: {memory: 32Mi}
-            limits: {memory: 128Mi}
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
 ---
 apiVersion: v1
 kind: Service

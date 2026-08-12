@@ -11,3 +11,10 @@ LABEL maintainer="NSS-NDR"
 LABEL description="elastic-agent collector for NSS-NDR probe (Fleet-managed, aligned with Security Onion)"
 
 USER root
+
+# 入口保护：低 IO/CPU 优先级运行，防止 chown/重启风暴打满磁盘（2026-08 事故修复）
+COPY files/entrypoint.sh /usr/local/bin/nss-agent-entrypoint.sh
+RUN chmod +x /usr/local/bin/nss-agent-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/nss-agent-entrypoint.sh"]
+CMD ["container"]

@@ -10,4 +10,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/cleaner
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /out/cleaner /usr/local/bin/cleaner
-ENTRYPOINT ["/usr/local/bin/cleaner"]
+COPY files/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -63,8 +63,8 @@ spec:
           ports:
             - {containerPort: 8220}
           resources:
-            requests: {memory: 256Mi}
-            limits: {memory: 1Gi}
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
           volumeMounts:
             - {name: certs, mountPath: /etc/elastic-agent/certs, readOnly: true}
       volumes:
@@ -107,8 +107,8 @@ spec:
             - {name: NAMESPACE, value: {{ .Release.Namespace | quote }}}
             - {name: SECRET_NAME, value: "nss-fleet-enrollment"}
           resources:
-            requests: {memory: 128Mi}
-            limits: {memory: 256Mi}
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 250m, memory: 256Mi}
           volumeMounts:
             - {name: certs, mountPath: /etc/elastic-agent/certs, readOnly: true}
       volumes:

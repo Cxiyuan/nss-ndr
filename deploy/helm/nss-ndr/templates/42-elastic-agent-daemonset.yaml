@@ -31,8 +31,8 @@ spec:
             - {name: nsm, mountPath: /nsm, readOnly: true}
             - {name: certs, mountPath: /etc/elastic-agent/certs, readOnly: true}
           resources:
-            requests: {memory: 256Mi}
-            limits: {memory: 1Gi}
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
       volumes:
         - {name: nsm, persistentVolumeClaim: {claimName: nss-ndr-nsm}}
         - {name: certs, secret: {secretName: nss-ndr-certs}}

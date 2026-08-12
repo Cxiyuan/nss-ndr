@@ -47,8 +47,10 @@ spec:
               mountPath: /usr/share/elasticsearch/data
           resources:
             requests:
+              cpu: 500m
               memory: 2Gi
             limits:
+              cpu: "2"
               memory: 4Gi
         # sidecar：ES 就绪后导入 ingest pipelines / ILM / 索引模板
         - name: es-init
@@ -81,6 +83,13 @@ spec:
                 secretKeyRef:
                   name: nss-ndr-secrets
                   key: xdr-push-password
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
       volumes:
         - name: data
           persistentVolumeClaim:

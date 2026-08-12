@@ -92,8 +92,10 @@ spec:
             - containerPort: 8220
           resources:
             requests:
+              cpu: 100m
               memory: 256Mi
             limits:
+              cpu: "1"
               memory: 1Gi
           volumeMounts:
             - name: certs
@@ -152,8 +154,10 @@ spec:
               value: "nss-fleet-enrollment"
           resources:
             requests:
+              cpu: 50m
               memory: 128Mi
             limits:
+              cpu: 250m
               memory: 256Mi
           volumeMounts:
             - name: certs

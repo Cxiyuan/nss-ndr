@@ -31,6 +31,9 @@ spec:
             - {containerPort: 9300, name: transport}
           volumeMounts:
             - {name: data, mountPath: /usr/share/elasticsearch/data}
+          resources:
+            requests: {cpu: 500m, memory: 2Gi}
+            limits: {cpu: "2", memory: 4Gi}
         - name: es-init
           image: "{{ .Values.images.registry }}/nss-ndr-es-init:{{ .Values.images.tag }}"
           imagePullPolicy: IfNotPresent
@@ -46,6 +49,9 @@ spec:
               valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: kibana-password}}
             - name: XDR_PASSWORD
               valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: xdr-push-password}}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 256Mi}
       volumes:
         - {name: data, persistentVolumeClaim: {claimName: nss-ndr-es-data}}
 ---
