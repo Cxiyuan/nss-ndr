@@ -12,7 +12,8 @@ import (
 
 const socketPath = "/var/run/suricata/suricata-command.socket"
 
-// suricataCommand 通过 unix socket 向运行中 suricata 发送命令（suricatasc 等价）
+// suricataCommand 通过 unix socket 向运行中 suricata 发送命令（Suricata 8 命令 socket 0.2 协议）
+// 协议：先握手 {"version":"0.2"}，再发送 {"command":"<method>"}，响应为带 \n 的 JSON
 func suricataCommand(method string) (map[string]any, error) {
 	if _, err := os.Stat(socketPath); err != nil {
 		return nil, fmt.Errorf("suricata socket 不可用: %v", err)
@@ -22,31 +23,32 @@ func suricataCommand(method string) (map[string]any, error) {
 		return nil, err
 	}
 	defer conn.Close()
-	msg := map[string]any{
-		"version": "0.1",
-		"id":      fmt.Sprintf("ndr-manager-%d", time.Now().UnixNano()),
-		"method":  method,
+	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	reader := bufio.NewReader(conn)
+	// 0.2 协议握手
+	if _, err := conn.Write([]byte(`{"version":"0.2"}` + "\n")); err != nil {
+		return nil, err
 	}
-	data, _ := json.Marshal(msg)
+	if _, err := reader.ReadString('\n'); err != nil {
+		return nil, fmt.Errorf("suricata 握手失败: %v", err)
+	}
+	// 发送命令（0.2 协议用 command 键，非 0.1 的 method）
+	data, _ := json.Marshal(map[string]any{"command": method})
 	if _, err := conn.Write(append(data, '\n')); err != nil {
 		return nil, err
 	}
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	line, err := bufio.NewReader(conn).ReadString('\n')
+	line, err := reader.ReadString('\n')
 	if err != nil {
 		return nil, err
 	}
 	var resp struct {
-		Return string `json:"return"`
+		Return  string            `json:"return"`
+		Message json.RawMessage   `json:"message"`
 	}
 	_ = json.Unmarshal([]byte(line), &resp)
 	out := map[string]any{"return": resp.Return}
-	if strings.Contains(line, "\"message\"") {
-		var full struct {
-			Message []json.RawMessage `json:"message"`
-		}
-		_ = json.Unmarshal([]byte(line), &full)
-		out["message"] = full.Message
+	if len(resp.Message) > 0 && string(resp.Message) != "null" {
+		out["message"] = resp.Message
 	}
 	if resp.Return != "OK" {
 		return out, fmt.Errorf("suricata %s 未确认: %s", method, strings.TrimSpace(line))

@@ -8,7 +8,7 @@ OUTFILE="/opt/so/log/suricata/rulestats.json"
 SOCKET="/var/run/suricata/suricata-command.socket"
 
 query() {
-    timeout 10 suricatasc -c "$1" "$SOCKET" 2>/dev/null
+    timeout 10 /opt/suricata/bin/suricatasc -c "$1" "$SOCKET" 2>/dev/null
 }
 
 STATS=$(query "ruleset-stats")

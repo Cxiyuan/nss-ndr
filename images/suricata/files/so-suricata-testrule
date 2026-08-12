@@ -21,10 +21,13 @@ TESTPCAP="$2"
 WORK=/tmp/nids-testing
 rm -rf "$WORK"
 mkdir -p "$WORK/rules" "$WORK/output"
+# suricata 以 940:940 运行，工作目录需放开读写权限
+chown -R 940:940 "$WORK"
 
 # 现有规则集 + 测试规则（对齐 SO：all-rulesets.rules + 追加）
 cp /etc/suricata/rules/all-rulesets.rules "$WORK/rules/all-rulesets.rules"
 cat "$TESTRULE" >> "$WORK/rules/all-rulesets.rules"
+chown 940:940 "$WORK/rules/all-rulesets.rules"
 
 # 测试配置：基于现有配置，eve 输出改到测试目录（避免污染 /nsm 实时 eve）
 python3 - "$WORK" <<'PYEOF'
@@ -33,6 +36,7 @@ work = sys.argv[1]
 with open("/etc/suricata/suricata.yaml", encoding="utf-8") as f:
     cfg = f.read()
 cfg = re.sub(r"filename: /nsm/suricata/[^\n]*", f"filename: {work}/output/eve.json", cfg)
+cfg = re.sub(r"default-rule-path: [^\n]*", f"default-rule-path: {work}/rules", cfg)
 with open(f"{work}/suricata-test.yaml", "w", encoding="utf-8") as f:
     f.write(cfg)
 PYEOF
@@ -42,7 +46,7 @@ echo "==============="
 echo "Running all-rulesets.rules + $(basename "$TESTRULE") against: $TESTPCAP"
 echo ""
 
-suricata -c "$WORK/suricata-test.yaml" \
+/opt/suricata/bin/suricata -c "$WORK/suricata-test.yaml" \
     --runmode single -v -k none \
     -r "$TESTPCAP" -l "$WORK/output" \
     --init-errors-fatal
