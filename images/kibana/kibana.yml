@@ -2,6 +2,8 @@
 
 server.host: "0.0.0.0"
 server.port: 5601
+# 嵌入探针管理 UI：Kibana 挂载在 /kibana 前缀下，由 ndr-manager 反向代理
+server.basePath: "/kibana"
 
 elasticsearch.hosts: ["http://nss-elasticsearch:9200"]
 elasticsearch.ssl.verificationMode: none

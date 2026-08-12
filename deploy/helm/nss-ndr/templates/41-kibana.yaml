@@ -34,7 +34,7 @@ spec:
           image: "{{ .Values.images.registry }}/nss-ndr-kibana-init:{{ .Values.images.tag }}"
           imagePullPolicy: IfNotPresent
           env:
-            - {name: KIBANA_URL, value: "http://localhost:5601"}
+            - {name: KIBANA_URL, value: "http://localhost:5601/kibana"}
             - {name: KIBANA_USERNAME, value: "elastic"}
             - name: KIBANA_PASSWORD
               valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: elastic-password}}

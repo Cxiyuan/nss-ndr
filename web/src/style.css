@@ -272,6 +272,13 @@ h2 {
   border: 1px solid #d0d7de;
   border-radius: 6px;
 }
+.viz-frame {
+  width: 100%;
+  height: calc(100vh - 130px);
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  background: #fff;
+}
 .row {
   display: flex;
   gap: 12px;

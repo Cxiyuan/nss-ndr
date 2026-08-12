@@ -59,6 +59,10 @@ func bearerToken(r *http.Request) string {
 	if strings.HasPrefix(h, "Bearer ") {
 		return strings.TrimPrefix(h, "Bearer ")
 	}
+	// iframe 子资源请求无 Authorization header，走同源 cookie
+	if c, err := r.Cookie("ndr_session"); err == nil {
+		return c.Value
+	}
 	return ""
 }
 
@@ -116,6 +120,15 @@ func apiLogin(w http.ResponseWriter, r *http.Request) {
 	sessionMu.Lock()
 	sessions[token] = userSession{username: body.Username, expiresAt: time.Now().Add(sessionTTL)}
 	sessionMu.Unlock()
+	// 同源 cookie：iframe 内 Kibana 代理等子资源请求免 Authorization header
+	http.SetCookie(w, &http.Cookie{
+		Name:     "ndr_session",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(sessionTTL.Seconds()),
+	})
 	audit("auth.login", body.Username, "登录")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token":      token,

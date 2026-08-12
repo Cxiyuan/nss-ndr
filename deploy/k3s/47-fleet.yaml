@@ -140,7 +140,7 @@ spec:
             - name: PYTHONUNBUFFERED
               value: "1"
             - name: KIBANA_URL
-              value: "http://nss-kibana:5601"
+              value: "http://nss-kibana:5601/kibana"
             - name: ES_USER
               value: "elastic"
             - name: ES_PASSWORD

@@ -61,7 +61,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: KIBANA_URL
-              value: "http://localhost:5601"
+              value: "http://localhost:5601/kibana"
             - name: KIBANA_USERNAME
               value: "elastic"
             - name: KIBANA_PASSWORD

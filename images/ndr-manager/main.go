@@ -69,7 +69,8 @@ func registerStatic(mux *http.ServeMux) {
 	}
 	fileServer := http.FileServer(http.FS(sub))
 	mux.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api" || len(r.URL.Path) >= 4 && r.URL.Path[:4] == "/api" {
+		if r.URL.Path == "/api" || len(r.URL.Path) >= 4 && r.URL.Path[:4] == "/api" ||
+			len(r.URL.Path) >= 7 && r.URL.Path[:7] == "/kibana" {
 			http.NotFound(w, r)
 			return
 		}
