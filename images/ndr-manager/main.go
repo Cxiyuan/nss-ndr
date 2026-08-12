@@ -13,7 +13,7 @@ import (
 var webFS embed.FS
 
 const (
-	confDir   = "/opt/so/conf"          // ConfigMap 挂载（只读参考）
+	confDir   = "/opt/so/conf"           // ConfigMap 挂载（只读参考）
 	rulesDir  = "/opt/so/rules/suricata" // 规则文件目录（hostPath，suricata 读取）
 	rulesFile = rulesDir + "/all-rulesets.rules"
 	stateDir  = "/opt/so/state"
@@ -25,6 +25,12 @@ func main() {
 		log.Fatalf("SQLite 初始化失败: %v", err)
 	}
 	defer closeDB()
+
+	kp, err := newKibanaProxy()
+	if err != nil {
+		log.Fatalf("Kibana 代理初始化失败: %v", err)
+	}
+	kibanaProxy = kp
 
 	if err := ensureDefaults(); err != nil {
 		log.Fatalf("默认配置初始化失败: %v", err)

@@ -1,80 +1,40 @@
 // Kibana 反向代理：探针 UI 内嵌 NDR 看板（免二次登录）
-// 后端用 elastic 账号登录 Kibana 维护 sid 会话，代理 /kibana/* 到 Kibana(basePath=/kibana)
+// 代理 /kibana/* 到 Kibana(basePath=/kibana)，每请求注入 Basic 认证头。
+// 说明：Kibana 9 默认限制 internal API（/internal/security/login 被禁），
+// 因此不走"登录取 sid"流程，改为直接使用 KIBANA_PROXY_USERNAME/PASSWORD 的 Basic 认证。
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	"encoding/base64"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"sync"
-	"time"
 )
 
 const kibanaInternalBase = "http://nss-kibana:5601"
 
+// 全局代理实例，main 启动时通过 newKibanaProxy 初始化
 var kibanaProxy = &kibanaReverseProxy{}
 
 type kibanaReverseProxy struct {
-	mu        sync.Mutex
-	sid       string
-	lastLogin time.Time
+	auth string // Basic 认证头值
 }
 
-// ensureLogin 用 KIBANA_PROXY_USERNAME/PASSWORD 登录 Kibana，缓存 sid cookie
-func (p *kibanaReverseProxy) ensureLogin() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.sid != "" && time.Since(p.lastLogin) < 20*time.Minute {
-		return nil
-	}
+// newKibanaProxy 从环境变量读取 Kibana 代理账号
+func newKibanaProxy() (*kibanaReverseProxy, error) {
 	user := os.Getenv("KIBANA_PROXY_USERNAME")
 	pass := os.Getenv("KIBANA_PROXY_PASSWORD")
 	if user == "" || pass == "" {
-		return fmt.Errorf("KIBANA_PROXY_USERNAME/PASSWORD 未配置")
+		return nil, fmt.Errorf("KIBANA_PROXY_USERNAME/PASSWORD 未配置")
 	}
-	body, _ := json.Marshal(map[string]any{
-		"providerType": "basic",
-		"providerName": "basic",
-		"currentURL":   "/",
-		"params": map[string]string{
-			"username": user,
-			"password": pass,
-		},
-	})
-	// Kibana 开启 rewriteBasePath 后，内部端点一律带 /kibana 前缀访问
-	req, err := http.NewRequest(http.MethodPost, kibanaInternalBase+"/kibana/internal/security/login", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("kbn-xsrf", "true")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
-	for _, c := range resp.Cookies() {
-		if c.Name == "sid" {
-			p.sid = c.Value
-			p.lastLogin = time.Now()
-			return nil
-		}
-	}
-	return fmt.Errorf("kibana 登录失败: HTTP %d", resp.StatusCode)
+	auth := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+pass))
+	return &kibanaReverseProxy{auth: auth}, nil
 }
 
 // ServeHTTP 反向代理 /kibana/* 到 Kibana（保留 /kibana basePath 前缀）
 func (p *kibanaReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if err := p.ensureLogin(); err != nil {
-		writeErr(w, http.StatusBadGateway, "Kibana 会话初始化失败: "+err.Error())
-		return
-	}
 	target, err := url.Parse(kibanaInternalBase)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -85,7 +45,7 @@ func (p *kibanaReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.Host = target.Host
-		req.Header.Set("Cookie", "sid="+p.sid)
+		req.Header.Set("Authorization", p.auth)
 		req.Header.Set("kbn-xsrf", "true")
 	}
 	proxy.ServeHTTP(w, r)
