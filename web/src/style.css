@@ -9,7 +9,7 @@ body {
 }
 .layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
 }
 .sidebar {
   width: 210px;
@@ -17,6 +17,7 @@ body {
   color: #c9d1d9;
   padding: 16px 0;
   flex-shrink: 0;
+  overflow-y: auto;
 }
 .brand {
   padding: 8px 20px 20px;
@@ -40,8 +41,11 @@ body {
 }
 .content {
   flex: 1;
-  padding: 24px 32px;
-  max-width: 1200px;
+  min-width: 0;
+  padding: 20px 28px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 h2 {
   margin-top: 0;
@@ -273,8 +277,9 @@ h2 {
   border-radius: 6px;
 }
 .viz-frame {
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  height: calc(100vh - 130px);
   border: 1px solid #e1e4e8;
   border-radius: 8px;
   background: #fff;
