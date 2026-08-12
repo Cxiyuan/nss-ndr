@@ -27,5 +27,16 @@ fi
 # 窄范围权限兜底（镜像内数据目录，规模小）
 $IONICE $NICE chown -R elastic-agent:elastic-agent /usr/share/elastic-agent/data 2>/dev/null || true
 
+# 官方 9.x 镜像二进制实际位于 /usr/share/elastic-agent/elastic-agent（软链到 data 目录）；
+# 部分版本同时提供 /usr/bin/elastic-agent，做兼容检测。
+AGENT_BIN="/usr/share/elastic-agent/elastic-agent"
+if [ ! -x "$AGENT_BIN" ]; then
+    AGENT_BIN="/usr/bin/elastic-agent"
+fi
+if [ ! -x "$AGENT_BIN" ]; then
+    echo "fatal: elastic-agent binary not found" >&2
+    exit 1
+fi
+
 # 官方容器模式入口：elastic-agent container
-exec $IONICE $NICE /usr/bin/elastic-agent container "$@"
+exec $IONICE $NICE "$AGENT_BIN" container "$@"
