@@ -140,6 +140,6 @@ echo "  探针管理后台 : http://<本机IP>:$MANAGER_PORT   （初始账号 a
 echo "  Kibana       : http://<本机IP>:30601/kibana   （elastic / nss-ndr@2026）"
 echo "  NDR 看板     : 已内嵌于管理后台“可视化分析”菜单"
 echo "  镜像口       : $INTERFACE"
-echo "  探针 ID      : $(grep -A2 '^probe:' "$CONFIG_FILE" 2>/dev/null | grep id | head -1 | awk '{print $2}')"
+echo "  探针 ID      : $(python3 -c "import yaml,sys; print(yaml.safe_load(open('$DEPLOY_DIR/10-configmap.yaml'))['data'].get('sensor_id',''))" 2>/dev/null)"
 echo ""
 echo "=========================================="
