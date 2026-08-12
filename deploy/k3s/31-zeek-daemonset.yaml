@@ -62,6 +62,8 @@ spec:
                 path: networks.cfg
               - key: bpf
                 path: bpf
+              - key: config.zeek
+                path: config.zeek
               - key: policy_securityonion_community-id-extended.zeek
                 path: policy/securityonion/community-id-extended.zeek
               - key: policy_securityonion_bpfconf.zeek
@@ -74,6 +76,12 @@ spec:
                 path: policy/securityonion/file-extraction/__load__.zeek
               - key: policy_securityonion_file-extraction_extract.zeek
                 path: policy/securityonion/file-extraction/extract.zeek
+              - key: policy_cve-2020-0601___load__.zeek
+                path: policy/cve-2020-0601/__load__.zeek
+              - key: policy_cve-2020-0601_cve-2020-0601.zeek
+                path: policy/cve-2020-0601/cve-2020-0601.zeek
+              - key: policy_cve-2020-0601_COPYING
+                path: policy/cve-2020-0601/COPYING
         - name: nsm
           persistentVolumeClaim:
             claimName: nss-ndr-nsm

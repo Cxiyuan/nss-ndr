@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# NSS-NDR so-suricata-rulestats（对齐 SO：查询运行中 suricata 的规则统计与最近重载时间）
+# 用法：so-suricata-rulestats
+# 输出：/opt/so/log/suricata/rulestats.json（{"rules_loaded","rules_failed","last_reload","return"}）
+
+OUTFILE="/opt/so/log/suricata/rulestats.json"
+SOCKET="/var/run/suricata/suricata-command.socket"
+
+query() {
+    timeout 10 suricatasc -c "$1" "$SOCKET" 2>/dev/null
+}
+
+STATS=$(query "ruleset-stats")
+RELOAD=$(query "ruleset-reload-time")
+[ -z "$RELOAD" ] && RELOAD='{}'
+
+OUTPUT=$(python3 - "$STATS" "$RELOAD" <<'PYEOF'
+import json, sys
+
+def parse(raw):
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+stats = parse(sys.argv[1])
+reload_ = parse(sys.argv[2])
+msgs = stats.get("message") or []
+if stats.get("return") == "OK" and msgs and isinstance(msgs[0].get("rules_loaded"), int):
+    rmsgs = reload_.get("message") or [{}]
+    out = {
+        "rules_loaded": msgs[0].get("rules_loaded"),
+        "rules_failed": msgs[0].get("rules_failed"),
+        "last_reload": rmsgs[0].get("last_reload", ""),
+        "return": "OK",
+    }
+    print(json.dumps(out))
+PYEOF
+)
+
+mkdir -p "$(dirname "$OUTFILE")"
+if [ -n "$OUTPUT" ]; then
+    echo "$OUTPUT" > "$OUTFILE"
+else
+    echo '{"return":"FAIL"}' > "$OUTFILE"
+fi
+cat "$OUTFILE"

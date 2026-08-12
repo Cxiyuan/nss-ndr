@@ -36,6 +36,10 @@ scripts/                  # 配置渲染等开发工具
 - [x] M9：补齐 Fleet（对齐 SO）：Fleet Server + Fleet 托管 elastic-agent，
   fleet-init 自动供给输出/策略/filestream 集成/令牌/Secret；FleetServer 策略输出钉 ES、
   数据策略走 Logstash（与 SO 完全一致，basic license 可行）；41 个 NDR 看板随镜像发布
+- [x] M10：suricata/zeek 插件与脚本对齐 SO 3.1.0：zeek local.zeek 全量加载清单（ICS/spicy/
+  tds/profinet/http2/intel/cve-2020-0601/标准脚本集）+ config.zeek（JA4）；suricata 补
+  so-suricata-testrule（单规则 pcap 验证）与 so-suricata-rulestats（规则统计，含 ndr-manager
+  API /api/suricata/stats）
 
 ## 快速开始（M0）
 

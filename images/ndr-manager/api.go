@@ -41,6 +41,7 @@ func registerAPI(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/rules/{id}/enable", apiSetRuleEnabled(true))
 	mux.HandleFunc("POST /api/rules/{id}/disable", apiSetRuleEnabled(false))
 	mux.HandleFunc("POST /api/rules/apply", apiApplyRules)
+	mux.HandleFunc("GET /api/suricata/stats", apiSuricataStats)
 
 	mux.HandleFunc("GET /api/sigma", apiListSigma)
 	mux.HandleFunc("POST /api/sigma", apiCreateSigma)
@@ -131,6 +132,15 @@ func apiStatus(w http.ResponseWriter, _ *http.Request) {
 		"applied_hash": configMapHash(),
 		"time":         nowStr(),
 	})
+}
+
+func apiSuricataStats(w http.ResponseWriter, _ *http.Request) {
+	stats, err := suricataStats()
+	if err != nil {
+		writeErr(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
 }
 
 func apiHistory(w http.ResponseWriter, _ *http.Request) {

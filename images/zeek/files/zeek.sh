@@ -11,11 +11,17 @@ CONF=/opt/so/conf
 [ -f "$CONF/zeekctl.cfg" ]  && cp -f "$CONF/zeekctl.cfg"  /opt/zeek/etc/zeekctl.cfg
 [ -f "$CONF/networks.cfg" ] && cp -f "$CONF/networks.cfg" /opt/zeek/etc/networks.cfg
 [ -f "$CONF/bpf" ] && cp -f "$CONF/bpf" /opt/zeek/etc/bpf
+# JA4 选项（对齐 SO：覆盖 ja4 包内 config.zeek）
+[ -f "$CONF/config.zeek" ] && cp -f "$CONF/config.zeek" /opt/zeek/share/zeek/site/packages/ja4/config.zeek
 if [ -d "$CONF/policy/securityonion" ]; then
   mkdir -p /opt/zeek/share/zeek/policy/securityonion
   cp -rf "$CONF/policy/securityonion/." /opt/zeek/share/zeek/policy/securityonion/
 fi
-chown -R 937:937 /opt/zeek/share/zeek/site /opt/zeek/etc /opt/zeek/share/zeek/policy/securityonion
+if [ -d "$CONF/policy/cve-2020-0601" ]; then
+  mkdir -p /opt/zeek/share/zeek/policy/cve-2020-0601
+  cp -rf "$CONF/policy/cve-2020-0601/." /opt/zeek/share/zeek/policy/cve-2020-0601/
+fi
+chown -R 937:937 /opt/zeek/share/zeek/site /opt/zeek/etc /opt/zeek/share/zeek/policy/securityonion /opt/zeek/share/zeek/policy/cve-2020-0601
 
 # 抓包能力（AF_PACKET 需要）
 setcap cap_net_raw,cap_net_admin=eip /opt/zeek/bin/zeek

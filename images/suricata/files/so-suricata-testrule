@@ -1,0 +1,74 @@
+#!/bin/bash
+#
+# NSS-NDR so-suricata-testrule（对齐 SO：单条规则 + pcap 离线验证）
+# 用法：so-suricata-testrule <规则文件> <pcap文件>
+# 在容器内执行：kubectl exec -n nss-ndr deploy/nss-suricata -- so-suricata-testrule /tmp/test.rules /tmp/test.pcap
+#
+# 流程（与 SO 一致）：现有规则集 + 测试规则 -> suricata 单线程离线重放 -> 输出命中告警 JSON
+
+set -e
+
+if [ "$#" -ne 2 ]; then
+    echo "用法: so-suricata-testrule <规则文件> <pcap文件>" >&2
+    exit 1
+fi
+
+TESTRULE="$1"
+TESTPCAP="$2"
+[ -f "$TESTRULE" ] || { echo "规则文件不存在: $TESTRULE" >&2; exit 1; }
+[ -f "$TESTPCAP" ] || { echo "pcap 文件不存在: $TESTPCAP" >&2; exit 1; }
+
+WORK=/tmp/nids-testing
+rm -rf "$WORK"
+mkdir -p "$WORK/rules" "$WORK/output"
+
+# 现有规则集 + 测试规则（对齐 SO：all-rulesets.rules + 追加）
+cp /etc/suricata/rules/all-rulesets.rules "$WORK/rules/all-rulesets.rules"
+cat "$TESTRULE" >> "$WORK/rules/all-rulesets.rules"
+
+# 测试配置：基于现有配置，eve 输出改到测试目录（避免污染 /nsm 实时 eve）
+python3 - "$WORK" <<'PYEOF'
+import re, sys
+work = sys.argv[1]
+with open("/etc/suricata/suricata.yaml", encoding="utf-8") as f:
+    cfg = f.read()
+cfg = re.sub(r"filename: /nsm/suricata/[^\n]*", f"filename: {work}/output/eve.json", cfg)
+with open(f"{work}/suricata-test.yaml", "w", encoding="utf-8") as f:
+    f.write(cfg)
+PYEOF
+
+echo ""
+echo "==============="
+echo "Running all-rulesets.rules + $(basename "$TESTRULE") against: $TESTPCAP"
+echo ""
+
+suricata -c "$WORK/suricata-test.yaml" \
+    --runmode single -v -k none \
+    -r "$TESTPCAP" -l "$WORK/output" \
+    --init-errors-fatal
+
+echo "==== Begin Suricata Output ==="
+python3 - "$WORK/output/eve.json" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+count = 0
+try:
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            try:
+                ev = json.loads(line)
+            except Exception:
+                continue
+            if ev.get("event_type") == "alert":
+                count += 1
+                a = ev.get("alert", {})
+                src = ev.get("src_ip", "")
+                dst = ev.get("dest_ip", "")
+                print(f"alert: {a.get('signature')} | {src}:{ev.get('src_port')} -> {dst}:{ev.get('dest_port')} | rule_id={a.get('signature_id')}")
+except FileNotFoundError:
+    pass
+print(f"---- 共命中 {count} 条告警 ----")
+PYEOF
+echo "==== End Suricata Output ==="
+echo "End so-suricata-testrule"
+echo "==============="

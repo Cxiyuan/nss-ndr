@@ -200,7 +200,12 @@ flowchart LR
 ### 5.2 zeek（元数据引擎）
 
 - 镜像：基于 `so-zeek:3.1.0` 瘦身，Zeek 8.0.8。
-- 复用 SO 资产：`json-logs`、`community-id-extended`、`conn-add-sensorname`、`bpfconf`、`file-extraction`（MIME 白名单）、`cve-2020-0601`、intel（可空）、`local.zeek` 加载清单（ja3/ja4/hassh/ICS 插件可按需裁剪）。
+- 复用 SO 资产：`json-logs`、`community-id-extended`、`conn-add-sensorname`、`bpfconf`、`file-extraction`（MIME 白名单）、`cve-2020-0601`、intel。
+- `local.zeek` 加载清单与 SO 3.1.0 **完全一致**：标准脚本集（software/known-*/ssl/ssh/http 检测等）、
+  ja3/ja4/hassh/oui-logging、intel、cve-2020-0601、ICS 插件（icsnpp-modbus/dnp3/bacnet/ethercat/enip/
+  opcua-binary/bsap/s7comm）、spicy 插件（wireguard/stun/ipsec/openvpn）、tds/profinet/http2、
+  detect-windows-shells 签名；另叠加自研 `json-logs`（ISO8601）与 `conn-add-sensorname`（探针标识）。
+- JA4 选项 `config.zeek` 与 SO 一致（覆盖 ja4 包内配置：仅启用基础 JA4，JA4+ 系列按 FoxIO 许可关闭）。
 - 运行：`node.cfg` 多 worker（fanout 23）、`zeekctl.cfg` 轮转 1h + 压缩。
 - 文件提取：白名单可配，`FileExtract::default_limit` 9MB，输出 `/nsm/zeek/extracted/complete/<md5>.<ext>`。
 

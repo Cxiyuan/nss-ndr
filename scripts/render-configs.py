@@ -29,6 +29,7 @@ TEMPLATES = {
 
 STATIC_CONFIGS = {
     "kibana.yml": "images/kibana/kibana.yml",
+    "config.zeek": "images/zeek/files/config.zeek",
     # Strelka 文件分析（参照 SO 3.1.0 配置，ELv2 资产见 README 许可说明）
     "strelka_backend.yaml": "images/strelka-backend/files/backend.yaml",
     "strelka_logging.yaml": "images/strelka-backend/files/logging.yaml",
@@ -39,7 +40,7 @@ STATIC_CONFIGS = {
     "strelka_manager.yaml": "images/strelka-manager/files/manager.yaml",
 }
 
-POLICY_DIR = "images/zeek/files/policy/securityonion"
+POLICY_ROOT = "images/zeek/files/policy"
 
 
 def load_cfg(path):
@@ -60,14 +61,15 @@ def render_templates(ctx):
 
 def render_policy():
     data = {}
-    base = os.path.join(ROOT, POLICY_DIR)
+    base = os.path.join(ROOT, POLICY_ROOT)
     for root, _dirs, files in os.walk(base):
         for name in files:
             rel = os.path.relpath(os.path.join(root, name), base)
+            top = rel.split(os.sep)[0]
             with open(os.path.join(root, name), encoding="utf-8") as f:
                 # ConfigMap data key 不允许 "/"（仅 [-._a-zA-Z0-9]），
-                # 用 "_" 扁平化；挂载时由 zeek DaemonSet volume items[].path 还原目录结构
-                data[f"policy_securityonion_{rel.replace('/', '_')}"] = f.read()
+                # 用 "_" 扁平化（保留顶层目录名）；挂载时由 zeek DaemonSet volume items[].path 还原
+                data[f"policy_{top}_{rel[len(top)+1:].replace('/', '_')}"] = f.read()
     return data
 
 

@@ -50,6 +50,13 @@
         策略钉 ES→logstash 恢复默认）、Secret 写集合路径、移除 data 卷挂载（遮蔽二进制软链）、
         FLEET_ENROLL/FLEET_URL/FLEET_CA 补齐、monitoring 走 logstash、自愈钉输出、
         清理 standalone agent.yml 死配置
+- [x] **M10 suricata/zeek 插件与脚本对齐 SO 3.1.0（2026-08-12）**
+  - [x] zeek local.zeek 全量加载清单（标准脚本集/ICS×8/spicy×4/tds/profinet/http2/intel/
+        cve-2020-0601/detect-windows-shells）
+  - [x] config.zeek（JA4 选项，覆盖 ja4 包内配置）与 cve-2020-0601 策略资产入库并下发
+  - [x] suricata 补 so-suricata-testrule / so-suricata-rulestats（容器内脚本）
+  - [x] ndr-manager 新增 GET /api/suricata/stats（规则统计等价 API）
+  - [ ] 部署验证：全量插件加载无报错 + testrule/rulestats 实测（待 CI）
 - [x] **M4 统一配置管理后台（nss-ndr-manager）**
   - [x] React SPA（Web UI：总览/探针/Suricata/Zeek/ES/告警推送/规则/历史审计）
   - [x] Go API + SQLite 配置库（版本历史 + 审计日志）

@@ -8,6 +8,9 @@ cp images/zeek/files/local.zeek images/zeek/files/node.cfg \
    images/zeek/files/zeekctl.cfg images/zeek/files/networks.cfg "$DEST/"
 cp images/zeek/files/policy/securityonion/*.zeek "$DEST/policy/securityonion/"
 cp images/zeek/files/policy/securityonion/file-extraction/* "$DEST/policy/securityonion/file-extraction/"
+mkdir -p "$DEST/policy/cve-2020-0601"
+cp images/zeek/files/policy/cve-2020-0601/* "$DEST/policy/cve-2020-0601/"
+cp images/zeek/files/config.zeek "$DEST/"
 cp images/kibana/kibana.yml "$DEST/"
 mkdir -p "$DEST/strelka/taste"
 cp images/strelka-backend/files/backend.yaml \

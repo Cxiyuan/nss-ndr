@@ -17,6 +17,10 @@ COPY files/node.cfg     /opt/zeek/etc/node.cfg
 COPY files/zeekctl.cfg  /opt/zeek/etc/zeekctl.cfg
 COPY files/networks.cfg /opt/zeek/etc/networks.cfg
 COPY files/policy/securityonion/ /opt/zeek/share/zeek/policy/securityonion/
-RUN chown -R 937:937 /opt/zeek/share/zeek/site /opt/zeek/etc /opt/zeek/share/zeek/policy/securityonion
+# JA4 选项（对齐 SO：覆盖 ja4 包内 config.zeek）
+COPY files/config.zeek  /opt/zeek/share/zeek/site/packages/ja4/config.zeek
+# CVE-2020-0601 证书策略（对齐 SO）
+COPY files/policy/cve-2020-0601/ /opt/zeek/share/zeek/policy/cve-2020-0601/
+RUN chown -R 937:937 /opt/zeek/share/zeek/site /opt/zeek/etc /opt/zeek/share/zeek/policy/securityonion /opt/zeek/share/zeek/policy/cve-2020-0601
 
 ENTRYPOINT ["/usr/local/sbin/zeek.sh"]

@@ -15,6 +15,11 @@ RUN chmod +x /usr/local/sbin/so-suricata.sh
 COPY files/suricata.yaml /etc/suricata/suricata.yaml
 COPY files/threshold.conf /etc/suricata/threshold.conf
 
+# 运维工具（对齐 SO：单规则 pcap 验证 / 规则统计）
+COPY files/so-suricata-testrule /usr/local/sbin/so-suricata-testrule
+COPY files/so-suricata-rulestats /usr/local/sbin/so-suricata-rulestats
+RUN chmod +x /usr/local/sbin/so-suricata-testrule /usr/local/sbin/so-suricata-rulestats
+
 # 默认空规则集（M0 不带任何规则）
 RUN mkdir -p /etc/suricata/rules && \
     touch /etc/suricata/rules/all-rulesets.rules && \
