@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -128,6 +130,20 @@ func defaultConfig() FullConfig {
 	return c
 }
 
+// seedConfig 优先从挂载的 ConfigMap（/opt/so/conf/probe.yaml）读取部署实况作为种子，
+// 保证 UI 首次打开显示的是当前实际配置（interface 等部署参数），而不是空默认值
+func seedConfig() FullConfig {
+	c := defaultConfig()
+	data, err := os.ReadFile(filepath.Join(confDir, "probe.yaml"))
+	if err != nil {
+		return c
+	}
+	if err := yaml.Unmarshal(data, &c); err != nil {
+		return c
+	}
+	return c
+}
+
 func ensureDefaults() error {
 	for _, key := range []string{cfgProbe, cfgSuricata, cfgZeek, cfgElasticsearch, cfgXdr, cfgStrelka, cfgDetections, cfgResources} {
 		var exists int
@@ -138,7 +154,7 @@ func ensureDefaults() error {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		// 初始化默认值
+		// 初始化默认值（优先用部署实况 seed）
 		var val string
 		if key == cfgResources {
 			data, err := yaml.Marshal(defaultResources())
@@ -147,7 +163,7 @@ func ensureDefaults() error {
 			}
 			val = string(data)
 		} else {
-			v, err := marshalSection(key, defaultConfig())
+			v, err := marshalSection(key, seedConfig())
 			if err != nil {
 				return err
 			}
