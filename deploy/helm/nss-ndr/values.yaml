@@ -2,7 +2,7 @@
 
 images:
   registry: ghcr.io/cxiyuan/nss-ndr   # 仓库级命名空间（包自动继承仓库 public 可见性）
-  tag: 7014b709294262714a8afcd714e572ef298aa707
+  tag: 83b5e7a7083eb1def53a85bfd646f3f7b7dfe813
   pullSecrets: []   # 镜像包已公开；如后续改私有，填 [{name: ghcr-pull}]
   elasticsearch: docker.elastic.co/elasticsearch/elasticsearch:9.3.3
 
