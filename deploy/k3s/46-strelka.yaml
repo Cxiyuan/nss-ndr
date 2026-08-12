@@ -54,7 +54,7 @@ spec:
             - containerPort: 6379
           resources:
             requests:
-              cpu: 100m
+              cpu: 50m
               memory: 128Mi
             limits:
               cpu: 500m
@@ -121,7 +121,7 @@ spec:
             - containerPort: 6379
           resources:
             requests:
-              cpu: 100m
+              cpu: 50m
               memory: 128Mi
             limits:
               cpu: 500m
@@ -183,7 +183,7 @@ spec:
             - containerPort: 57314
           resources:
             requests:
-              cpu: 100m
+              cpu: 50m
               memory: 128Mi
             limits:
               cpu: 500m
@@ -242,7 +242,7 @@ spec:
           command: ["strelka-backend"]
           resources:
             requests:
-              cpu: 200m
+              cpu: 100m
               memory: 256Mi
             limits:
               cpu: "2"
@@ -307,7 +307,7 @@ spec:
           command: ["strelka-filestream"]
           resources:
             requests:
-              cpu: 100m
+              cpu: 50m
               memory: 128Mi
             limits:
               cpu: 500m

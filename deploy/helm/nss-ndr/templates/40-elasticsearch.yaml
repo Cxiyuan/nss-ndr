@@ -32,7 +32,7 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /usr/share/elasticsearch/data}
           resources:
-            requests: {cpu: 500m, memory: 2Gi}
+            requests: {cpu: 200m, memory: 2Gi}
             limits: {cpu: "2", memory: 4Gi}
         - name: es-init
           image: "{{ .Values.images.registry }}/nss-ndr-es-init:{{ .Values.images.tag }}"

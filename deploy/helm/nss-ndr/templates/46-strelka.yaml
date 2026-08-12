@@ -30,7 +30,7 @@ spec:
           ports:
             - {containerPort: 6379}
           resources:
-            requests: {cpu: 100m, memory: 128Mi}
+            requests: {cpu: 50m, memory: 128Mi}
             limits: {cpu: 500m, memory: 512Mi}
           volumeMounts:
             - {name: nsm, mountPath: /nsm}
@@ -75,7 +75,7 @@ spec:
           ports:
             - {containerPort: 6379}
           resources:
-            requests: {cpu: 100m, memory: 128Mi}
+            requests: {cpu: 50m, memory: 128Mi}
             limits: {cpu: 500m, memory: 512Mi}
           volumeMounts:
             - {name: nsm, mountPath: /nsm}
@@ -120,7 +120,7 @@ spec:
           ports:
             - {containerPort: 57314}
           resources:
-            requests: {cpu: 100m, memory: 128Mi}
+            requests: {cpu: 50m, memory: 128Mi}
             limits: {cpu: 500m, memory: 512Mi}
           volumeMounts:
             - {name: config, mountPath: /etc/strelka, readOnly: true}
@@ -163,7 +163,7 @@ spec:
           image: "{{ .Values.images.registry }}/nss-ndr-strelka-backend:{{ .Values.images.tag }}"
           command: ["strelka-backend"]
           resources:
-            requests: {cpu: 200m, memory: 256Mi}
+            requests: {cpu: 100m, memory: 256Mi}
             limits: {cpu: "2", memory: 4Gi}
           volumeMounts:
             - {name: config, mountPath: /etc/strelka, readOnly: true}
@@ -208,7 +208,7 @@ spec:
           image: "{{ .Values.images.registry }}/nss-ndr-strelka-manager:{{ .Values.images.tag }}"
           command: ["strelka-filestream"]
           resources:
-            requests: {cpu: 100m, memory: 128Mi}
+            requests: {cpu: 50m, memory: 128Mi}
             limits: {cpu: 500m, memory: 512Mi}
           volumeMounts:
             - {name: config, mountPath: /etc/strelka, readOnly: true}
