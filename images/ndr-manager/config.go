@@ -139,9 +139,19 @@ func ensureDefaults() error {
 			return err
 		}
 		// 初始化默认值
-		val, err := marshalSection(key, defaultConfig())
-		if err != nil {
-			return err
+		var val string
+		if key == cfgResources {
+			data, err := yaml.Marshal(defaultResources())
+			if err != nil {
+				return err
+			}
+			val = string(data)
+		} else {
+			v, err := marshalSection(key, defaultConfig())
+			if err != nil {
+				return err
+			}
+			val = v
 		}
 		if _, err := db.Exec("INSERT INTO configs(key, value) VALUES(?,?)", key, val); err != nil {
 			return err
