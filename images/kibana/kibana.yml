@@ -8,7 +8,9 @@ server.rewriteBasePath: true
 # 探针管理后台代理需要调用 internal API（登录会话），自托管环境放行内部路由
 server.restrictInternalApis: false
 # 产品界面统一暗黑主题（锁定覆盖，用户侧不可切换）
-uiSettings.overrides.theme.darkMode: enabled
+uiSettings:
+  overrides:
+    "theme:darkMode": enabled
 
 elasticsearch.hosts: ["http://nss-elasticsearch:9200"]
 elasticsearch.ssl.verificationMode: none
