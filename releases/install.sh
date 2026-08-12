@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # NSS-NDR 探针一键安装/部署脚本（幂等，可重复执行）
 # 用法:
-#   bash scripts/install.sh -i enp5s0 [-c configs/probe.yaml] [-t <镜像tag>] [-p 30603]
+#   bash releases/install.sh -i enp5s0 [-c configs/probe.yaml] [-t <镜像tag>] [-p 30603]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -86,13 +86,13 @@ fi
 
 # ---------- 渲染 ConfigMap ----------
 log "渲染 ConfigMap..."
-python3 "$ROOT/scripts/render-configs.py" "$CONFIG_FILE" "$DEPLOY_DIR/10-configmap.yaml"
+python3 "$ROOT/releases/render-configs.py" "$CONFIG_FILE" "$DEPLOY_DIR/10-configmap.yaml"
 [[ -f "$TMP_CFG" ]] && rm -f "$TMP_CFG"
 
 # ---------- 凭据 ----------
 log "准备凭据..."
 if [[ ! -f "$DEPLOY_DIR/25-secret.yaml" ]]; then
-  bash "$ROOT/scripts/gen-secret.sh"
+  bash "$ROOT/releases/gen-secret.sh"
 else
   log "25-secret.yaml 已存在，跳过生成"
 fi
@@ -102,7 +102,7 @@ log "创建命名空间/证书/全部资源..."
 kubectl create ns "$NS" --dry-run=client -o yaml 2>/dev/null | kubectl apply -f - >/dev/null
 if ! kubectl get secret nss-ndr-certs -n "$NS" >/dev/null 2>&1; then
   GEN_CERTS="$DEPLOY_DIR/gen-certs.sh"
-  [[ -f "$GEN_CERTS" ]] || GEN_CERTS="$ROOT/scripts/gen-certs.sh"
+  [[ -f "$GEN_CERTS" ]] || GEN_CERTS="$ROOT/releases/gen-certs.sh"
   bash "$GEN_CERTS" "$NS"
 else
   log "证书 Secret 已存在，跳过"

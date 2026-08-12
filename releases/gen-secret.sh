@@ -14,7 +14,7 @@ if [ -f "$TARGET" ]; then
 fi
 
 cat > "$TARGET" <<EOF
-# 自动生成（scripts/gen-secret.sh）；elastic 密码固定默认值，其余随机
+# 自动生成（releases/gen-secret.sh）；elastic 密码固定默认值，其余随机
 apiVersion: v1
 kind: Secret
 metadata:

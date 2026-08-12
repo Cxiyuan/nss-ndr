@@ -1,5 +1,5 @@
 # NSS-NDR Suricata 配置模板
-# 由 scripts/render-configs.py 从 probe.yaml 渲染（${VAR} 为占位符）
+# 由 releases/render-configs.py 从 probe.yaml 渲染（${VAR} 为占位符）
 
 %YAML 1.1
 ---

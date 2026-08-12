@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # NSS-NDR 探针一键卸载脚本（只清理本项目，不影响其他业务）
 # 用法:
-#   bash scripts/uninstall.sh [-y] [--keep-images] [--keep-manifests]
+#   bash releases/uninstall.sh [-y] [--keep-images] [--keep-manifests]
 set -euo pipefail
 
 NS="nss-ndr"

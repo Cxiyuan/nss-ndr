@@ -1,4 +1,4 @@
-// 配置渲染引擎：FullConfig -> ConfigMap data（等价 scripts/render-configs.py）
+// 配置渲染引擎：FullConfig -> ConfigMap data（等价 releases/render-configs.py）
 package main
 
 import (

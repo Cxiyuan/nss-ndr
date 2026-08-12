@@ -80,7 +80,7 @@
   - [x] Redis 缓冲（list + 背压 + 批量）
   - [x] filebeat 改 Lumberjack 输出（双向 TLS，client 证书）
   - [x] data_stream 路由 + metadata.pipeline 指派 ES ingest pipeline
-  - [x] 自签 CA/证书（scripts/gen-certs.sh → Secret nss-ndr-certs）
+  - [x] 自签 CA/证书（releases/gen-certs.sh → Secret nss-ndr-certs）
   - [x] zeek 全日志类型 pipeline 补齐（62 类）
   - [x] 端到端验证：filebeat→logstash→redis→logstash→ES 全链路零错误
   - [x] 幂等机制（对齐 SO）：filebeat 生成稳定事件 ID（metadata._id），logstash create + document_id，重复事件 version_conflict 静默

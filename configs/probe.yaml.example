@@ -1,5 +1,5 @@
 # NSS-NDR 探针配置文件（示例）
-# 修改后运行：python3 scripts/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
+# 修改后运行：python3 releases/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
 
 probe:
   id: nss-001                 # 探针唯一标识（observer.name / 推送标记）

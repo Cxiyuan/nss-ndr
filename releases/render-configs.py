@@ -2,7 +2,7 @@
 """NSS-NDR 配置渲染：probe.yaml -> k3s ConfigMap
 
 用法:
-    python3 scripts/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
+    python3 releases/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
 
 依赖: pyyaml (pip3 install pyyaml)
 """

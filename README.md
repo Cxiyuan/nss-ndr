@@ -49,7 +49,7 @@ cp configs/probe.yaml.example configs/probe.yaml
 $EDITOR configs/probe.yaml
 
 # 2. 渲染 k3s 清单中的 ConfigMap
-python3 scripts/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
+python3 releases/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
 # 注意：10-configmap.yaml 为生成物不入库；镜像口(interface)为部署环境参数，
 # 必须在本步骤前于 probe.yaml 中按服务器实际网卡填写（空值会渲染失败）
 
@@ -87,7 +87,7 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
 
 - 节点需设置 `vm.max_map_count=262144`（`sysctl -w vm.max_map_count=262144`，写入 `/etc/sysctl.d/` 持久化）。
 - M2/M3：ES 已启用 xpack security；部署前生成凭据：
-  - k3s 路径：`bash scripts/gen-secret.sh`（elastic 默认 `nss-ndr@2026`，其余服务账号随机；
+  - k3s 路径：`bash releases/gen-secret.sh`（elastic 默认 `nss-ndr@2026`，其余服务账号随机；
     也可参照 `deploy/k3s/25-secret.yaml.example` 手工修改）
   - Helm 路径：`values.secrets`（elastic 默认已固化 `nss-ndr@2026`）
   - es-init 会自动创建 filebeat / kibana_system / xdr-push 应用用户。
@@ -97,10 +97,10 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
 
 ```bash
 # 证书（fleet-server / elastic-agent / logstash 双向 TLS 共用同一 CA）
-bash scripts/gen-certs.sh
+bash releases/gen-certs.sh
 # 渲染 ConfigMap + 生成 Secret 后整体应用
-python3 scripts/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
-bash scripts/gen-secret.sh
+python3 releases/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
+bash releases/gen-secret.sh
 kubectl apply -k deploy/k3s/
 ```
 
