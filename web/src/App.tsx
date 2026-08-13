@@ -61,9 +61,9 @@ export default function App() {
 
   return (
     <div className="layout">
-      <aside className="sidebar">
+      <header className="topbar">
         <div className="brand">NSS-NDR 探针管理</div>
-        <nav>
+        <nav className="topnav">
           {nav.map((n) => (
             <NavLink
               key={n.to}
@@ -76,7 +76,7 @@ export default function App() {
           ))}
         </nav>
         <div className="user-area">
-          <div className="user-name">admin</div>
+          <span className="user-name">admin</span>
           <button className="link-btn" onClick={() => setShowPwd(!showPwd)}>
             修改密码
           </button>
@@ -84,7 +84,7 @@ export default function App() {
             退出登录
           </button>
         </div>
-      </aside>
+      </header>
       <main className={"content" + (location.pathname === "/viz" ? " content--full" : "")}>
         {showPwd && (
           <div className="pwd-box">

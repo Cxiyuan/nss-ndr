@@ -9,28 +9,42 @@ body {
 }
 .layout {
   display: flex;
+  flex-direction: column;
   height: 100vh;
 }
-.sidebar {
-  width: 210px;
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: #161b22;
   color: #c9d1d9;
-  padding: 16px 0;
+  padding: 0 20px;
+  height: 52px;
   flex-shrink: 0;
-  overflow-y: auto;
 }
 .brand {
-  padding: 8px 20px 20px;
+  padding-right: 24px;
   font-size: 16px;
   font-weight: 600;
   color: #fff;
+  white-space: nowrap;
+}
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
 }
 .nav-item {
   display: block;
-  padding: 9px 20px;
+  padding: 6px 14px;
   color: #c9d1d9;
   text-decoration: none;
   font-size: 14px;
+  border-radius: 6px;
+  white-space: nowrap;
 }
 .nav-item:hover {
   background: #21262d;
@@ -247,16 +261,18 @@ h2 {
   margin: 0;
 }
 .user-area {
-  margin-top: 24px;
-  padding: 12px 20px;
-  border-top: 1px solid #30363d;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 12px;
+  flex-direction: row;
+  flex-shrink: 0;
+  padding-left: 12px;
+  border-left: 1px solid #30363d;
 }
 .user-name {
   font-size: 13px;
   color: #c9d1d9;
+  white-space: nowrap;
 }
 .link-btn {
   background: none;
@@ -264,8 +280,9 @@ h2 {
   color: #8b949e;
   font-size: 13px;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
   padding: 0;
+  white-space: nowrap;
 }
 .link-btn:hover {
   color: #fff;
