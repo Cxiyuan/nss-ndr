@@ -1,11 +1,35 @@
 * {
   box-sizing: border-box;
 }
+html {
+  color-scheme: dark;
+}
 body {
   margin: 0;
   font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: #f5f6f8;
-  color: #1f2329;
+  /* 与 Kibana 9 dark 主题页面背景一致 */
+  background: #07101f;
+  color: #d5dce8;
+}
+input,
+select,
+textarea {
+  background: #0d1a2e;
+  color: #d5dce8;
+}
+::placeholder {
+  color: #6b7a93;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #1d2f4a;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #07101f;
 }
 .layout {
   display: flex;
@@ -47,10 +71,10 @@ body {
   white-space: nowrap;
 }
 .nav-item:hover {
-  background: #21262d;
+  background: #16233a;
 }
 .nav-item.active {
-  background: #1f6feb;
+  background: #2c7be5;
   color: #fff;
 }
 .content {
@@ -60,6 +84,7 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  background: #07101f;
 }
 /* 可视化分析：右侧区域完全交给 Kibana 看板，去掉内边距 */
 .content--full {
@@ -75,7 +100,7 @@ h2 {
   margin-top: 0;
 }
 .hint {
-  color: #57606a;
+  color: #8b98b0;
   font-size: 13px;
 }
 .cards {
@@ -84,15 +109,15 @@ h2 {
   margin: 16px 0;
 }
 .card {
-  background: #fff;
-  border: 1px solid #e1e4e8;
+  background: #0b1628;
+  border: 1px solid #1d2f4a;
   border-radius: 8px;
   padding: 16px 20px;
   min-width: 180px;
 }
 .card-label {
   font-size: 12px;
-  color: #57606a;
+  color: #8b98b0;
 }
 .card-value {
   font-size: 20px;
@@ -104,10 +129,11 @@ h2 {
   min-height: 360px;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 13px;
-  border: 1px solid #d0d7de;
+  border: 1px solid #1d2f4a;
   border-radius: 6px;
   padding: 12px;
-  background: #fff;
+  background: #0b1628;
+  color: #d5dce8;
 }
 .login-wrap {
   min-height: 100vh;
@@ -117,7 +143,8 @@ h2 {
   background: #161b22;
 }
 .login-card {
-  background: #fff;
+  background: #0b1628;
+  border: 1px solid #1d2f4a;
   border-radius: 10px;
   padding: 32px 36px;
   width: 340px;
@@ -134,13 +161,15 @@ h2 {
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
-  color: #57606a;
+  color: #8b98b0;
 }
 .login-card input {
   padding: 8px 10px;
-  border: 1px solid #d0d7de;
+  border: 1px solid #1d2f4a;
   border-radius: 6px;
   font-size: 14px;
+  background: #0d1a2e;
+  color: #d5dce8;
 }
 .alert {
   padding: 8px 12px;
@@ -148,31 +177,32 @@ h2 {
   font-size: 13px;
 }
 .alert.ok {
-  background: #dafbe1;
-  color: #1a7f37;
+  background: #0f2a1d;
+  color: #5ad48c;
 }
 .alert.error {
-  background: #ffebe9;
-  color: #cf222e;
+  background: #33151a;
+  color: #ff7a85;
 }
 .btn {
-  background: #f6f8fa;
-  border: 1px solid #d0d7de;
+  background: #16233a;
+  border: 1px solid #2a4060;
   border-radius: 6px;
   padding: 8px 16px;
   font-size: 14px;
   cursor: pointer;
+  color: #d5dce8;
 }
 .btn:hover {
-  background: #eaeef2;
+  background: #1e3050;
 }
 .btn.primary {
-  background: #1f6feb;
-  border-color: #1f6feb;
+  background: #2c7be5;
+  border-color: #2c7be5;
   color: #fff;
 }
 .btn.primary:hover {
-  background: #1a5fd0;
+  background: #3b8bf0;
 }
 .btn:disabled {
   opacity: 0.6;
@@ -191,13 +221,15 @@ h2 {
   flex: 1;
   min-width: 220px;
   padding: 8px 10px;
-  border: 1px solid #d0d7de;
+  border: 1px solid #1d2f4a;
   border-radius: 6px;
+  background: #0b1628;
+  color: #d5dce8;
 }
 .tabs {
   display: flex;
   gap: 4px;
-  border-bottom: 1px solid #d8dee4;
+  border-bottom: 1px solid #1d2f4a;
   margin-bottom: 18px;
   flex-wrap: wrap;
 }
@@ -207,15 +239,15 @@ h2 {
   border-bottom: 2px solid transparent;
   padding: 10px 16px;
   font-size: 14px;
-  color: #57606a;
+  color: #8b98b0;
   cursor: pointer;
 }
 .tab:hover {
-  color: #1f6feb;
+  color: #4da3ff;
 }
 .tab.active {
-  color: #1f6feb;
-  border-bottom-color: #1f6feb;
+  color: #4da3ff;
+  border-bottom-color: #4da3ff;
   font-weight: 600;
 }
 .form-grid {
@@ -224,8 +256,8 @@ h2 {
   gap: 16px;
 }
 .field {
-  background: #fff;
-  border: 1px solid #e1e4e8;
+  background: #0b1628;
+  border: 1px solid #1d2f4a;
   border-radius: 8px;
   padding: 14px 16px;
   display: flex;
@@ -237,7 +269,7 @@ h2 {
   font-weight: 600;
 }
 .field .unit {
-  color: #57606a;
+  color: #8b98b0;
   font-weight: 400;
   margin-left: 6px;
   font-size: 12px;
@@ -248,10 +280,12 @@ h2 {
 .field select,
 .field textarea {
   padding: 7px 10px;
-  border: 1px solid #d0d7de;
+  border: 1px solid #1d2f4a;
   border-radius: 6px;
   font-size: 14px;
   width: 100%;
+  background: #0d1a2e;
+  color: #d5dce8;
 }
 .field input[type="checkbox"] {
   width: 18px;
@@ -288,8 +322,8 @@ h2 {
   color: #fff;
 }
 .pwd-box {
-  background: #fff;
-  border: 1px solid #e1e4e8;
+  background: #0b1628;
+  border: 1px solid #1d2f4a;
   border-radius: 8px;
   padding: 14px 16px;
   display: flex;
@@ -300,15 +334,17 @@ h2 {
 }
 .pwd-box input {
   padding: 7px 10px;
-  border: 1px solid #d0d7de;
+  border: 1px solid #1d2f4a;
   border-radius: 6px;
+  background: #0d1a2e;
+  color: #d5dce8;
 }
 .viz-frame {
   flex: 1;
   min-height: 0;
   width: 100%;
   border: none;
-  background: #0d1117;
+  background: #07101f;
 }
 .row {
   display: flex;
@@ -319,20 +355,23 @@ h2 {
 .comment {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #d0d7de;
+  border: 1px solid #1d2f4a;
   border-radius: 6px;
+  background: #0b1628;
+  color: #d5dce8;
 }
 .btn {
   padding: 8px 16px;
-  border: 1px solid #d0d7de;
-  background: #f6f8fa;
+  border: 1px solid #2a4060;
+  background: #16233a;
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
+  color: #d5dce8;
 }
 .btn.primary {
-  background: #1f6feb;
-  border-color: #1f6feb;
+  background: #2c7be5;
+  border-color: #2c7be5;
   color: #fff;
 }
 .btn:disabled {
@@ -346,18 +385,18 @@ h2 {
   font-size: 14px;
 }
 .alert.ok {
-  background: #dafbe1;
-  color: #1a7f37;
+  background: #0f2a1d;
+  color: #5ad48c;
 }
 .alert.error {
-  background: #ffebe9;
-  color: #cf222e;
+  background: #33151a;
+  color: #ff7a85;
 }
 table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
-  border: 1px solid #e1e4e8;
+  background: #0b1628;
+  border: 1px solid #1d2f4a;
   border-radius: 8px;
   margin: 12px 0;
 }
@@ -365,11 +404,11 @@ th,
 td {
   text-align: left;
   padding: 8px 12px;
-  border-bottom: 1px solid #eef1f4;
+  border-bottom: 1px solid #16233a;
   font-size: 13px;
 }
 th {
-  background: #f6f8fa;
+  background: #0d1a2e;
   font-weight: 600;
 }
 .mono {
@@ -377,8 +416,8 @@ th {
   font-size: 12px;
 }
 .panel {
-  background: #fff;
-  border: 1px solid #e1e4e8;
+  background: #0b1628;
+  border: 1px solid #1d2f4a;
   border-radius: 8px;
   padding: 16px;
   margin: 12px 0;
@@ -394,17 +433,19 @@ th {
   width: 100%;
   margin-top: 4px;
   padding: 8px;
-  border: 1px solid #d0d7de;
+  border: 1px solid #1d2f4a;
   border-radius: 6px;
   font-family: inherit;
+  background: #0d1a2e;
+  color: #d5dce8;
 }
 .link {
   background: none;
   border: none;
-  color: #1f6feb;
+  color: #4da3ff;
   cursor: pointer;
   margin-right: 10px;
 }
 .link.danger {
-  color: #cf222e;
+  color: #ff7a85;
 }
