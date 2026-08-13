@@ -114,13 +114,15 @@ event x509_certificate(f: fa_file, cert_ref: opaque of x509, cert: X509::Certifi
     {
     if ( ! f?$info || ! f?$conns )
         return;
+    if ( ! f$info?$x509 )
+        return;
     for ( cid in f$conns )
         {
         local c = f$conns[cid];
         local id = get_cid(c);
         if ( id != "" )
             {
-            f$info$community_id = id;
+            f$info$x509$community_id = id;
             break;
             }
         }
