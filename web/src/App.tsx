@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { api, clearToken, isAuthed } from "./api";
 import Dashboard from "./pages/Dashboard";
 import ConfigPage from "./pages/ConfigPage";
@@ -19,6 +19,7 @@ const nav = [
 ];
 
 export default function App() {
+  const location = useLocation();
   const [authed, setAuthed] = useState(isAuthed());
   const [showPwd, setShowPwd] = useState(false);
   const [oldPwd, setOldPwd] = useState("");
@@ -84,7 +85,7 @@ export default function App() {
           </button>
         </div>
       </aside>
-      <main className="content">
+      <main className={"content" + (location.pathname === "/viz" ? " content--full" : "")}>
         {showPwd && (
           <div className="pwd-box">
             <input
