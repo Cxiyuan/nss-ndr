@@ -40,6 +40,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
   background: #161b22;
   color: #c9d1d9;
   padding: 0 20px;
@@ -54,10 +55,13 @@ textarea {
   white-space: nowrap;
 }
 .topnav {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 2px;
-  flex: 1;
+  max-width: calc(100% - 480px);
   min-width: 0;
   overflow-x: auto;
 }
@@ -300,6 +304,7 @@ h2 {
   gap: 12px;
   flex-direction: row;
   flex-shrink: 0;
+  margin-left: auto;
   padding-left: 12px;
   border-left: 1px solid #30363d;
 }
