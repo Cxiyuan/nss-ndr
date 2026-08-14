@@ -69,6 +69,12 @@ func buildSigmaQuery(content string) (*sigmaQuery, error) {
 		ds = "zeek.ssl"
 	case "smb":
 		ds = "zeek.smb"
+	case "smb_files":
+		ds = "zeek.smb_files"
+	case "smb_mapping":
+		ds = "zeek.smb_mapping"
+	case "ntlm":
+		ds = "zeek.ntlm"
 	case "file":
 		ds = "zeek.files"
 	}
@@ -86,6 +92,12 @@ func buildSigmaQuery(content string) (*sigmaQuery, error) {
 			ds = "zeek.files"
 		case "smb":
 			ds = "zeek.smb"
+		case "smb_files":
+			ds = "zeek.smb_files"
+		case "smb_mapping":
+			ds = "zeek.smb_mapping"
+		case "ntlm":
+			ds = "zeek.ntlm"
 		}
 	}
 	if ds != "" {

@@ -1,5 +1,5 @@
 ##! NSS-NDR：把连接级 Community ID 扩展到全部协议日志
-##! 使 DNS/HTTP/QUIC/X509/SSH/DHCP/SOCKS/SSL/Files 等日志都带 community_id，
+##! 使 DNS/HTTP/QUIC/X509/SSH/DHCP/SOCKS/SSL/Files/SMB/NTLM 等日志都带 community_id，
 ##! 便于跨引擎（Suricata/Zeek）与跨日志类型关联。
 
 module NSSNDR;
@@ -12,6 +12,8 @@ module NSSNDR;
 @load base/protocols/dhcp
 @load base/protocols/socks
 @load base/files/x509
+@load base/protocols/smb
+@load base/protocols/ntlm
 @load policy/protocols/conn/community-id-logging
 
 export {
@@ -42,6 +44,18 @@ export {
     redef record SOCKS::Info += {
         community_id: string &log &optional;
     };
+    redef record SMB::FileInfo += {
+        community_id: string &log &optional;
+    };
+    redef record SMB::TreeInfo += {
+        community_id: string &log &optional;
+    };
+    redef record NTLM::Info += {
+        community_id: string &log &optional;
+    };
+
+    ## conn_id -> community_id 映射（写入事件时连接上下文不可直接访问，用映射表兜底）
+    global cid_map: table[conn_id] of string = table();
 }
 
 # 取连接级 community_id（由 community-id-logging 在 new_connection 时写入 c$conn）
@@ -158,4 +172,44 @@ event socks_request(c: connection, version: count, request_type: count,
         if ( id != "" )
             c$socks$community_id = id;
         }
+    }
+
+function fill_from_conn_id(id: conn_id): string
+    {
+    if ( id in cid_map )
+        return cid_map[id];
+    return "";
+    }
+
+event new_connection(c: connection)
+    {
+    if ( c?$conn && c$conn?$community_id )
+        cid_map[c$id] = c$conn$community_id;
+    }
+
+event connection_state_remove(c: connection)
+    {
+    delete cid_map[c$id];
+    }
+
+## SMB 文件访问 / 共享映射 / NTLM 认证日志在写出前注入连接级 Community ID
+hook SMB::log_policy_files(rec: any, id: Log::ID, filter: Log::Filter)
+    {
+    local fi = rec as SMB::FileInfo;
+    if ( fi?$id )
+        fi$community_id = fill_from_conn_id(fi$id);
+    }
+
+hook SMB::log_policy_mapping(rec: any, id: Log::ID, filter: Log::Filter)
+    {
+    local ti = rec as SMB::TreeInfo;
+    if ( ti?$id )
+        ti$community_id = fill_from_conn_id(ti$id);
+    }
+
+hook NTLM::log_policy(rec: any, id: Log::ID, filter: Log::Filter)
+    {
+    local ni = rec as NTLM::Info;
+    if ( ni?$id )
+        ni$community_id = fill_from_conn_id(ni$id);
     }

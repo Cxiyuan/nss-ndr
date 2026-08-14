@@ -21,7 +21,7 @@ correlation:
     logsource:
       product: zeek
       category: network_connection
-      service: smb
+      service: smb_files
     detection:
       selection_445:
         destination.port|gte: 445

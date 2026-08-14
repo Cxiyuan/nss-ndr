@@ -1,0 +1,23 @@
+{
+  "description": "NSS-NDR zeek.smb_files（Zeek 8 SMB 文件访问日志）",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "smb_files"
+      }
+    },
+    {
+      "json": {
+        "field": "message",
+        "target_field": "message2",
+        "ignore_failure": true
+      }
+    },
+    {
+      "pipeline": {
+        "name": "zeek.common"
+      }
+    }
+  ]
+}
