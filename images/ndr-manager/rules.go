@@ -46,6 +46,27 @@ func (s RuleStore) List() []Rule {
 	return out
 }
 
+// ListCustom 返回自定义/内置（非 ET Open）规则，供规则管理页展示
+func (s RuleStore) ListCustom() []Rule {
+	rows, err := db.Query("SELECT id,name,rule,threshold,type,enabled,category,created_at,updated_at FROM rules WHERE type != 'etopen'")
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	out := []Rule{}
+	for rows.Next() {
+		var r Rule
+		var enabled int
+		if err := rows.Scan(&r.ID, &r.Name, &r.Rule, &r.Threshold, &r.Type, &enabled, &r.Category, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			continue
+		}
+		r.Enabled = enabled == 1
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
+	return out
+}
+
 func (s RuleStore) Get(id string) (Rule, error) {
 	var r Rule
 	var enabled int

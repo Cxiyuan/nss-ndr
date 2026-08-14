@@ -44,6 +44,9 @@ func main() {
 	if err := store.ImportBuiltins("/opt/so/builtin-rules"); err != nil {
 		log.Printf("warn: 内置规则导入失败: %v", err)
 	}
+	if err := importETOpen(); err != nil {
+		log.Printf("warn: ET Open 内置规则集导入失败: %v", err)
+	}
 	if err := purgeLegacyBuiltinSigma(); err != nil {
 		log.Printf("warn: 旧版内置 Sigma 规则清理失败: %v", err)
 	}

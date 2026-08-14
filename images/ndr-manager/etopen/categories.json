@@ -1,0 +1,218 @@
+{
+  "version": "2026-08-14",
+  "source": "ET Open (Emerging Threats Open)",
+  "source_url": "https://rules.emergingthreats.net/open/suricata/",
+  "license": "ET Open 按官方源索引标注为 MIT（规则文件头为 BSD 风格再分发条款，随产品分发需保留版权声明）",
+  "groups": [
+    {
+      "key": "exploit",
+      "name": "漏洞利用与 CVE 攻击",
+      "desc": "CVE 漏洞利用、0day/最新攻击事件、shellcode、SQL 注入等，规则元数据多带 reference:cve 可关联 CVE 编号",
+      "categories": [
+        {
+          "key": "exploit",
+          "name_cn": "通用漏洞利用",
+          "desc_cn": "覆盖常见 CVE 漏洞利用特征，规则带 reference:cve 可直接关联 CVE 编号"
+        },
+        {
+          "key": "exploit_kit",
+          "name_cn": "漏洞利用工具包",
+          "desc_cn": "Exploit Kit 批量攻击工具的活动特征（CVE 武器化利用）"
+        },
+        {
+          "key": "current_events",
+          "name_cn": "最新攻击事件/0day",
+          "desc_cn": "每日更新，紧跟最新活跃攻击与 0day 应急规则"
+        },
+        {
+          "key": "shellcode",
+          "name_cn": "Shellcode 载荷",
+          "desc_cn": "漏洞利用载荷 Shellcode 特征"
+        },
+        {
+          "key": "activex",
+          "name_cn": "ActiveX 漏洞利用",
+          "desc_cn": "ActiveX/浏览器插件漏洞利用特征"
+        },
+        {
+          "key": "sql",
+          "name_cn": "SQL 注入",
+          "desc_cn": "SQL 注入攻击特征"
+        }
+      ]
+    },
+    {
+      "key": "web",
+      "name": "Web 攻击",
+      "desc": "Web 服务器/Web 应用/Web 客户端侧攻击检测",
+      "categories": [
+        {
+          "key": "web_server",
+          "name_cn": "Web 服务器攻击",
+          "desc_cn": "Apache/Nginx/IIS 等 Web 服务器层攻击（路径穿越、文件包含等）"
+        },
+        {
+          "key": "web_specific_apps",
+          "name_cn": "Web 应用漏洞",
+          "desc_cn": "具体 Web 应用/框架/中间件漏洞（OA、CMS、反序列化、远程命令执行等），规则量最大"
+        },
+        {
+          "key": "web_client",
+          "name_cn": "Web 客户端攻击",
+          "desc_cn": "浏览器/客户端侧攻击（drive-by、恶意 JS 等）"
+        }
+      ]
+    },
+    {
+      "key": "lateral",
+      "name": "内网横向渗透与侦察",
+      "desc": "内网扫描侦察、SMB/RPC 横向移动、攻击链狩猎",
+      "categories": [
+        {
+          "key": "scan",
+          "name_cn": "端口扫描/内网侦察",
+          "desc_cn": "端口扫描、内网侦察行为特征"
+        },
+        {
+          "key": "netbios",
+          "name_cn": "SMB/NetBIOS 横向移动",
+          "desc_cn": "SMB/NetBIOS 相关横向移动与利用（永恒之蓝类、SMB 共享枚举）"
+        },
+        {
+          "key": "rpc",
+          "name_cn": "RPC 横向利用",
+          "desc_cn": "RPC 服务漏洞利用（DCOM 类横向）"
+        },
+        {
+          "key": "hunting",
+          "name_cn": "攻击链狩猎",
+          "desc_cn": "主动狩猎：可疑行为模式、攻击链中段特征"
+        }
+      ]
+    },
+    {
+      "key": "malware",
+      "name": "恶意软件与 C2",
+      "desc": "恶意软件家族、移动恶意软件、钓鱼、C2 回连与 JA3 指纹",
+      "categories": [
+        {
+          "key": "malware",
+          "name_cn": "恶意软件家族",
+          "desc_cn": "恶意软件家族特征与 C2 回连（全包最大分类，性能敏感请按需启用）"
+        },
+        {
+          "key": "mobile_malware",
+          "name_cn": "移动恶意软件",
+          "desc_cn": "移动端恶意软件特征"
+        },
+        {
+          "key": "phishing",
+          "name_cn": "钓鱼",
+          "desc_cn": "钓鱼 URL/页面特征"
+        },
+        {
+          "key": "adware_pup",
+          "name_cn": "广告/潜在有害程序",
+          "desc_cn": "广告软件与潜在有害程序特征"
+        },
+        {
+          "key": "p2p",
+          "name_cn": "P2P/文件共享",
+          "desc_cn": "P2P/非法文件共享流量特征"
+        },
+        {
+          "key": "coinminer",
+          "name_cn": "挖矿",
+          "desc_cn": "挖矿流量特征"
+        },
+        {
+          "key": "worm",
+          "name_cn": "蠕虫",
+          "desc_cn": "蠕虫传播特征"
+        },
+        {
+          "key": "ja3",
+          "name_cn": "恶意 JA3 指纹",
+          "desc_cn": "JA3/TLS 指纹识别恶意客户端"
+        }
+      ]
+    },
+    {
+      "key": "protocol",
+      "name": "协议攻击与其他",
+      "desc": "攻击响应特征、DoS、常见协议攻击、工控攻击等",
+      "categories": [
+        {
+          "key": "attack_response",
+          "name_cn": "攻击响应特征",
+          "desc_cn": "攻击成功后的响应特征（命令执行回显、Webshell 回显等），对确认攻击落地很有价值"
+        },
+        {
+          "key": "dos",
+          "name_cn": "拒绝服务",
+          "desc_cn": "拒绝服务攻击特征"
+        },
+        {
+          "key": "dns",
+          "name_cn": "DNS 攻击",
+          "desc_cn": "DNS 隧道/异常检测"
+        },
+        {
+          "key": "ftp",
+          "name_cn": "FTP 攻击",
+          "desc_cn": "FTP 协议攻击特征"
+        },
+        {
+          "key": "smtp",
+          "name_cn": "SMTP 攻击",
+          "desc_cn": "SMTP 协议攻击特征"
+        },
+        {
+          "key": "imap",
+          "name_cn": "IMAP 攻击",
+          "desc_cn": "IMAP 协议攻击特征"
+        },
+        {
+          "key": "pop3",
+          "name_cn": "POP3 攻击",
+          "desc_cn": "POP3 协议攻击特征"
+        },
+        {
+          "key": "snmp",
+          "name_cn": "SNMP 攻击",
+          "desc_cn": "SNMP 协议攻击特征"
+        },
+        {
+          "key": "telnet",
+          "name_cn": "Telnet 攻击",
+          "desc_cn": "Telnet 协议攻击特征"
+        },
+        {
+          "key": "tftp",
+          "name_cn": "TFTP 攻击",
+          "desc_cn": "TFTP 协议攻击特征"
+        },
+        {
+          "key": "voip",
+          "name_cn": "VoIP 攻击",
+          "desc_cn": "VoIP 协议攻击特征"
+        },
+        {
+          "key": "icmp_info",
+          "name_cn": "ICMP 侦察",
+          "desc_cn": "ICMP 侦察/异常信息探测"
+        },
+        {
+          "key": "user_agents",
+          "name_cn": "恶意 User-Agent",
+          "desc_cn": "恶意/扫描器 User-Agent 特征"
+        },
+        {
+          "key": "scada",
+          "name_cn": "工控攻击",
+          "desc_cn": "SCADA/工控系统攻击特征"
+        }
+      ]
+    }
+  ]
+}

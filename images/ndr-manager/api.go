@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -55,6 +56,14 @@ func registerAPI(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/rules/{id}/disable", requireAuth(apiSetRuleEnabled(false)))
 	mux.HandleFunc("POST /api/rules/apply", requireAuth(apiApplyRules))
 	mux.HandleFunc("GET /api/suricata/stats", requireAuth(apiSuricataStats))
+
+	// ET Open 内置规则集（事件检测）
+	mux.HandleFunc("GET /api/etopen/tree", requireAuth(apiETOpenTree))
+	mux.HandleFunc("GET /api/etopen/rules", requireAuth(apiETOpenRules))
+	mux.HandleFunc("POST /api/etopen/category/{cat}/enable", requireAuth(apiETOpenCategory(true)))
+	mux.HandleFunc("POST /api/etopen/category/{cat}/disable", requireAuth(apiETOpenCategory(false)))
+	mux.HandleFunc("POST /api/etopen/rule/{id}/enable", requireAuth(apiETOpenRule(true)))
+	mux.HandleFunc("POST /api/etopen/rule/{id}/disable", requireAuth(apiETOpenRule(false)))
 
 	mux.HandleFunc("GET /api/sigma", requireAuth(apiListSigma))
 	mux.HandleFunc("POST /api/sigma", requireAuth(apiCreateSigma))
@@ -197,7 +206,7 @@ func apiAudit(w http.ResponseWriter, _ *http.Request) {
 
 // 规则 handlers
 func apiListRules(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, store.List())
+	writeJSON(w, http.StatusOK, store.ListCustom())
 }
 
 func apiCreateRule(w http.ResponseWriter, r *http.Request) {
@@ -222,6 +231,10 @@ func apiCreateRule(w http.ResponseWriter, r *http.Request) {
 
 func apiUpdateRule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if existing, err := store.Get(id); err == nil && existing.Type == "etopen" {
+		writeErr(w, http.StatusBadRequest, "内置 ET Open 规则不可编辑")
+		return
+	}
 	var rule Rule
 	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
 		writeErr(w, http.StatusBadRequest, "请求体解析失败")
@@ -237,6 +250,10 @@ func apiUpdateRule(w http.ResponseWriter, r *http.Request) {
 
 func apiDeleteRule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if existing, err := store.Get(id); err == nil && existing.Type == "etopen" {
+		writeErr(w, http.StatusBadRequest, "内置 ET Open 规则不可删除")
+		return
+	}
 	if err := store.Delete(id); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -261,6 +278,63 @@ func apiApplyRules(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "规则已渲染，suricata 热加载触发"})
+}
+
+// ---------- ET Open 内置规则集（事件检测） ----------
+
+func apiETOpenTree(w http.ResponseWriter, _ *http.Request) {
+	tree, err := etopenTree()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, tree)
+}
+
+func apiETOpenRules(w http.ResponseWriter, r *http.Request) {
+	cat := strings.TrimSpace(r.URL.Query().Get("category"))
+	if cat == "" {
+		writeErr(w, http.StatusBadRequest, "category 不能为空")
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	offset := 0
+	limit := 50
+	if v := r.URL.Query().Get("offset"); v != "" {
+		fmt.Sscanf(v, "%d", &offset)
+	}
+	if v := r.URL.Query().Get("limit"); v != "" {
+		fmt.Sscanf(v, "%d", &limit)
+	}
+	page, err := etopenListRules(cat, q, offset, limit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func apiETOpenCategory(enabled bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cat := r.PathValue("cat")
+		n, err := etopenCategoryEnable(cat, enabled)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "category": cat, "enabled": enabled, "affected": n})
+	}
+}
+
+func apiETOpenRule(enabled bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if err := etopenSetRule(id, enabled); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "enabled": enabled})
+	}
 }
 
 // Sigma handlers

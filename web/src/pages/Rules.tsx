@@ -55,7 +55,7 @@ export default function Rules() {
   return (
     <div>
       <div className="row">
-        <h2 style={{ margin: 0 }}>规则管理</h2>
+        <h2 style={{ margin: 0 }}>自定义规则（Suricata）</h2>
         <button className="btn primary" onClick={() => setEditing({ name: "", rule: "", threshold: "" })}>
           新建规则
         </button>
@@ -63,6 +63,9 @@ export default function Rules() {
           渲染并热加载
         </button>
       </div>
+      <p className="hint">
+        自定义单条 Suricata 规则。内置 ET Open 规则集在「事件检测」中按分类勾选加载。
+      </p>
       {msg && <div className="alert ok">{msg}</div>}
       {err && <div className="alert error">{err}</div>}
 

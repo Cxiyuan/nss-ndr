@@ -116,6 +116,28 @@ export interface ConfigSchema {
   fields: ConfigField[];
 }
 
+export interface ETOpenCat {
+  key: string;
+  name_cn: string;
+  desc_cn: string;
+  file: string;
+  total: number;
+  enabled_count: number;
+  enabled: boolean;
+}
+
+export interface ETOpenGroup {
+  key: string;
+  name: string;
+  desc: string;
+  categories: ETOpenCat[];
+}
+
+export interface ETOpenRulePage {
+  total: number;
+  rules: Rule[];
+}
+
 export const api = {
   login: (username: string, password: string) =>
     req<any>("POST", "/api/login", { username, password }),
@@ -141,6 +163,16 @@ export const api = {
   setRuleEnabled: (id: string, enabled: boolean) =>
     req<any>("POST", `/api/rules/${id}/${enabled ? "enable" : "disable"}`),
   applyRules: () => req<any>("POST", "/api/rules/apply"),
+  etopenTree: () => req<ETOpenGroup[]>("GET", "/api/etopen/tree"),
+  etopenRules: (category: string, q: string, offset: number, limit: number) =>
+    req<ETOpenRulePage>(
+      "GET",
+      `/api/etopen/rules?category=${encodeURIComponent(category)}&q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}`
+    ),
+  etopenCategory: (category: string, enabled: boolean) =>
+    req<any>("POST", `/api/etopen/category/${encodeURIComponent(category)}/${enabled ? "enable" : "disable"}`),
+  etopenRule: (id: string, enabled: boolean) =>
+    req<any>("POST", `/api/etopen/rule/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`),
   listSigma: () => req<SigmaRule[]>("GET", "/api/sigma"),
   createSigma: (r: SigmaRule) => req<SigmaRule>("POST", "/api/sigma", r),
   updateSigma: (id: string, r: SigmaRule) => req<SigmaRule>("PUT", `/api/sigma/${id}`, r),

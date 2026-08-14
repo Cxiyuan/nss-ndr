@@ -151,7 +151,7 @@ export default function Sigma() {
   return (
     <div>
       <div className="row">
-        <h2 style={{ margin: 0 }}>Sigma 规则</h2>
+        <h2 style={{ margin: 0 }}>事件告警（Sigma 规则）</h2>
         <button className="btn primary" onClick={() => setEditing({ title: "", content: "" })}>
           新建规则
         </button>
