@@ -307,7 +307,51 @@ flowchart LR
 - 安全：可选 `X-NDR-Signature: sha256=hex(hmac_sha256(secret, body))`，XDR 可校验来源。
 - `pcap.file`：全包已落盘时的文件引用，XDR 可按需通过探针 API 拉取（后续能力）。
 
-### 5.9 cleaner（数据清理任务，CronJob）
+### 5.9 Sigma 关联检测（三层信号模型，Phase 1-3）
+
+**模型**：Suricata 规则命中 = 线索（signal），Zeek 元数据 = 上下文（context），Sigma 关联规则 = 最终裁决（alert）。
+只有关联规则确认后写入 `logs-detections.alerts-so` 的才作为告警外推（xdr-push 默认白名单仅 `detections.alerts`）。
+
+**关联规则语法**（NSS-NDR 扩展段，兼容普通 Sigma 规则）：
+
+```yaml
+title: 关联规则示例
+status: test
+level: medium
+backend: auto                # eql | esql | auto（默认 EQL 执行，auto 额外生成 ES|QL 供预览）
+correlation:
+  clue:                      # 阶段1 线索（默认 suricata）
+    logsource: { product: suricata }
+    detection:
+      selection: { rule.name|contains: "ET MALWARE" }
+      condition: selection
+  confirm:                   # 阶段2 确认（默认 zeek）
+    logsource: { product: zeek, category: dns }
+    detection:
+      selection: { dns.question.name|endswith: ".xyz" }
+      condition: selection
+  group_by: network.community_id   # 两侧关联键（默认 community_id）
+  timespan: 5m                    # 时间窗（默认跟随 schedule）
+  required: both                  # both | clue | confirm
+  fallback: none                  # none | clue_only | confirm_only
+  confidence: medium              # low | medium | high
+```
+
+**执行引擎**（ndr-manager 调度器）：
+
+- 两阶段执行：阶段1 线索查询（`logs-suricata.alerts-so`）→ 按 `group_by` 取键集合；阶段2 用键集合过滤确认查询（`logs-zeek-so`，terms 过滤，上限 500 键）→ 求交/回退。
+- `required=both` 时仅两侧都命中的键出告警；`fallback=clue_only/confirm_only` 时未确认侧按 `low` 置信度出回退告警（`nss.correlation.confirmed=false`）。
+- `required=clue`（仅线索）与 `required=confirm`（Zeek-only）保留单侧能力，避免纯关联造成的漏报。
+- 告警携带证据：`nss.correlation.{key, confirmed, clue_hits, confirm_hits}`，`event_data` 兼容 xdr-push 推送；告警自带 `rule.type=correlation`、`rule.confidence`。
+- 证据预览：`GET /api/sigma/{id}/evidence`（dry-run 不写告警），UI 提供关联规则模板、策略/置信度展示与证据明细。
+
+**ES|QL 评估结论（Phase 3）**：已接入 pySigma ES|QL 输出（`backend=esql` 时经 `/_query` 执行，失败自动回退 EQL，转换失败不阻断）。评估结论：
+
+1. SigmaHQ 的 ES|QL correlation 规则使用 `DATE_TRUNC()` 静态时间桶，非滑动窗口，跨桶边界事件会漏报——本项目关联引擎保持自研两阶段（真滑动窗口），不采用 ES|QL correlation 作为执行引擎；
+2. ES|QL 返回扁平列而非 `_source`，不适合作为告警证据载体，故执行默认仍走 EQL（保留完整文档）；
+3. ES|QL 作为查询表示（预览/Kibana 使用）与简单规则的可选执行后端保留，待真实 ES 环境验证后按需推广。
+
+### 5.10 cleaner（数据清理任务，CronJob）
 
 - 职责：统一清理**磁盘原始文件**（防止流量盘写满），与 ES 侧 ILM（清理索引，防止索引盘写满）配套，两层互不替代。
 - 运行形态：DaemonSet/CronJob，以 hostPath 挂载 `/nsm` 运行；容器内直接 `df`（文件系统级容量）与 `du`（目录级用量），不依赖部署方分区方案（见 §4.3.3）。

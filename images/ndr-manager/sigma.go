@@ -21,11 +21,15 @@ type SigmaRule struct {
 	Product   string `json:"product"`
 	Service   string `json:"service"`
 	Level     string `json:"level"`
-	Status    string `json:"status"` // enabled | disabled
+	Status    string `json:"status"`   // enabled | disabled
 	Schedule  string `json:"schedule"` // 执行间隔，如 5m
 	LastRunAt string `json:"last_run_at,omitempty"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
+	// 以下为读取时由 enrichSigmaRule 填充的视图字段（不入库）
+	Type        string           `json:"type,omitempty"` // simple | correlation
+	Backend     string           `json:"backend,omitempty"`
+	Correlation *correlationView `json:"correlation,omitempty"`
 }
 
 // sigmaYAML 是 Sigma 规则文件的 YAML 结构（解析所需子集）
@@ -34,12 +38,52 @@ type sigmaYAML struct {
 	ID        string `yaml:"id"`
 	Status    string `yaml:"status"`
 	Level     string `yaml:"level"`
+	Backend   string `yaml:"backend"` // eql | esql | auto
 	Logsource struct {
 		Category string `yaml:"category"`
 		Product  string `yaml:"product"`
 		Service  string `yaml:"service"`
 	} `yaml:"logsource"`
+	Detection   map[string]any    `yaml:"detection"`
+	Correlation *sigmaCorrelation `yaml:"correlation"`
+}
+
+// sigmaCorrelation 是 NSS-NDR 扩展的关联规则段（三层信号模型）：
+//
+//	clue    阶段1 线索（默认 suricata.alert 命中）
+//	confirm 阶段2 确认（默认 zeek 元数据条件）
+//
+// 两侧事件按 group_by 字段（默认 network.community_id）在时间窗内关联。
+type sigmaCorrelation struct {
+	Clue       *sigmaStage `yaml:"clue"`
+	Confirm    *sigmaStage `yaml:"confirm"`
+	GroupBy    string      `yaml:"group_by"`
+	Timespan   string      `yaml:"timespan"`
+	Required   string      `yaml:"required"`   // both | clue | confirm
+	Fallback   string      `yaml:"fallback"`   // none | clue_only | confirm_only
+	Confidence string      `yaml:"confidence"` // low | medium | high
+}
+
+type sigmaStage struct {
+	Logsource sigmaLogsource `yaml:"logsource"`
 	Detection map[string]any `yaml:"detection"`
+}
+
+type sigmaLogsource struct {
+	Category string `yaml:"category"`
+	Product  string `yaml:"product"`
+	Service  string `yaml:"service"`
+}
+
+// correlationView 是 API/UI 展示用的关联规则元数据
+type correlationView struct {
+	ClueProduct    string `json:"clue_product,omitempty"`
+	ConfirmProduct string `json:"confirm_product,omitempty"`
+	GroupBy        string `json:"group_by"`
+	Timespan       string `json:"timespan,omitempty"`
+	Required       string `json:"required"`
+	Fallback       string `json:"fallback"`
+	Confidence     string `json:"confidence"`
 }
 
 func parseSigma(content string) (*sigmaYAML, error) {
@@ -50,16 +94,121 @@ func parseSigma(content string) (*sigmaYAML, error) {
 	if sy.Title == "" {
 		return nil, fmt.Errorf("Sigma 规则缺少 title")
 	}
-	if sy.Detection == nil || len(sy.Detection) == 0 {
+	if (sy.Detection == nil || len(sy.Detection) == 0) && sy.Correlation == nil {
 		return nil, fmt.Errorf("Sigma 规则缺少 detection 段")
 	}
+	// 关联规则校验与默认值归一化
+	if sy.Correlation != nil {
+		c := sy.Correlation
+		if c.Clue == nil && c.Confirm == nil {
+			return nil, fmt.Errorf("correlation 段至少需要 clue（线索）或 confirm（确认）之一")
+		}
+		for name, st := range map[string]*sigmaStage{"clue": c.Clue, "confirm": c.Confirm} {
+			if st == nil {
+				continue
+			}
+			if st.Detection == nil || len(st.Detection) == 0 {
+				return nil, fmt.Errorf("correlation.%s 缺少 detection 段", name)
+			}
+			if st.Logsource.Product == "" {
+				if name == "clue" {
+					st.Logsource.Product = "suricata"
+				} else {
+					st.Logsource.Product = "zeek"
+				}
+			}
+		}
+		if c.GroupBy == "" {
+			c.GroupBy = "network.community_id"
+		}
+		if c.Required == "" {
+			c.Required = "both"
+		}
+		switch c.Required {
+		case "both", "clue", "confirm":
+		default:
+			return nil, fmt.Errorf("correlation.required 仅支持 both|clue|confirm，当前: %s", c.Required)
+		}
+		if c.Fallback == "" {
+			c.Fallback = "none"
+		}
+		switch c.Fallback {
+		case "none", "clue_only", "confirm_only":
+		default:
+			return nil, fmt.Errorf("correlation.fallback 仅支持 none|clue_only|confirm_only，当前: %s", c.Fallback)
+		}
+		if c.Confidence == "" {
+			c.Confidence = sigmaConfidenceForLevel(sy.Level)
+		}
+		switch c.Confidence {
+		case "low", "medium", "high":
+		default:
+			return nil, fmt.Errorf("correlation.confidence 仅支持 low|medium|high，当前: %s", c.Confidence)
+		}
+		if c.Timespan != "" && parseInterval(c.Timespan) <= 0 {
+			return nil, fmt.Errorf("correlation.timespan 格式无效: %s", c.Timespan)
+		}
+	}
+	if sy.Backend == "" {
+		sy.Backend = "auto"
+	}
+	switch sy.Backend {
+	case "eql", "esql", "auto":
+	default:
+		return nil, fmt.Errorf("backend 仅支持 eql|esql|auto，当前: %s", sy.Backend)
+	}
 	return &sy, nil
+}
+
+func sigmaConfidenceForLevel(level string) string {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "critical", "high":
+		return "high"
+	case "medium":
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+// enrichSigmaRule 解析规则内容，填充类型/后端/关联元数据视图字段
+func enrichSigmaRule(r *SigmaRule) {
+	sy, err := parseSigma(r.Content)
+	if err != nil {
+		r.Type = "simple"
+		r.Backend = "auto"
+		return
+	}
+	r.Backend = sy.Backend
+	if sy.Correlation == nil {
+		r.Type = "simple"
+		r.Correlation = nil
+		return
+	}
+	r.Type = "correlation"
+	cv := &correlationView{
+		GroupBy:    sy.Correlation.GroupBy,
+		Timespan:   sy.Correlation.Timespan,
+		Required:   sy.Correlation.Required,
+		Fallback:   sy.Correlation.Fallback,
+		Confidence: sy.Correlation.Confidence,
+	}
+	if sy.Correlation.Clue != nil {
+		cv.ClueProduct = sy.Correlation.Clue.Logsource.Product
+	}
+	if sy.Correlation.Confirm != nil {
+		cv.ConfirmProduct = sy.Correlation.Confirm.Logsource.Product
+	}
+	r.Correlation = cv
 }
 
 func (s SigmaRule) load(id string) error {
 	err := db.QueryRow(`SELECT id,title,content,category,product,service,level,status,schedule,last_run_at,created_at,updated_at
 		FROM sigma_rules WHERE id=?`, id).
 		Scan(&s.ID, &s.Title, &s.Content, &s.Category, &s.Product, &s.Service, &s.Level, &s.Status, &s.Schedule, &s.LastRunAt, &s.CreatedAt, &s.UpdatedAt)
+	if err == nil {
+		enrichSigmaRule(&s)
+	}
 	return err
 }
 
@@ -75,6 +224,7 @@ func listSigmaRules() []SigmaRule {
 		if err := rows.Scan(&r.ID, &r.Title, &r.Content, &r.Category, &r.Product, &r.Service, &r.Level, &r.Status, &r.Schedule, &r.LastRunAt, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			continue
 		}
+		enrichSigmaRule(&r)
 		out = append(out, r)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })

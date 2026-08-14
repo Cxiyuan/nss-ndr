@@ -397,6 +397,20 @@ h2 {
   background: #33151a;
   color: #ff7a85;
 }
+.badge {
+  display: inline-block;
+  background: #123c63;
+  color: #7cc5ff;
+  border: 1px solid #1d5a8f;
+  border-radius: 10px;
+  padding: 1px 10px;
+  font-size: 12px;
+}
+.badge.plain {
+  background: #16233a;
+  color: #8b98b0;
+  border-color: #22344f;
+}
 table {
   width: 100%;
   border-collapse: collapse;

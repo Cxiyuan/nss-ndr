@@ -66,6 +66,7 @@ func registerAPI(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sigma/{id}/disable", requireAuth(apiSetSigmaStatus("disabled")))
 	mux.HandleFunc("POST /api/sigma/{id}/run", requireAuth(apiRunSigma))
 	mux.HandleFunc("GET /api/sigma/{id}/preview", requireAuth(apiPreviewSigma))
+	mux.HandleFunc("GET /api/sigma/{id}/evidence", requireAuth(apiEvidenceSigma))
 }
 
 func apiHealth(w http.ResponseWriter, _ *http.Request) {
@@ -376,12 +377,107 @@ func apiPreviewSigma(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "Sigma 规则不存在")
 		return
 	}
+	sy, err := parseSigma(rule.Content)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if sy.Correlation != nil {
+		out := map[string]any{
+			"type":       "correlation",
+			"group_by":   sy.Correlation.GroupBy,
+			"required":   sy.Correlation.Required,
+			"fallback":   sy.Correlation.Fallback,
+			"confidence": sy.Correlation.Confidence,
+			"timespan":   sy.Correlation.Timespan,
+			"backend":    sy.Backend,
+		}
+		if sy.Correlation.Clue != nil {
+			sq, err := buildStageQuery(*sy.Correlation.Clue, rule.Title, rule.ID)
+			if err != nil {
+				writeErr(w, http.StatusBadRequest, "线索查询转换失败: "+err.Error())
+				return
+			}
+			out["clue"] = sq
+		}
+		if sy.Correlation.Confirm != nil {
+			sq, err := buildStageQuery(*sy.Correlation.Confirm, rule.Title, rule.ID)
+			if err != nil {
+				writeErr(w, http.StatusBadRequest, "确认查询转换失败: "+err.Error())
+				return
+			}
+			out["confirm"] = sq
+		}
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
 	sq, err := buildSigmaQuery(rule.Content)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, sq)
+}
+
+// apiEvidenceSigma 证据预览（dry-run）：不写告警，返回关联命中组或普通规则命中文档
+func apiEvidenceSigma(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	window := 10 * time.Minute
+	if ws := r.URL.Query().Get("window"); ws != "" {
+		if d := parseInterval(ws); d > 0 {
+			window = d
+		}
+	}
+	var rule SigmaRule
+	for _, x := range listSigmaRules() {
+		if x.ID == id {
+			rule = x
+			break
+		}
+	}
+	if rule.ID == "" {
+		writeErr(w, http.StatusNotFound, "Sigma 规则不存在")
+		return
+	}
+	sy, err := parseSigma(rule.Content)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if sy.Correlation != nil {
+		if ts := parseInterval(sy.Correlation.Timespan); ts > 0 {
+			window = ts
+		}
+		matches, err := executeCorrelationRule(rule, sy.Correlation, window, true)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"type":    "correlation",
+			"window":  window.String(),
+			"matches": matches,
+			"count":   len(matches),
+		})
+		return
+	}
+	sq, err := buildSigmaQuery(rule.Content)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	now := time.Now().UTC()
+	hits, err := runSigmaQuery(sq, now.Add(-window), now, nil)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"type":   "simple",
+		"window": window.String(),
+		"hits":   summarizeHits(hits),
+		"count":  len(hits),
+	})
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

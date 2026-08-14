@@ -76,6 +76,17 @@ export interface SigmaRule {
   status?: string;
   schedule?: string;
   last_run_at?: string;
+  type?: string; // simple | correlation
+  backend?: string;
+  correlation?: {
+    clue_product?: string;
+    confirm_product?: string;
+    group_by: string;
+    timespan?: string;
+    required: string;
+    fallback: string;
+    confidence: string;
+  };
 }
 
 export interface ConfigField {
@@ -138,4 +149,6 @@ export const api = {
     req<any>("POST", `/api/sigma/${id}/${status === "enabled" ? "enable" : "disable"}`),
   runSigma: (id: string) => req<any>("POST", `/api/sigma/${id}/run`),
   previewSigma: (id: string) => req<any>("GET", `/api/sigma/${id}/preview`),
+  evidenceSigma: (id: string, window?: string) =>
+    req<any>("GET", `/api/sigma/${id}/evidence${window ? `?window=${encodeURIComponent(window)}` : ""}`),
 };

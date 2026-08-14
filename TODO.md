@@ -15,7 +15,21 @@
   - [x] Suricata 告警标记线索：`nss.detection.stage=clue` + tags `alert,clue`
   - [x] 修复 stats 污染：eve-log stats 输出默认关闭 + agent 侧丢弃非 alert 事件
   - [ ] 部署验证（CI 构建后）
-  - [ ] Phase 1 关联规则（Sigma correlation 段 + 两阶段确认引擎）设计文档
+- [ ] **Phase 1 关联规则引擎（Sigma correlation 段 + 两阶段确认）**
+  - [x] correlation 规则模型：clue/confirm/group_by/timespan/required/fallback/confidence/backend
+  - [x] 两阶段执行：线索查询 → 键集合 → terms 过滤确认查询 → 求交/回退
+  - [x] 告警证据：`nss.correlation.{key,confirmed,clue_hits,confirm_hits}` + 未确认回退降置信度
+  - [x] 校验与视图：关联规则元数据随 API 返回（type/correlation/backend）
+- [ ] **Phase 2 关联规则 UI 与证据预览**
+  - [x] 规则列表：类型徽标、关联策略（required/fallback）、置信度展示
+  - [x] 编辑器：关联规则模板一键插入 + 字段说明
+  - [x] 证据预览：`GET /api/sigma/{id}/evidence`（dry-run）+ UI 证据明细
+  - [ ] 部署验证（CI 构建后）
+- [ ] **Phase 3 ES|QL 后端**
+  - [x] pySigma ES|QL 输出（backend=esql|auto，转换失败不阻断）
+  - [x] ES|QL 执行路径（/_query）+ 失败自动回退 EQL
+  - [x] 评估结论落档：ES|QL correlation 静态时间桶/无 _source，关联执行保持自研两阶段
+  - [ ] 真实 ES 环境验证 ES|QL 执行后按需推广
 - [x] **M3 运维完善**
   - [x] cleaner（全包/日志双阈值 + 磁盘压力兜底）
   - [x] Helm Chart 化
