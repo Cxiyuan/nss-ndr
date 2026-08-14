@@ -145,6 +145,7 @@ export default function Detections() {
         <p className="hint">
           ET Open 内置规则集（来源：rules.emergingthreats.net），已启用 {totals.enabled} / {totals.total} 条。
           勾选分类加载为 Suricata 检测线索，配合 Zeek 上下文与 Sigma 事件告警确认。
+          内置规则由产品规则库维护，仅可启停，不可编辑/删除。
         </p>
         {groups.map((g) => (
           <div className="tree-group" key={g.key}>

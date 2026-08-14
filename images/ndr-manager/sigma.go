@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -24,6 +26,7 @@ type SigmaRule struct {
 	Status    string `json:"status"`   // enabled | disabled
 	Schedule  string `json:"schedule"` // 执行间隔，如 5m
 	LastRunAt string `json:"last_run_at,omitempty"`
+	Builtin   bool   `json:"builtin,omitempty"` // 内置产品规则库：仅可启停，不可编辑/删除
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 	// 以下为读取时由 enrichSigmaRule 填充的视图字段（不入库）
@@ -213,7 +216,7 @@ func (s SigmaRule) load(id string) error {
 }
 
 func listSigmaRules() []SigmaRule {
-	rows, err := db.Query(`SELECT id,title,content,category,product,service,level,status,schedule,last_run_at,created_at,updated_at FROM sigma_rules`)
+	rows, err := db.Query(`SELECT id,title,content,category,product,service,level,status,schedule,last_run_at,builtin,created_at,updated_at FROM sigma_rules`)
 	if err != nil {
 		return nil
 	}
@@ -221,9 +224,11 @@ func listSigmaRules() []SigmaRule {
 	out := []SigmaRule{}
 	for rows.Next() {
 		var r SigmaRule
-		if err := rows.Scan(&r.ID, &r.Title, &r.Content, &r.Category, &r.Product, &r.Service, &r.Level, &r.Status, &r.Schedule, &r.LastRunAt, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		var builtin int
+		if err := rows.Scan(&r.ID, &r.Title, &r.Content, &r.Category, &r.Product, &r.Service, &r.Level, &r.Status, &r.Schedule, &r.LastRunAt, &builtin, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			continue
 		}
+		r.Builtin = builtin == 1
 		enrichSigmaRule(&r)
 		out = append(out, r)
 	}
@@ -231,7 +236,12 @@ func listSigmaRules() []SigmaRule {
 	return out
 }
 
+// upsertSigmaRule 仅允许写入自定义规则（builtin=false）；内置规则由 importBuiltinSigma 维护
 func upsertSigmaRule(r SigmaRule) error {
+	return upsertSigmaRuleEx(r, false)
+}
+
+func upsertSigmaRuleEx(r SigmaRule, builtin bool) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	if r.ID == "" {
 		r.ID = sigmaPublicID(r.Content)
@@ -257,16 +267,67 @@ func upsertSigmaRule(r SigmaRule) error {
 	r.Product = sy.Logsource.Product
 	r.Service = sy.Logsource.Service
 	r.Level = sy.Level
-	_, err = db.Exec(`INSERT INTO sigma_rules(id,title,content,category,product,service,level,status,schedule,created_at,updated_at)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?)
+	builtinV := 0
+	if builtin {
+		builtinV = 1
+	}
+	_, err = db.Exec(`INSERT INTO sigma_rules(id,title,content,category,product,service,level,status,schedule,builtin,created_at,updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET title=excluded.title, content=excluded.content, category=excluded.category,
 		product=excluded.product, service=excluded.service, level=excluded.level, status=excluded.status,
-		schedule=excluded.schedule, updated_at=excluded.updated_at`,
-		r.ID, r.Title, r.Content, r.Category, r.Product, r.Service, r.Level, r.Status, r.Schedule, now, now)
+		schedule=excluded.schedule, builtin=excluded.builtin, updated_at=excluded.updated_at`,
+		r.ID, r.Title, r.Content, r.Category, r.Product, r.Service, r.Level, r.Status, r.Schedule, builtinV, now, now)
 	if err == nil {
 		audit("sigma.upsert", r.ID, r.Title)
 	}
 	return err
+}
+
+// importBuiltinSigma 从产品规则库目录 /opt/so/builtin-sigma 导入内置 Sigma 规则：
+// 内置规则仅可启停；产品升级时按 id 更新内容，但保留用户启停状态（status 不在更新列）
+func importBuiltinSigma(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	count := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			continue
+		}
+		r := SigmaRule{Content: string(data), Status: "disabled", Schedule: "5m"}
+		sy, err := parseSigma(r.Content)
+		if err != nil {
+			log.Printf("warn: 内置 Sigma 规则 %s 解析失败: %v", name, err)
+			continue
+		}
+		r.Title = sy.Title
+		r.ID = sy.ID
+		if r.ID == "" {
+			sum := sha256.Sum256([]byte(r.Content))
+			r.ID = "sigma-builtin-" + hex.EncodeToString(sum[:16])
+		}
+		if err := upsertSigmaRuleEx(r, true); err != nil {
+			log.Printf("warn: 内置 Sigma 规则 %s 导入失败: %v", name, err)
+			continue
+		}
+		count++
+	}
+	if count > 0 {
+		log.Printf("已同步 %d 条内置 Sigma 规则（产品规则库）", count)
+	}
+	return nil
 }
 
 func deleteSigmaRule(id string) error {
@@ -288,6 +349,14 @@ func setSigmaRuleStatus(id, status string) error {
 func sigmaPublicID(content string) string {
 	sum := sha256.Sum256([]byte(content))
 	return "sigma-" + hex.EncodeToString(sum[:8])
+}
+
+func builtinSigmaRule(id string) bool {
+	var builtin int
+	if err := db.QueryRow("SELECT builtin FROM sigma_rules WHERE id=?", id).Scan(&builtin); err != nil {
+		return false
+	}
+	return builtin == 1
 }
 
 // legacyBuiltinSigmaIDs 是旧版本镜像内置 Sigma 规则的固定 UUID

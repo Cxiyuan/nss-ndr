@@ -65,6 +65,7 @@ export default function Rules() {
       </div>
       <p className="hint">
         自定义单条 Suricata 规则。内置 ET Open 规则集在「事件检测」中按分类勾选加载。
+        <b>内置规则</b>（产品规则库维护）仅可启停，不可编辑/删除。
       </p>
       {msg && <div className="alert ok">{msg}</div>}
       {err && <div className="alert error">{err}</div>}
@@ -122,17 +123,23 @@ export default function Rules() {
               <td>
                 <input type="checkbox" checked={!!r.enabled} onChange={() => toggle(r)} />
               </td>
-              <td>{r.name}</td>
-              <td>{r.type}</td>
+              <td>
+                {r.type === "builtin" && <span className="badge">内置</span>} {r.name}
+              </td>
+              <td>{r.type === "builtin" ? "内置" : r.type}</td>
               <td className="mono">{r.rule.slice(0, 80)}</td>
               <td>{r.updated_at}</td>
               <td>
-                <button className="link" onClick={() => setEditing(r)}>
-                  编辑
-                </button>
-                <button className="link danger" onClick={() => remove(r)}>
-                  删除
-                </button>
+                {r.type !== "builtin" && (
+                  <button className="link" onClick={() => setEditing(r)}>
+                    编辑
+                  </button>
+                )}
+                {r.type !== "builtin" && (
+                  <button className="link danger" onClick={() => remove(r)}>
+                    删除
+                  </button>
+                )}
               </td>
             </tr>
           ))}

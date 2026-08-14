@@ -231,8 +231,8 @@ func apiCreateRule(w http.ResponseWriter, r *http.Request) {
 
 func apiUpdateRule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if existing, err := store.Get(id); err == nil && existing.Type == "etopen" {
-		writeErr(w, http.StatusBadRequest, "内置 ET Open 规则不可编辑")
+	if existing, err := store.Get(id); err == nil && (existing.Type == "etopen" || existing.Type == "builtin") {
+		writeErr(w, http.StatusBadRequest, "内置规则不可编辑，仅可启停")
 		return
 	}
 	var rule Rule
@@ -250,8 +250,8 @@ func apiUpdateRule(w http.ResponseWriter, r *http.Request) {
 
 func apiDeleteRule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if existing, err := store.Get(id); err == nil && existing.Type == "etopen" {
-		writeErr(w, http.StatusBadRequest, "内置 ET Open 规则不可删除")
+	if existing, err := store.Get(id); err == nil && (existing.Type == "etopen" || existing.Type == "builtin") {
+		writeErr(w, http.StatusBadRequest, "内置规则不可删除")
 		return
 	}
 	if err := store.Delete(id); err != nil {
@@ -363,6 +363,10 @@ func apiCreateSigma(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "Sigma 规则内容不能为空")
 		return
 	}
+	if sy, err := parseSigma(rule.Content); err == nil && sy.ID != "" && builtinSigmaRule(sy.ID) {
+		writeErr(w, http.StatusBadRequest, "内置 Sigma 规则不可覆盖，仅可启停")
+		return
+	}
 	if err := upsertSigmaRule(rule); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -378,6 +382,10 @@ func apiImportSigma(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "请求体解析失败")
 		return
 	}
+	if sy, err := parseSigma(body.Content); err == nil && sy.ID != "" && builtinSigmaRule(sy.ID) {
+		writeErr(w, http.StatusBadRequest, "内置 Sigma 规则不可覆盖，仅可启停")
+		return
+	}
 	if err := upsertSigmaRule(SigmaRule{Content: body.Content}); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -387,6 +395,10 @@ func apiImportSigma(w http.ResponseWriter, r *http.Request) {
 
 func apiUpdateSigma(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if builtinSigmaRule(id) {
+		writeErr(w, http.StatusBadRequest, "内置 Sigma 规则不可编辑，仅可启停")
+		return
+	}
 	var rule SigmaRule
 	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
 		writeErr(w, http.StatusBadRequest, "请求体解析失败")
@@ -401,7 +413,12 @@ func apiUpdateSigma(w http.ResponseWriter, r *http.Request) {
 }
 
 func apiDeleteSigma(w http.ResponseWriter, r *http.Request) {
-	if err := deleteSigmaRule(r.PathValue("id")); err != nil {
+	id := r.PathValue("id")
+	if builtinSigmaRule(id) {
+		writeErr(w, http.StatusBadRequest, "内置 Sigma 规则不可删除")
+		return
+	}
+	if err := deleteSigmaRule(id); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}

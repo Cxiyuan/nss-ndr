@@ -76,6 +76,7 @@ export interface SigmaRule {
   status?: string;
   schedule?: string;
   last_run_at?: string;
+  builtin?: boolean;
   type?: string; // simple | correlation
   backend?: string;
   correlation?: {

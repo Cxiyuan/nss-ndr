@@ -12,6 +12,7 @@ interface SigmaRule {
   status?: string;
   schedule?: string;
   last_run_at?: string;
+  builtin?: boolean;
   type?: string;
   backend?: string;
   correlation?: {
@@ -160,6 +161,7 @@ export default function Sigma() {
         Sigma 规则由检测调度器按 schedule 定时在 ES 上执行，命中写入 <code>logs-detections.alerts-so</code>。
         普通规则直接查询；<b>关联规则</b>（correlation 段）先匹配 Suricata 线索，再按{" "}
         <code>group_by</code>（默认 community_id）联动 Zeek 元数据确认，最终输出告警，降低误报。
+        <b>内置规则</b>（产品规则库维护）仅可启停，不可编辑/删除；新建规则为用户自定义规则。
       </p>
       {msg && <div className="alert ok">{msg}</div>}
       {err && <div className="alert error">{err}</div>}
@@ -251,7 +253,7 @@ export default function Sigma() {
                 <input type="checkbox" checked={r.status === "enabled"} onChange={() => toggle(r)} />
               </td>
               <td>
-                {r.title}
+                {r.builtin && <span className="badge">内置</span>} {r.title}
                 {r.correlation && (
                   <div className="hint mono">
                     线索:{r.correlation.clue_product || "-"} → 确认:{r.correlation.confirm_product || "-"} ·{" "}
@@ -277,9 +279,11 @@ export default function Sigma() {
               <td>{r.schedule}</td>
               <td>{r.last_run_at || "-"}</td>
               <td>
-                <button className="link" onClick={() => setEditing(r)}>
-                  编辑
-                </button>
+                {!r.builtin && (
+                  <button className="link" onClick={() => setEditing(r)}>
+                    编辑
+                  </button>
+                )}
                 <button className="link" onClick={() => previewRule(r)}>
                   预览查询
                 </button>
@@ -289,9 +293,11 @@ export default function Sigma() {
                 <button className="link" onClick={() => run(r)}>
                   立即执行
                 </button>
-                <button className="link danger" onClick={() => remove(r)}>
-                  删除
-                </button>
+                {!r.builtin && (
+                  <button className="link danger" onClick={() => remove(r)}>
+                    删除
+                  </button>
+                )}
               </td>
             </tr>
           ))}

@@ -48,6 +48,15 @@ CREATE TABLE audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL,
   target TEXT NOT NULL, detail TEXT DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE sigma_rules (
+  id TEXT PRIMARY KEY, title TEXT NOT NULL, content TEXT NOT NULL,
+  category TEXT DEFAULT '', product TEXT DEFAULT '', service TEXT DEFAULT '',
+  level TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'disabled',
+  schedule TEXT NOT NULL DEFAULT '5m', last_run_at TEXT DEFAULT '',
+  builtin INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`); err != nil {
 		t.Fatal(err)
 	}
@@ -117,5 +126,36 @@ CREATE TABLE audit (
 	// 自定义规则列表不应包含 etopen
 	if rules := store.ListCustom(); len(rules) != 0 {
 		t.Fatalf("ListCustom 应过滤 ET Open，实际 %d 条", len(rules))
+	}
+
+	// 内置 Sigma 规则库：导入为 builtin，仅可启停
+	sigmaDir := filepath.Join(tmp, "builtin-sigma")
+	if err := os.MkdirAll(sigmaDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	builtinSigma := `title: 测试内置事件告警
+id: 11111111-2222-3333-4444-555555555555
+status: test
+level: medium
+logsource:
+  product: zeek
+  category: dns
+detection:
+  selection:
+    dns.question.name|endswith: ".xyz"
+  condition: selection
+`
+	if err := os.WriteFile(filepath.Join(sigmaDir, "builtin-test.yml"), []byte(builtinSigma), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := importBuiltinSigma(sigmaDir); err != nil {
+		t.Fatalf("importBuiltinSigma: %v", err)
+	}
+	sigmas := listSigmaRules()
+	if len(sigmas) != 1 || !sigmas[0].Builtin {
+		t.Fatalf("内置 Sigma 规则应导入且 builtin=true: %+v", sigmas)
+	}
+	if !builtinSigmaRule("11111111-2222-3333-4444-555555555555") {
+		t.Fatalf("builtinSigmaRule 应识别内置规则")
 	}
 }

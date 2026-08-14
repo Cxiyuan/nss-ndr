@@ -31,6 +31,8 @@ COPY --from=build /ndr-manager /usr/local/bin/ndr-manager
 COPY images/ndr-manager/sigma_so_pipeline.yaml /opt/ndr-manager/sigma_so_pipeline.yaml
 # 内置规则集（so_extractions / so_filters，默认禁用）
 COPY images/detections/builtin-rules/ /opt/so/builtin-rules/
+# 内置 Sigma 事件告警规则库（产品规则库：仅可启停，不可编辑/删除）
+COPY images/ndr-manager/builtin-sigma/ /opt/so/builtin-sigma/
 # ET Open 内置规则集（35 个分类，约 3.9 万条，默认全部禁用，WebUI 勾选加载）
 COPY images/ndr-manager/etopen/ /opt/so/etopen/
 EXPOSE 8080

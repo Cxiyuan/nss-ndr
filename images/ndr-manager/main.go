@@ -50,6 +50,9 @@ func main() {
 	if err := purgeLegacyBuiltinSigma(); err != nil {
 		log.Printf("warn: 旧版内置 Sigma 规则清理失败: %v", err)
 	}
+	if err := importBuiltinSigma("/opt/so/builtin-sigma"); err != nil {
+		log.Printf("warn: 内置 Sigma 规则库同步失败: %v", err)
+	}
 
 	// 首次启动：若规则文件不存在则渲染初始规则集
 	if _, err := os.Stat(rulesFile); os.IsNotExist(err) {

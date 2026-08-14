@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS sigma_rules (
   status      TEXT NOT NULL DEFAULT 'disabled',
   schedule    TEXT NOT NULL DEFAULT '5m',
   last_run_at TEXT DEFAULT '',
+  builtin     INTEGER NOT NULL DEFAULT 0,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -75,6 +76,8 @@ CREATE TABLE IF NOT EXISTS users (
 	if _, err := db.Exec(schema); err != nil {
 		return err
 	}
+	// 存量库迁移：补齐 builtin 列（首次出现报 duplicate column 忽略）
+	_, _ = db.Exec("ALTER TABLE sigma_rules ADD COLUMN builtin INTEGER NOT NULL DEFAULT 0")
 	return nil
 }
 
