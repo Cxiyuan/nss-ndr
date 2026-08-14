@@ -31,7 +31,5 @@ COPY --from=build /ndr-manager /usr/local/bin/ndr-manager
 COPY images/ndr-manager/sigma_so_pipeline.yaml /opt/ndr-manager/sigma_so_pipeline.yaml
 # 内置规则集（so_extractions / so_filters，默认禁用）
 COPY images/detections/builtin-rules/ /opt/so/builtin-rules/
-# 内置 Sigma 规则（默认禁用，可在管理后台启用）
-COPY images/ndr-manager/builtin-sigma/ /opt/so/builtin-sigma/
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/ndr-manager"]

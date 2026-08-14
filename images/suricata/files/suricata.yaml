@@ -92,7 +92,7 @@ outputs:
               deployment: reverse
               header: X-Forwarded-For
         - stats:
-            enabled: yes
+            enabled: no
             filename: stats.log
             append: yes
             totals: yes

@@ -78,16 +78,16 @@ flowchart LR
    - suricata：eve.json 按小时轮转 `/nsm/eve-%Y-%m-%d-%H:%M.json`；pcap-log `%n/so-pcap.%t`（1000MB/个，多文件，可 LZ4）。
    - zeek：JSON 协议日志 `/nsm/zeek/logs/current/*.log`；文件提取 `/nsm/zeek/extracted/complete/`。
    - 详细落盘设计见 §4.3。
-3. **采集**：elastic-agent（Fleet 托管）监听 `/nsm/suricata/eve*.json`、`/nsm/zeek/logs/current/*.log` 与 `/nsm/strelka/log/strelka.log`；集成由 Fleet 策略下发（filestream），Zeek 按文件名 JS 设 `@metadata.pipeline=zeek.<logname>`；Suricata 固定 `suricata.common`；ICS 日志自动打 `ics` tag。
+3. **采集**：elastic-agent（Fleet 托管）监听 `/nsm/suricata/eve*.json`、`/nsm/zeek/logs/current/*.log` 与 `/nsm/strelka/log/strelka.log`；集成由 Fleet 策略下发（filestream），Zeek 按文件名 JS 设 `@metadata.pipeline=zeek.<logname>`；Suricata 固定 `suricata.common`；ICS 日志自动打 `ics` tag。Phase 0 起 Suricata 只采集 `event_type=alert` 的线索事件，stats/flow 等非告警 eve 事件在 agent 侧丢弃，eve-log 的 stats 输出默认关闭。
 4. **归一化**：ES ingest pipeline（复用 SO 的 `zeek.*` / `suricata.*` / `strelka.file` / `common`），字段映射 ECS：`id.orig_h→source.ip`、`community_id→network.community_id`、`sensorname→observer.name`、`event.dataset=module.dataset` 等。
 5. **存储**：数据流（沿用 SO 命名）：
    - `logs-zeek-so`（Zeek 全部日志，`event.dataset=zeek.conn/...`）
-   - `logs-suricata.alerts-so`（Suricata 告警，管道显式 `_index` 路由）
+   - `logs-suricata.alerts-so`（Suricata 命中线索 signal，管道显式 `_index` 路由，`nss.detection.stage=clue`）
    - `logs-zeek.notice` 归入 `logs-zeek-so`（`event.dataset=zeek.notice`）
    - `logs-strelka-so`（文件分析，若启用）
    - `logs-detections.alerts-*`（Detections 派生告警，若启用）
    - `logs-soc-so`（探针自身服务日志）
-6. **告警推送**：`xdr-push` 监听 `logs-suricata.alerts-so` + `logs-zeek-so(event.dataset=zeek.notice)` 的新增告警（高频轮询游标，默认 2s），**实时主动 POST 到配置文件中维护的 Webhook URL**（XDR 侧以该 URL 接收）。
+6. **告警推送**：`xdr-push` 监听三个告警相关数据流（高频轮询游标，默认 2s），按推送白名单过滤后**实时主动 POST 到配置文件中维护的 Webhook URL**（XDR 侧以该 URL 接收）。Phase 0 起默认白名单仅 `detections.alerts`（Sigma 关联确认后的最终告警）；`suricata.alert`（线索）、`zeek.notice`（上下文）不再默认外推，如需外推在 `xdr.event_types` 显式配置。
 
 ### 4.2 事件模型（ECS 子集，与 SO 一致）
 
@@ -260,7 +260,7 @@ flowchart LR
   - 失败重试（指数退避 + 上限），超时重试，超限进入死信（本地 `logs-xdr-push-dlq` 或文件）。
   - 报文含 `alert_id`（ES 文档 `_id`）作为幂等键，XDR 可据此去重。
   - 可选 HMAC-SHA256 签名头（`xdr.webhook.secret` 配置，未配置则不签名）。
-- 配置：Webhook URL/Secret/超时/重试/推送间隔/推送白名单（默认 `suricata.alert`、`zeek.notice`）。
+- 配置：Webhook URL/Secret/超时/重试/推送间隔/推送白名单（Phase 0 默认 `detections.alerts`；suricata.alert=线索、zeek.notice=上下文，不默认外推）。
 
 ### 5.8 Webhook 告警报文规范（v1 草案，供 XDR 侧对接）
 
@@ -363,7 +363,7 @@ xdr:
   timeout_s: 10
   push_interval_s: 2
   retry_max: 5
-  event_types: [suricata.alert, zeek.notice]
+  event_types: [detections.alerts]   # Phase 0：默认仅推 Sigma 确认后的最终告警
 ```
 
 - 变更策略：ConfigMap 更新 → 相关容器 watch 或重启（k3s 天然支持）；后续可演进为 CRD。
@@ -395,7 +395,7 @@ xdr:
 
 ### M2：告警与规则管理闭环（2-3 周）
 - 交付：detections 服务（API + 轻量 UI）、xdr-push 服务、suricata 规则热加载。
-- 验收：自定义规则命中 → `logs-suricata.alerts-so` → xdr-push **实时 POST Webhook URL**（XDR 沙箱接收）→ 本地告警可检索；规则启停/阈值生效；重试、断点续传、幂等去重正常。
+- 验收：自定义规则命中 → `logs-detections.alerts-so`（Sigma 确认后的最终告警）→ xdr-push **实时 POST Webhook URL**（XDR 沙箱接收）→ 本地告警可检索；规则启停/阈值生效；重试、断点续传、幂等去重正常。
 
 ### M3：全包与运维完善（2 周）
 - 交付：pcap-log 全包 + pcap-cleaner 阈值清理、文件提取 + Strelka（可选）、健康检查/日志聚合、Helm Chart 化。

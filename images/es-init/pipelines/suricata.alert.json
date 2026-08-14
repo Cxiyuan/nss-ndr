@@ -1,9 +1,11 @@
 {
-  "description": "NSS-NDR suricata.alert",
+  "description": "NSS-NDR suricata.alert（线索 signal：最终告警由 Sigma 关联确认后输出，见 nss.detection.stage=clue）",
   "processors": [
     { "set": { "field": "event.kind", "value": "alert" } },
     { "set": { "field": "event.category", "value": ["network"] } },
     { "set": { "field": "event.type", "value": ["intrusion_detection"] } },
+    { "set": { "field": "nss.detection.stage", "value": "clue" } },
+    { "append": { "field": "tags", "value": ["alert", "clue"] } },
     { "rename": { "field": "alert", "target_field": "rule", "ignore_missing": true } },
     { "rename": { "field": "rule.signature", "target_field": "rule.name", "ignore_missing": true } },
     { "rename": { "field": "rule.signature_id", "target_field": "rule.uuid", "ignore_missing": true } },

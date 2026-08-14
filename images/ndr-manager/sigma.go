@@ -5,8 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
-	"path/filepath"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -141,34 +140,30 @@ func sigmaPublicID(content string) string {
 	return "sigma-" + hex.EncodeToString(sum[:8])
 }
 
-// importBuiltinSigma 导入镜像内置规则（幂等，按 id 不覆盖用户修改）
-func importBuiltinSigma(dir string) error {
-	entries, err := os.ReadDir(dir)
+// legacyBuiltinSigmaIDs 是旧版本镜像内置 Sigma 规则的固定 UUID
+// （2026-08-14 起产品不再内置 Sigma 规则；启动时清理历史残留）
+var legacyBuiltinSigmaIDs = []string{
+	"01584916-9b8b-4295-834a-6a773626f974", // High Volume DNS Queries from Single Host
+	"e343eba1-094f-4549-8428-203dc1c4f28d", // Suspicious DNS Query for Dynamic DNS Domain
+	"7f040f96-d846-4dd0-9411-c46186fad64e", // Suspicious HTTP Request URI
+	"904da9e2-11ce-4ade-8aab-6d7099395a31", // Connection Attempt to Uncommon Port
+	"7cc5f183-3c9c-4e93-aa84-096166b5ce6e", // Suspicious TLS Connection (Known Bad Cipher)
+}
+
+// purgeLegacyBuiltinSigma 清理旧版本内置 Sigma 规则（升级后不再残留；仅删除已知内置 ID，不影响用户导入的规则）
+func purgeLegacyBuiltinSigma() error {
+	placeholders := make([]string, len(legacyBuiltinSigmaIDs))
+	args := make([]any, 0, len(legacyBuiltinSigmaIDs))
+	for i, id := range legacyBuiltinSigmaIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	res, err := db.Exec("DELETE FROM sigma_rules WHERE id IN ("+strings.Join(placeholders, ",")+")", args...)
 	if err != nil {
 		return err
 	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yml") && !strings.HasSuffix(e.Name(), ".yaml") {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
-		if err != nil {
-			continue
-		}
-		sy, err := parseSigma(string(data))
-		if err != nil {
-			continue
-		}
-		id := sy.ID
-		if id == "" {
-			id = sigmaPublicID(string(data))
-		}
-		_, err = db.Exec(`INSERT OR IGNORE INTO sigma_rules(id,title,content,category,product,service,level,status,schedule,created_at,updated_at)
-			VALUES(?,?,?,?,?,?,?, 'disabled','5m',datetime('now'),datetime('now'))`,
-			id, sy.Title, string(data), sy.Logsource.Category, sy.Logsource.Product, sy.Logsource.Service, sy.Level)
-		if err != nil {
-			continue
-		}
+	if n, _ := res.RowsAffected(); n > 0 {
+		log.Printf("已清理 %d 条旧版内置 Sigma 规则", n)
 	}
 	return nil
 }

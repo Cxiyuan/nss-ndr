@@ -9,6 +9,13 @@
   - [x] xdr-push 服务（ES 轮询新告警 → Webhook 推送，游标/重试/去重/HMAC）
   - [x] 镜像构建与 k8s 清单
   - [x] 阈值/抑制（规则内嵌 threshold 关键字，reload 即生效）
+- [ ] **Phase 0 三层信号模型（Suricata=线索 / Zeek=上下文 / Sigma=最终告警）**
+  - [x] 清除全部内置 Sigma 规则（含旧版残留清理，保留手动导入）
+  - [x] xdr-push 推送白名单默认收敛为 `detections.alerts`（可配置恢复）
+  - [x] Suricata 告警标记线索：`nss.detection.stage=clue` + tags `alert,clue`
+  - [x] 修复 stats 污染：eve-log stats 输出默认关闭 + agent 侧丢弃非 alert 事件
+  - [ ] 部署验证（CI 构建后）
+  - [ ] Phase 1 关联规则（Sigma correlation 段 + 两阶段确认引擎）设计文档
 - [x] **M3 运维完善**
   - [x] cleaner（全包/日志双阈值 + 磁盘压力兜底）
   - [x] Helm Chart 化
@@ -69,7 +76,7 @@
   - [x] manager Sigma 规则管理（SQLite CRUD/启停/导入/转换预览，UI 页）
   - [x] Sigma→ES 查询转换器（网络类字段映射 + selection/condition 解析）
   - [x] 检测调度器（按 schedule 定时执行，命中写告警，payload 对齐 SO）
-  - [x] 内置 5 条网络类 Sigma 规则（默认禁用）
+  - [x] 曾内置 5 条网络类 Sigma 规则（默认禁用）；2026-08-14 起产品不再内置 Sigma 规则（清除内置规则及导入逻辑，保留手动导入/CRUD 能力，启动时自动清理旧版内置残留）
   - [x] xdr-push 扩展推送 detections.alerts（Webhook/死信）
   - [x] 修复数据链路：zeek 各日志类型 pipeline、event.dataset keyword 映射、dns/http/tls 字段映射
   - [x] 端到端验证：启用规则→执行→告警写入 detections 索引→Webhook 推送（18888 测试地址写死信）
@@ -108,5 +115,5 @@
 - [ ] ES 版本/许可：Elasticsearch 9.3.3（默认）还是 OpenSearch
 - [ ] Zeek 轮转历史是否补采进 ES（默认只留档）
 - [ ] manager 配置初始化：部署后需在 UI 填写镜像口/Webhook 再首次下发（当前已用 API 写入）
-- [ ] Sigma 规则源扩展：支持从 SigmaHQ 仓库拉取/同步（当前内置 + 手动导入）
+- [ ] Sigma 规则源扩展：支持从 SigmaHQ 仓库拉取/同步（当前手动导入）
 - [ ] YARA 规则源扩展：构建期固定 securityonion-yara 提交，后续可加 UI 同步/自定义规则
