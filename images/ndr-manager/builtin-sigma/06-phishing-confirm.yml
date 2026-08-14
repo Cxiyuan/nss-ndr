@@ -22,7 +22,8 @@ correlation:
     detection:
       selection:
         http.request.method: POST
-        http.response.status_code: 200
+        http.response.status_code|gte: 200
+        http.response.status_code|lte: 200
       condition: selection
   group_by: network.community_id
   timespan: 5m

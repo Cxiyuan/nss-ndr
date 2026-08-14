@@ -21,7 +21,8 @@ correlation:
       category: http
     detection:
       selection_status:
-        http.response.status_code: 200
+        http.response.status_code|gte: 200
+        http.response.status_code|lte: 200
       selection_script:
         url.full|endswith:
           - .php

@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,6 +18,18 @@ import (
 )
 
 var esSigmaClient *esClient
+
+// esHTTPError 携带 HTTP 状态码，便于调用方做容错（如索引未创建时的 404）
+type esHTTPError struct {
+	method string
+	path   string
+	code   int
+	body   string
+}
+
+func (e *esHTTPError) Error() string {
+	return fmt.Sprintf("ES %s %s: %d %s", e.method, e.path, e.code, e.body)
+}
 
 type esClient struct {
 	host   string
@@ -63,7 +76,7 @@ func (c *esClient) do(method, path string, body any) ([]byte, error) {
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("ES %s %s: %d %s", method, path, resp.StatusCode, string(data))
+		return nil, &esHTTPError{method: method, path: path, code: resp.StatusCode, body: string(data)}
 	}
 	return data, nil
 }
@@ -187,6 +200,11 @@ func runSigmaQuery(sq *sigmaQuery, from, to time.Time, keyFilter map[string]any)
 	data, err := esSigmaClient.do(http.MethodPost,
 		"/"+strings.Join(sq.Indexes, ",")+"/_eql/search", body)
 	if err != nil {
+		var he *esHTTPError
+		if errors.As(err, &he) && he.code == http.StatusNotFound {
+			// 索引尚未创建（如新部署尚无告警/元数据）：视为无命中，不报错
+			return nil, nil
+		}
 		return nil, err
 	}
 	var resp struct {
@@ -220,6 +238,10 @@ func runEsqlQuery(sq *sigmaQuery, from, to time.Time) ([]map[string]any, error) 
 	}
 	data, err := esSigmaClient.do(http.MethodPost, "/_query?format=json", body)
 	if err != nil {
+		var he *esHTTPError
+		if errors.As(err, &he) && he.code == http.StatusNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	var resp struct {

@@ -24,9 +24,11 @@ correlation:
       service: smb
     detection:
       selection_445:
-        destination.port: 445
+        destination.port|gte: 445
+        destination.port|lte: 445
       selection_139:
-        destination.port: 139
+        destination.port|gte: 139
+        destination.port|lte: 139
       condition: selection_445 or selection_139
   group_by: network.community_id
   timespan: 5m
