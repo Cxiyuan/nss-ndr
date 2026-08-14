@@ -1,0 +1,35 @@
+title: SMB 横向移动确认（ET NETBIOS/RPC 线索 + Zeek SMB 会话）
+id: 11111111-0002-4000-8000-000000000002
+status: stable
+level: high
+backend: auto
+logsource:
+  product: suricata
+  category: network
+description: NETBIOS/RPC 横向移动线索命中后，联动同 community_id 的 Zeek SMB 会话（445/139）确认横向利用针对真实 SMB 服务，过滤正常流量误报。
+correlation:
+  clue:
+    logsource:
+      product: suricata
+    detection:
+      selection_netbios:
+        rule.name|contains: "ET NETBIOS"
+      selection_rpc:
+        rule.name|contains: "ET RPC"
+      condition: selection_netbios or selection_rpc
+  confirm:
+    logsource:
+      product: zeek
+      category: network_connection
+      service: smb
+    detection:
+      selection_445:
+        destination.port: 445
+      selection_139:
+        destination.port: 139
+      condition: selection_445 or selection_139
+  group_by: network.community_id
+  timespan: 5m
+  required: both
+  fallback: none
+  confidence: high

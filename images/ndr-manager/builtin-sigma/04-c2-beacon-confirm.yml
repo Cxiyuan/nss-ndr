@@ -1,0 +1,34 @@
+title: C2 回连确认（ET MALWARE 线索 + Zeek 长连接）
+id: 11111111-0004-4000-8000-000000000004
+status: stable
+level: high
+backend: auto
+logsource:
+  product: suricata
+  category: network
+description: 恶意软件/C2 类线索命中后，联动同 community_id 的 Zeek 连接时长（>=60 秒）确认 C2 回连行为，过滤 CDN/云服务等误报。
+correlation:
+  clue:
+    logsource:
+      product: suricata
+    detection:
+      selection:
+        rule.name|contains:
+          - C&C
+          - Backdoor
+          - C2
+          - Beacon
+      condition: selection
+  confirm:
+    logsource:
+      product: zeek
+      category: network_connection
+    detection:
+      selection:
+        event.duration|gte: 60
+      condition: selection
+  group_by: network.community_id
+  timespan: 15m
+  required: both
+  fallback: clue_only
+  confidence: high

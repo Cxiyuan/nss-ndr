@@ -313,6 +313,10 @@ func importBuiltinSigma(dir string) error {
 			continue
 		}
 		r.Title = sy.Title
+		// Sigma 状态 stable 表示产品验证过的规则，首次导入默认启用；test/experimental 默认禁用
+		if sy.Status == "stable" {
+			r.Status = "enabled"
+		}
 		r.ID = sy.ID
 		if r.ID == "" {
 			sum := sha256.Sum256([]byte(r.Content))

@@ -1,0 +1,32 @@
+title: DNS 异常/隧道确认（ET DNS 线索 + Zeek DNS 记录）
+id: 11111111-0009-4000-8000-000000000009
+status: stable
+level: medium
+backend: auto
+logsource:
+  product: suricata
+  category: network
+description: DNS 异常线索命中后，联动同 community_id 的 Zeek DNS 记录（TXT 查询或 NXDOMAIN 应答）确认隧道/异常解析行为。
+correlation:
+  clue:
+    logsource:
+      product: suricata
+    detection:
+      selection:
+        rule.name|contains: "ET DNS"
+      condition: selection
+  confirm:
+    logsource:
+      product: zeek
+      category: dns
+    detection:
+      selection_txt:
+        dns.question.type: TXT
+      selection_nxdomain:
+        dns.response_code: NXDOMAIN
+      condition: selection_txt or selection_nxdomain
+  group_by: network.community_id
+  timespan: 5m
+  required: both
+  fallback: clue_only
+  confidence: medium

@@ -1,0 +1,24 @@
+title: 应急事件：横向渗透工具直接告警（ET CURRENT_EVENTS）
+id: 11111111-000c-4000-8000-00000000000c
+status: stable
+level: high
+backend: auto
+logsource:
+  product: suricata
+  category: network
+description: 最新应急事件规则（如 Rubeus 等横向渗透工具特征）无需联动确认，直接输出告警，保证应急响应时效。
+correlation:
+  clue:
+    logsource:
+      product: suricata
+    detection:
+      selection:
+        rule.name|contains:
+          - ET CURRENT_EVENTS
+          - HackTool
+      condition: selection
+  group_by: network.community_id
+  timespan: 5m
+  required: clue
+  fallback: clue_only
+  confidence: high

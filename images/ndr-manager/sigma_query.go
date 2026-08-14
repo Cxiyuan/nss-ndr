@@ -20,7 +20,7 @@ type sigmaQuery struct {
 	Filter  map[string]any `json:"filter,omitempty"`
 }
 
-const sigmaPipeline = "/opt/ndr-manager/sigma_so_pipeline.yaml"
+var sigmaPipeline = envOr("NDR_SIGMA_PIPELINE", "/opt/ndr-manager/sigma_so_pipeline.yaml")
 
 // buildSigmaQuery 用 pySigma（sigma CLI）把 Sigma 规则转换为 EQL 查询；
 // backend 为 esql/auto 时额外尝试 ES|QL 转换（失败不阻断，执行仍走 EQL）。
@@ -59,26 +59,33 @@ func buildSigmaQuery(content string) (*sigmaQuery, error) {
 		sq.Indexes = []string{"logs-zeek-so", "logs-suricata.alerts-so"}
 	}
 	ds := ""
-	switch strings.ToLower(ls.Category) {
-	case "network_connection", "network":
-		ds = "zeek.conn"
+	// service 更具体，优先映射到对应数据集；category 作为兜底
+	switch strings.ToLower(ls.Service) {
 	case "dns":
 		ds = "zeek.dns"
-	case "web", "http":
+	case "http":
 		ds = "zeek.http"
-	case "tls", "ssl":
+	case "ssl", "tls":
 		ds = "zeek.ssl"
+	case "smb":
+		ds = "zeek.smb"
 	case "file":
 		ds = "zeek.files"
 	}
 	if ds == "" {
-		switch strings.ToLower(ls.Service) {
+		switch strings.ToLower(ls.Category) {
+		case "network_connection", "network":
+			ds = "zeek.conn"
 		case "dns":
 			ds = "zeek.dns"
-		case "http":
+		case "web", "http":
 			ds = "zeek.http"
-		case "ssl", "tls":
+		case "tls", "ssl":
 			ds = "zeek.ssl"
+		case "file":
+			ds = "zeek.files"
+		case "smb":
+			ds = "zeek.smb"
 		}
 	}
 	if ds != "" {

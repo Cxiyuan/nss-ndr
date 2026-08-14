@@ -16,13 +16,47 @@
             "module": { "type": "keyword" },
             "kind": { "type": "keyword" },
             "category": { "type": "keyword" },
-            "type": { "type": "keyword" }
+            "type": { "type": "keyword" },
+            "severity": { "type": "long" }
           }
         },
         "source": { "properties": { "ip": { "type": "ip" }, "port": { "type": "long" } } },
         "destination": { "properties": { "ip": { "type": "ip" }, "port": { "type": "long" } } },
-        "network": { "properties": { "transport": { "type": "keyword" }, "protocol": { "type": "keyword" } } },
-        "rule": { "type": "object", "dynamic": true },
+        "network": {
+          "properties": {
+            "transport": { "type": "keyword" },
+            "protocol": { "type": "keyword" },
+            "community_id": { "type": "keyword" },
+            "data": { "type": "object", "properties": { "decoded": { "type": "text", "index": false } } }
+          }
+        },
+        "rule": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "keyword" },
+            "uuid": { "type": "keyword" },
+            "category": { "type": "keyword" },
+            "metadata": { "type": "object", "enabled": false }
+          }
+        },
+        "log": {
+          "properties": {
+            "id": { "type": "object", "properties": { "uid": { "type": "keyword" } } }
+          }
+        },
+        "observer": {
+          "properties": {
+            "name": { "type": "keyword" },
+            "ingress": { "type": "object", "properties": { "interface": { "type": "object", "properties": { "name": { "type": "keyword" } } } } }
+          }
+        },
+        "nss": {
+          "type": "object",
+          "properties": {
+            "detection": { "type": "object", "properties": { "stage": { "type": "keyword" } } }
+          }
+        },
+        "tags": { "type": "keyword" },
         "message": { "type": "object", "enabled": false }
       }
     }

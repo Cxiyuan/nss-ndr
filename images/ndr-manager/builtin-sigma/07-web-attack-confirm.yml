@@ -1,0 +1,32 @@
+title: Web 注入/应用攻击确认（ET SQL/WEB_SPECIFIC_APPS 线索 + Zeek HTTP 响应）
+id: 11111111-0007-4000-8000-000000000007
+status: stable
+level: high
+backend: auto
+logsource:
+  product: suricata
+  category: network
+description: SQL 注入与 Web 应用漏洞线索命中后，联动同 community_id 的 Zeek HTTP 4xx/5xx 响应确认攻击请求真实到达服务端，降低规则特征误报。
+correlation:
+  clue:
+    logsource:
+      product: suricata
+    detection:
+      selection:
+        rule.name|contains:
+          - ET SQL_INJECTION
+          - ET WEB_SPECIFIC_APPS
+      condition: selection
+  confirm:
+    logsource:
+      product: zeek
+      category: http
+    detection:
+      selection:
+        http.response.status_code|gte: 400
+      condition: selection
+  group_by: network.community_id
+  timespan: 5m
+  required: both
+  fallback: clue_only
+  confidence: high

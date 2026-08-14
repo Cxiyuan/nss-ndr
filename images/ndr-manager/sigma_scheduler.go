@@ -413,7 +413,8 @@ func firstHit(hits []map[string]any) map[string]any {
 // （证据字段放 nss.correlation，event_data 兼容 xdr-push 推送）
 func writeSigmaCorrelationAlert(r SigmaRule, corr *sigmaCorrelation, m correlationMatch) error {
 	confidence := corr.Confidence
-	if !m.Confirmed {
+	// 仅 required=both 且未确认的回退告警降级；required=clue 直接告警保持声明置信度
+	if corr.Required == "both" && !m.Confirmed {
 		// 回退告警：置信度降级为 low
 		confidence = "low"
 	}

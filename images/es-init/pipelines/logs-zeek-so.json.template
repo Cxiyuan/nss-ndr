@@ -15,12 +15,65 @@
             "dataset": { "type": "keyword" },
             "module": { "type": "keyword" },
             "kind": { "type": "keyword" },
-            "category": { "type": "keyword" }
+            "category": { "type": "keyword" },
+            "duration": { "type": "double" }
           }
         },
-        "source": { "properties": { "ip": { "type": "ip" }, "port": { "type": "long" } } },
-        "destination": { "properties": { "ip": { "type": "ip" }, "port": { "type": "long" } } },
-        "network": { "properties": { "transport": { "type": "keyword" }, "protocol": { "type": "keyword" } } },
+        "source": {
+          "properties": {
+            "ip": { "type": "ip" },
+            "port": { "type": "long" },
+            "bytes": { "type": "long" },
+            "packets": { "type": "long" }
+          }
+        },
+        "destination": {
+          "properties": {
+            "ip": { "type": "ip" },
+            "port": { "type": "long" },
+            "bytes": { "type": "long" },
+            "packets": { "type": "long" }
+          }
+        },
+        "client": {
+          "properties": {
+            "ip": { "type": "ip" },
+            "port": { "type": "long" },
+            "bytes": { "type": "long" },
+            "packets": { "type": "long" }
+          }
+        },
+        "server": {
+          "properties": {
+            "ip": { "type": "ip" },
+            "port": { "type": "long" },
+            "bytes": { "type": "long" },
+            "packets": { "type": "long" }
+          }
+        },
+        "connection": {
+          "properties": {
+            "state": { "type": "keyword" }
+          }
+        },
+        "network": {
+          "properties": {
+            "transport": { "type": "keyword" },
+            "protocol": { "type": "keyword" },
+            "community_id": { "type": "keyword" }
+          }
+        },
+        "log": {
+          "properties": {
+            "id": { "type": "object", "properties": { "uid": { "type": "keyword" } } }
+          }
+        },
+        "observer": {
+          "properties": {
+            "name": { "type": "keyword" },
+            "ingress": { "type": "object", "properties": { "interface": { "type": "object", "properties": { "name": { "type": "keyword" } } } } }
+          }
+        },
         "dns": {
           "type": "object",
           "properties": {

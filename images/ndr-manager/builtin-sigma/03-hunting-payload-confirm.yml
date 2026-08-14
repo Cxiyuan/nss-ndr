@@ -1,0 +1,34 @@
+title: 攻击链载荷下载确认（ET HUNTING 线索 + Zeek 文件）
+id: 11111111-0003-4000-8000-000000000003
+status: stable
+level: medium
+backend: auto
+logsource:
+  product: suricata
+  category: network
+description: 狩猎类线索命中后，联动同 community_id 的 Zeek 文件日志确认攻击链中可执行文件/恶意脚本下载，将狩猎行为升级为攻击链证据。
+correlation:
+  clue:
+    logsource:
+      product: suricata
+    detection:
+      selection:
+        rule.name|contains: "ET HUNTING"
+      condition: selection
+  confirm:
+    logsource:
+      product: zeek
+      category: file
+    detection:
+      selection:
+        file.mime_type|contains:
+          - dosexec
+          - x-msdownload
+          - javascript
+          - html
+      condition: selection
+  group_by: network.community_id
+  timespan: 10m
+  required: both
+  fallback: clue_only
+  confidence: medium

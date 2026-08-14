@@ -1,0 +1,30 @@
+title: 挖矿连接确认（ET COINMINER 线索 + Zeek 长连接）
+id: 11111111-000b-4000-8000-00000000000b
+status: stable
+level: medium
+backend: auto
+logsource:
+  product: suricata
+  category: network
+description: 挖矿线索命中后，联动同 community_id 的 Zeek 连接时长（>=600 秒）确认挖矿池长连接，过滤偶发特征误报。
+correlation:
+  clue:
+    logsource:
+      product: suricata
+    detection:
+      selection:
+        rule.name|contains: "ET COINMINER"
+      condition: selection
+  confirm:
+    logsource:
+      product: zeek
+      category: network_connection
+    detection:
+      selection:
+        event.duration|gte: 600
+      condition: selection
+  group_by: network.community_id
+  timespan: 10m
+  required: both
+  fallback: clue_only
+  confidence: medium
