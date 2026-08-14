@@ -29,6 +29,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 log()  { echo -e "\033[1;36m[uninstall]\033[0m $*"; }
+warn() { echo -e "\033[1;33m[uninstall]\033[0m $*"; }
 die()  { echo -e "\033[1;31m[uninstall]\033[0m $*" >&2; exit 1; }
 
 if [[ "$ASSUME_YES" != "1" ]]; then
@@ -73,11 +74,15 @@ if [[ "$KEEP_IMAGES" != "1" ]]; then
   log "清理项目镜像..."
   ctr -n k8s.io images ls 2>/dev/null | grep "ghcr.io/cxiyuan/nss-ndr/" | awk '{print $1}' | sort -u |
     while read -r img; do ctr -n k8s.io images rm "$img" >/dev/null 2>&1 || true; done
-  for img in \
-    docker.elastic.co/elasticsearch/elasticsearch:9.3.3 \
-    docker.io/library/redis:7-alpine \
-    docker.io/library/busybox:1.36; do
-    ctr -n k8s.io images rm "$img" >/dev/null 2>&1 || true
+  # 基础镜像（digest 引用形式，按镜像名前缀匹配删除）
+  for prefix in \
+    docker.elastic.co/elasticsearch/elasticsearch \
+    docker.io/library/redis \
+    docker.io/library/busybox; do
+    ctr -n k8s.io images ls 2>/dev/null | awk '{print $1}' | sort -u |
+      grep "^$prefix" | while read -r img; do
+        ctr -n k8s.io images rm "$img" >/dev/null 2>&1 || true
+      done
   done
   # CRI 缓存里的 <none> 残留
   crictl images 2>/dev/null | awk '$1=="<none>" {print $3}' | while read -r id; do
