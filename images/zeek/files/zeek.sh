@@ -35,6 +35,17 @@ setcap cap_net_raw,cap_net_admin=eip /opt/zeek/bin/capstats
 mkdir -p /nsm/zeek/logs /nsm/zeek/spool /nsm/zeek/extracted/complete
 chown -R 937:937 /nsm/zeek
 
+# 启动前归档上次运行的日志文件：非正常重启（pod 重建/进程被杀）时旧文件未轮转，
+# filestream 的 offset registry 与重建后的文件状态冲突会卡住采集；
+# 归档后 zeek 创建全新日志文件，filestream 识别为新文件从头读取。
+if [ -d /nsm/zeek/logs/current ] && compgen -G "/nsm/zeek/logs/current/*.log" >/dev/null; then
+  ARCHIVE_DIR="/nsm/zeek/logs/archive-$(date +%Y-%m-%d-%H%M%S)"
+  mkdir -p "$ARCHIVE_DIR"
+  mv /nsm/zeek/logs/current/*.log "$ARCHIVE_DIR/" 2>/dev/null || true
+  chown -R 937:937 "$ARCHIVE_DIR"
+  echo "已归档上次运行日志到 $ARCHIVE_DIR"
+fi
+
 # 部署并运行 Zeek（node.cfg / local.zeek 由 ConfigMap 挂载）
 runuser zeek -c '/opt/zeek/bin/zeekctl deploy'
 

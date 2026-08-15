@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # NSS-NDR 探针一键安装/部署脚本（幂等，可重复执行）
 # 用法:
-#   bash releases/install.sh -i enp5s0 [-c configs/probe.yaml] [-t <镜像tag>] [-p 30603]
+#   bash releases/install.sh -i enp5s0 [-c configs/probe.yaml] [-t <镜像tag>] [-p 30603] [--timeout <秒>]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,6 +13,7 @@ CONFIG_FILE=""
 TAG=""
 MANAGER_PORT=30603
 SKIP_CHECKS=0
+TIMEOUT=1800
 
 usage() {
   echo "用法: $0 [选项]"
@@ -20,6 +21,7 @@ usage() {
   echo "  -c, --config <文件>      probe 配置（默认 configs/probe.yaml，不存在则从示例复制）"
   echo "  -t, --tag <镜像tag>      覆盖镜像版本（默认用 kustomization 当前 pin）"
   echo "  -p, --manager-port <端口> 管理后台 NodePort（默认 30603）"
+  echo "  --timeout <秒>            组件就绪等待超时（默认 1800，慢网络拉镜像可调大）"
   echo "  --skip-checks            跳过环境预检"
   echo "  -h, --help               显示帮助"
   exit "${1:-0}"
@@ -31,6 +33,7 @@ while [[ $# -gt 0 ]]; do
     -c|--config) CONFIG_FILE="$2"; shift 2 ;;
     -t|--tag) TAG="$2"; shift 2 ;;
     -p|--manager-port) MANAGER_PORT="$2"; shift 2 ;;
+    --timeout) TIMEOUT="$2"; shift 2 ;;
     --skip-checks) SKIP_CHECKS=1; shift ;;
     -h|--help) usage 0 ;;
     *) echo "未知参数: $1"; usage 1 ;;
@@ -77,6 +80,7 @@ fi
 
 # ---------- 镜像 tag ----------
 if [[ -n "$TAG" ]]; then
+  [[ "$TAG" =~ ^[0-9a-f]{40}$ ]] || die "镜像 tag 应为 40 位 git sha（当前: $TAG），请用完整 commit hash"
   if [[ -f "$DEPLOY_DIR/kustomization.yaml" ]]; then
     sed -i.bak "s/\(newTag: \).*/\1$TAG/" "$DEPLOY_DIR/kustomization.yaml"
     rm -f "$DEPLOY_DIR/kustomization.yaml.bak"
@@ -115,7 +119,7 @@ kubectl apply -k "$DEPLOY_DIR"
 log "资源已应用，等待组件就绪..."
 
 # ---------- 等待就绪 ----------
-deadline=$((SECONDS + 900))
+deadline=$((SECONDS + TIMEOUT))
 while [[ $SECONDS -lt $deadline ]]; do
   not_ready=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null |
     awk '$3 != "Running" && $3 != "Completed" {n++} END {print n+0}')

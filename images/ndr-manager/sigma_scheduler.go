@@ -19,6 +19,12 @@ import (
 
 var esSigmaClient *esClient
 
+// sigmaBackoffUntil / sigmaFailStreak：ES 连续不可用时指数退避，避免日志风暴
+var (
+	sigmaBackoffUntil time.Time
+	sigmaFailStreak   int
+)
+
 // esHTTPError 携带 HTTP 状态码，便于调用方做容错（如索引未创建时的 404）
 type esHTTPError struct {
 	method string
@@ -94,7 +100,15 @@ func startSigmaScheduler() {
 }
 
 func runDueSigmaRules() {
-	for _, r := range enabledSigmaRules() {
+	if time.Now().Before(sigmaBackoffUntil) {
+		return
+	}
+	rules := enabledSigmaRules()
+	if len(rules) == 0 {
+		return
+	}
+	failed := 0
+	for _, r := range rules {
 		interval := parseInterval(r.Schedule)
 		if interval <= 0 {
 			interval = 5 * time.Minute
@@ -106,9 +120,22 @@ func runDueSigmaRules() {
 			}
 		}
 		if err := executeSigmaRule(r, interval); err != nil {
+			failed++
 			log.Printf("warn: sigma 规则 %s 执行失败: %v", r.ID, err)
 		}
 		_, _ = db.Exec("UPDATE sigma_rules SET last_run_at=? WHERE id=?", time.Now().UTC().Format(time.RFC3339), r.ID)
+	}
+	// 全部规则同时失败说明 ES/调度依赖不可用，指数退避（30s -> 1m -> 2m -> 4m -> 8m，上限 8m）
+	if failed == len(rules) && failed > 0 {
+		sigmaFailStreak++
+		backoff := time.Duration(1<<uint(sigmaFailStreak-1)) * 30 * time.Second
+		if backoff > 8*time.Minute {
+			backoff = 8 * time.Minute
+		}
+		sigmaBackoffUntil = time.Now().Add(backoff)
+		log.Printf("warn: sigma 调度连续失败 %d 次，退避 %v 后重试", sigmaFailStreak, backoff)
+	} else {
+		sigmaFailStreak = 0
 	}
 }
 

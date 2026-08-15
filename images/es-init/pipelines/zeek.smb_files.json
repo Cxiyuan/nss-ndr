@@ -15,6 +15,41 @@
       }
     },
     {
+      "rename": {
+        "field": "message2.action",
+        "target_field": "smb.action",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.path",
+        "target_field": "smb.path",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.name",
+        "target_field": "smb.name",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.size",
+        "target_field": "smb.size",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.prev_name",
+        "target_field": "smb.prev_name",
+        "ignore_missing": true
+      }
+    },
+    {
       "pipeline": {
         "name": "zeek.common"
       }

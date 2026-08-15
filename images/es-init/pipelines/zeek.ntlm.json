@@ -15,6 +15,34 @@
       }
     },
     {
+      "rename": {
+        "field": "message2.username",
+        "target_field": "ntlm.username",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.hostname",
+        "target_field": "ntlm.hostname",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.domainname",
+        "target_field": "ntlm.domainname",
+        "ignore_missing": true
+      }
+    },
+    {
+      "rename": {
+        "field": "message2.success",
+        "target_field": "ntlm.success",
+        "ignore_missing": true
+      }
+    },
+    {
       "pipeline": {
         "name": "zeek.common"
       }

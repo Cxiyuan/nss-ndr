@@ -17,6 +17,16 @@ wait_es() {
   done
 }
 
+wait_security() {
+  [ "$ES_SECURITY" = "true" ] || return 0
+  # ES 首次启动后安全插件需要初始化（reserved 用户/安全索引），
+  # 直接建用户会 401；等 elastic 认证成功再继续，避免初始化时序问题
+  until curl -sk $CURL_AUTH "$ES_URL/_security/_authenticate" -o /dev/null 2>/dev/null; do
+    echo "$(date) - 等待 ES 安全插件就绪..."
+    sleep 5
+  done
+}
+
 import_json() {
   local method=$1 path=$2 file=$3
   curl -sk $CURL_AUTH -X "$method" \
@@ -34,8 +44,17 @@ create_app_users() {
     echo "warn: 缺少应用用户密码环境变量，跳过用户创建"
     return 1
   }
+  # 校验应用用户密码是否已是期望值；一致则跳过（避免每次重启重置密码造成瞬时认证失败）
+  check_user_pass() {
+    local name=$1 pass=$2
+    curl -sk -u "$name:$pass" "$ES_URL/_security/_authenticate" -o /dev/null 2>/dev/null
+  }
   create_user() {
     local name=$1 pass=$2 roles=$3
+    if check_user_pass "$name" "$pass"; then
+      echo "$(date) - 用户 $name 密码已正确，跳过"
+      return 0
+    fi
     local code
     code=$(curl -sk $CURL_AUTH -X PUT "$ES_URL/_security/user/$name" \
       -H "Content-Type: application/json" \
@@ -86,6 +105,7 @@ load_once() {
 }
 
 wait_es
+wait_security
 echo "$(date) - ES 已就绪，开始导入配置"
 
 # 循环执行：ES 重启/配置变更后可自动恢复
@@ -95,5 +115,5 @@ while true; do
   else
     echo "$(date) - 部分导入失败，10s 后重试"
   fi
-  sleep "${ES_INIT_INTERVAL:-300}"
+  sleep "${ES_INIT_INTERVAL:-30}"
 done

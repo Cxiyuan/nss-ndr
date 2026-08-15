@@ -142,12 +142,6 @@
     },
     {
       "remove": {
-        "field": "message2",
-        "ignore_missing": true
-      }
-    },
-    {
-      "remove": {
         "field": "pipeline",
         "ignore_missing": true
       }
