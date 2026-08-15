@@ -47,7 +47,8 @@ create_app_users() {
   # 校验应用用户密码是否已是期望值；一致则跳过（避免每次重启重置密码造成瞬时认证失败）
   check_user_pass() {
     local name=$1 pass=$2
-    curl -sk -u "$name:$pass" "$ES_URL/_security/_authenticate" -o /dev/null 2>/dev/null
+    # 必须校验 HTTP 2xx：curl 对 401 默认退出码为 0，只看退出码会把未设置密码误判为已正确
+    curl -sk -u "$name:$pass" -o /dev/null -w "%{http_code}" "$ES_URL/_security/_authenticate" 2>/dev/null | grep -q "^2"
   }
   create_user() {
     local name=$1 pass=$2 roles=$3
