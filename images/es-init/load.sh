@@ -40,7 +40,7 @@ import_json() {
 
 create_app_users() {
   [ "$ES_SECURITY" = "true" ] || return 0
-  [ -n "$FB_PASSWORD" ] && [ -n "$KIBANA_PASSWORD" ] && [ -n "$XDR_PASSWORD" ] || {
+  [ -n "$FB_PASSWORD" ] && [ -n "$XDR_PASSWORD" ] || {
     echo "warn: 缺少应用用户密码环境变量，跳过用户创建"
     return 1
   }
@@ -66,7 +66,7 @@ create_app_users() {
         echo "$(date) - 已创建/更新用户 $name"
         ;;
       *)
-        # 内置保留用户（如 kibana_system）不能用 PUT 创建/更新，改用改密 API
+        # 内置保留用户不能用 PUT 创建/更新，改用改密 API
         code=$(curl -sk $CURL_AUTH -X POST "$ES_URL/_security/user/$name/_password" \
           -H "Content-Type: application/json" \
           -d "{\"password\":\"$pass\"}" \
@@ -80,7 +80,6 @@ create_app_users() {
     esac
   }
   create_user filebeat "$FB_PASSWORD" superuser
-  create_user kibana_system "$KIBANA_PASSWORD" kibana_system
   create_user xdr-push "$XDR_PASSWORD" superuser
 }
 

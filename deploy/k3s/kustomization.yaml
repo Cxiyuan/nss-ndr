@@ -9,12 +9,8 @@ resources:
   - 30-suricata-daemonset.yaml
   - 31-zeek-daemonset.yaml
   - 40-elasticsearch.yaml
-  - 41-kibana.yaml
-  - 42-elastic-agent-daemonset.yaml
-  - 44-logstash.yaml
-  - 45-redis.yaml
+  - 43-filebeat-daemonset.yaml
   - 46-strelka.yaml
-  - 47-fleet.yaml
   - 51-xdr-push.yaml
   - 60-cleaner-cronjob.yaml
   - 55-manager.yaml
@@ -26,16 +22,6 @@ images:
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek
     newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-es-init
-    newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579
-  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-elastic-agent
-    newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579
-  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-fleet-init
-    newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579
-  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-logstash
-    newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579
-  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-kibana
-    newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579
-  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-kibana-init
     newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-xdr-push
     newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579

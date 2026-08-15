@@ -31,21 +31,6 @@ jobs:
           - name: es-init
             context: images/es-init
             file: images/es-init/Dockerfile
-          - name: elastic-agent
-            context: images/elastic-agent
-            file: images/elastic-agent/Dockerfile
-          - name: fleet-init
-            context: images/fleet-init
-            file: images/fleet-init/Dockerfile
-          - name: logstash
-            context: .
-            file: images/logstash/Dockerfile
-          - name: kibana
-            context: images/kibana
-            file: images/kibana/Dockerfile
-          - name: kibana-init
-            context: images/kibana-init
-            file: images/kibana-init/Dockerfile
           - name: ndr-manager
             context: .
             file: images/ndr-manager/Dockerfile

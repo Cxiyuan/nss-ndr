@@ -26,12 +26,6 @@ func main() {
 	}
 	defer closeDB()
 
-	kp, err := newKibanaProxy()
-	if err != nil {
-		log.Fatalf("Kibana 代理初始化失败: %v", err)
-	}
-	kibanaProxy = kp
-
 	if err := ensureDefaults(); err != nil {
 		log.Fatalf("默认配置初始化失败: %v", err)
 	}
@@ -74,8 +68,7 @@ func registerStatic(mux *http.ServeMux) {
 	}
 	fileServer := http.FileServer(http.FS(sub))
 	mux.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api" || len(r.URL.Path) >= 4 && r.URL.Path[:4] == "/api" ||
-			len(r.URL.Path) >= 7 && r.URL.Path[:7] == "/kibana" {
+		if r.URL.Path == "/api" || len(r.URL.Path) >= 4 && r.URL.Path[:4] == "/api" {
 			http.NotFound(w, r)
 			return
 		}

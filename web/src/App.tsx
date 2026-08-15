@@ -1,23 +1,20 @@
 import { useState } from "react";
-import { NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { NavLink, Route, Routes } from "react-router-dom";
 import { api, clearToken, isAuthed } from "./api";
 import Dashboard from "./pages/Dashboard";
 import ConfigPage from "./pages/ConfigPage";
 import History from "./pages/History";
 import RulesIndex from "./pages/RulesIndex";
 import Login from "./pages/Login";
-import Viz from "./pages/Viz";
 
 const nav = [
   { to: "/", label: "总览", end: true },
   { to: "/config", label: "参数配置" },
-  { to: "/viz", label: "可视化分析" },
   { to: "/rules", label: "规则" },
   { to: "/history", label: "历史与审计" },
 ];
 
 export default function App() {
-  const location = useLocation();
   const [authed, setAuthed] = useState(isAuthed());
   const [showPwd, setShowPwd] = useState(false);
   const [oldPwd, setOldPwd] = useState("");
@@ -83,7 +80,7 @@ export default function App() {
           </button>
         </div>
       </header>
-      <main className={"content" + (location.pathname === "/viz" ? " content--full" : "")}>
+      <main className="content">
         {showPwd && (
           <div className="pwd-box">
             <input
@@ -108,7 +105,6 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/config" element={<ConfigPage />} />
-          <Route path="/viz" element={<Viz />} />
           <Route path="/rules/*" element={<RulesIndex />} />
           <Route path="/history" element={<History />} />
         </Routes>

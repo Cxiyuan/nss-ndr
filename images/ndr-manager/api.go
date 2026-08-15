@@ -33,11 +33,6 @@ func registerAPI(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/password", requireAuth(apiChangePassword))
 	// XDR 分析任务下发（Bearer 令牌认证，见 apiXDRTask）
 	mux.HandleFunc("POST /api/xdr/task", apiXDRTask)
-	// Kibana 看板代理（iframe 同源嵌入，自动维护 Kibana 会话）
-	// 按具体方法注册，避免与 SPA 兜底路由 "GET /" 冲突（Go 1.22+ ServeMux 规则）
-	for _, m := range []string{"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"} {
-		mux.Handle(m+" /kibana/", requireAuth(kibanaProxy.ServeHTTP))
-	}
 	mux.HandleFunc("GET /api/config", requireAuth(apiGetFullConfig))
 	mux.HandleFunc("GET /api/config/schema", requireAuth(apiConfigSchema))
 	mux.HandleFunc("PUT /api/config", requireAuth(apiSaveFormConfig))

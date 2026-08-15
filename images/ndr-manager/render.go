@@ -65,7 +65,6 @@ func renderAll(c FullConfig) (*renderedData, error) {
 		"zeekctl.cfg":    "templates/zeekctl.cfg",
 		"networks.cfg":   "templates/networks.cfg",
 		"config.zeek":    "templates/config.zeek",
-		"kibana.yml":     "templates/kibana.yml",
 	}
 	for key, rel := range templates {
 		content, err := tplFS.ReadFile(rel)

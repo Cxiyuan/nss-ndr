@@ -45,8 +45,6 @@ spec:
               valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: elastic-password}}
             - name: FB_PASSWORD
               valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: filebeat-password}}
-            - name: KIBANA_PASSWORD
-              valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: kibana-password}}
             - name: XDR_PASSWORD
               valueFrom: {secretKeyRef: {name: nss-ndr-secrets, key: xdr-push-password}}
           resources:

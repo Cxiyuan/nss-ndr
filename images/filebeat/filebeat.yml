@@ -1,0 +1,94 @@
+# NSS-NDR standalone filebeat 配置（2026-08-15 架构：NDR=数据源+线索+执行者）
+# 采集 Suricata eve / Zeek 日志 / Strelka 结果，直连 ES（data stream 由 ingest pipeline 路由）
+filebeat.inputs:
+  # Suricata eve（告警线索 + 其他事件）
+  - type: filestream
+    id: suricata-eve
+    enabled: true
+    paths:
+      - /nsm/suricata/eve-*.json
+    parsers:
+      - ndjson:
+          target: ""
+    processors:
+      - script:
+          lang: javascript
+          source: |
+            function process(event) {
+              var et = event.Get("event_type") || "other";
+              event.Put("@metadata.pipeline", et === "alert" ? "suricata.alert" : "suricata.common");
+              var src = (event.Get("log.file.fingerprint") || "") + "|" + (event.Get("log.offset") || "");
+              var h = 5381;
+              for (var i = 0; i < src.length; i++) { h = ((h << 5) + h + src.charCodeAt(i)) >>> 0; }
+              event.Put("metadata._id", "nss-" + h.toString(16));
+            }
+      - add_fields:
+          target: event
+          fields:
+            category: network
+            module: suricata
+
+  # Zeek 日志（按文件名映射 pipeline：zeek.<type>）
+  - type: filestream
+    id: zeek-logs
+    enabled: true
+    paths:
+      - /nsm/zeek/logs/current/*.log
+    processors:
+      - dissect:
+          tokenizer: "/nsm/zeek/logs/current/%{pipeline}.log"
+          field: log.file.path
+          target_prefix: ""
+      - script:
+          lang: javascript
+          source: |
+            function process(event) {
+              var pl = event.Get("pipeline");
+              if (pl) event.Put("@metadata.pipeline", "zeek." + pl);
+              var src = (event.Get("log.file.fingerprint") || "") + "|" + (event.Get("log.offset") || "");
+              var h = 5381;
+              for (var i = 0; i < src.length; i++) { h = ((h << 5) + h + src.charCodeAt(i)) >>> 0; }
+              event.Put("metadata._id", "nss-" + h.toString(16));
+            }
+      - add_fields:
+          target: event
+          fields:
+            category: network
+            module: zeek
+
+  # Strelka 文件分析结果
+  - type: filestream
+    id: strelka-logs
+    enabled: true
+    paths:
+      - /nsm/strelka/log/strelka.log
+    parsers:
+      - ndjson:
+          target: ""
+    processors:
+      - script:
+          lang: javascript
+          source: |
+            function process(event) {
+              event.Put("@metadata.pipeline", "strelka.file");
+              var src = (event.Get("log.file.fingerprint") || "") + "|" + (event.Get("log.offset") || "");
+              var h = 5381;
+              for (var i = 0; i < src.length; i++) { h = ((h << 5) + h + src.charCodeAt(i)) >>> 0; }
+              event.Put("metadata._id", "nss-" + h.toString(16));
+            }
+      - add_fields:
+          target: event
+          fields:
+            category: file
+            module: strelka
+
+output.elasticsearch:
+  hosts: ["${ES_HOST:http://nss-elasticsearch:9200}"]
+  username: "${ES_USERNAME:filebeat}"
+  password: "${ES_PASSWORD}"
+  pipeline: "%{[@metadata.pipeline]}"
+  allow_older_versions: true
+
+script.enabled: true
+logging.level: info
+logging.to_stderr: true

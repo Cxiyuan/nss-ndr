@@ -61,54 +61,10 @@ type: Opaque
 stringData:
   elastic-password: "nss-ndr@2026"
   filebeat-password: $(openssl rand -hex 16)
-  kibana-password: $(openssl rand -hex 16)
-  kibana-encryption-key: $(openssl rand -hex 32)
-  kibana-encrypted-saved-objects-key: $(openssl rand -hex 32)
-  kibana-reporting-key: $(openssl rand -hex 32)
   xdr-push-password: $(openssl rand -hex 16)
   redis-password: $(openssl rand -hex 16)
 EOF
   log "已生成 $target（elastic 登录：elastic / nss-ndr@2026）"
-}
-
-# 生成数据总线 TLS 证书 Secret（namespace 已存在时调用）
-gen_certs() {
-  local dir cnf
-  dir=$(mktemp -d)
-  cnf="$dir/openssl.cnf"
-  cat > "$cnf" <<'EOF'
-[req]
-distinguished_name = dn
-req_extensions = ext
-[dn]
-[ext]
-subjectAltName = DNS:nss-logstash,DNS:nss-fleet-server,DNS:localhost,IP:127.0.0.1
-EOF
-  echo "== 生成 CA / 服务端 / 客户端证书 =="
-  openssl genrsa -out "$dir/ca.key" 2048 2>/dev/null
-  openssl req -x509 -new -nodes -key "$dir/ca.key" -sha256 -days 3650 \
-    -out "$dir/ca.crt" -subj "/CN=nss-ndr-ca"
-  for srv in logstash fleet-server; do
-    openssl genrsa -out "$dir/$srv.key" 2048 2>/dev/null
-    openssl req -new -key "$dir/$srv.key" -out "$dir/$srv.csr" -subj "/CN=nss-$srv" -config "$cnf"
-    openssl x509 -req -in "$dir/$srv.csr" -CA "$dir/ca.crt" -CAkey "$dir/ca.key" -CAcreateserial \
-      -out "$dir/$srv.crt" -days 3650 -sha256 -extfile "$cnf" -extensions ext
-  done
-  openssl genrsa -out "$dir/elastic-agent.key" 2048 2>/dev/null
-  openssl req -new -key "$dir/elastic-agent.key" -out "$dir/elastic-agent.csr" -subj "/CN=nss-elastic-agent"
-  openssl x509 -req -in "$dir/elastic-agent.csr" -CA "$dir/ca.crt" -CAkey "$dir/ca.key" -CAcreateserial \
-    -out "$dir/elastic-agent.crt" -days 3650 -sha256
-  kubectl -n "$NS" create secret generic nss-ndr-certs \
-    --from-file=ca.crt="$dir/ca.crt" \
-    --from-file=logstash.crt="$dir/logstash.crt" \
-    --from-file=logstash.key="$dir/logstash.key" \
-    --from-file=elastic-agent.crt="$dir/elastic-agent.crt" \
-    --from-file=elastic-agent.key="$dir/elastic-agent.key" \
-    --from-file=fleet-server.crt="$dir/fleet-server.crt" \
-    --from-file=fleet-server.key="$dir/fleet-server.key" \
-    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-  rm -rf "$dir"
-  log "证书 Secret nss-ndr-certs 已创建"
 }
 
 # 渲染 ConfigMap（内嵌 render-configs.py）
@@ -132,7 +88,7 @@ TEMPLATES = {
     "networks.cfg": "images/zeek/files/networks.cfg",
 }
 STATIC_CONFIGS = {
-    "kibana.yml": "images/kibana/kibana.yml",
+    "filebeat.yml": "images/filebeat/filebeat.yml",
     "config.zeek": "images/zeek/files/config.zeek",
     "strelka_backend.yaml": "images/strelka-backend/files/backend.yaml",
     "strelka_logging.yaml": "images/strelka-backend/files/logging.yaml",
@@ -311,14 +267,7 @@ cmd_install() {
   gen_secret
   log "创建命名空间..."
   kubectl create ns "$NS" --dry-run=client -o yaml 2>/dev/null | kubectl apply -f - >/dev/null
-  if ! kubectl get secret nss-ndr-certs -n "$NS" >/dev/null 2>&1; then
-    gen_certs
-  else
-    log "证书 Secret 已存在，跳过"
-  fi
 
-  # fleet-init Job 不可变，重复部署先删旧 Job
-  kubectl delete job nss-fleet-init -n "$NS" --ignore-not-found >/dev/null 2>&1 || true
   kubectl apply -k "$DEPLOY_DIR"
   log "资源已应用，等待组件就绪（超时 ${timeout}s）..."
 
@@ -341,8 +290,7 @@ cmd_install() {
   log "================ 部署完成 ================"
   echo ""
   echo "  探针管理后台 : http://<本机IP>:$manager_port   （初始账号 admin / admin，登录后请改密）"
-  echo "  Kibana       : http://<本机IP>:30601/kibana   （elastic / nss-ndr@2026）"
-  echo "  NDR 看板     : 已内嵌于管理后台“可视化分析”菜单"
+  echo "  XDR 任务接口 : POST http://<本机IP>:$manager_port/api/xdr/task（Bearer 令牌，见参数配置-告警推送）"
   echo "  镜像口       : $interface"
   echo "  探针 ID      : $(python3 -c "import yaml,sys; print(yaml.safe_load(open('$DEPLOY_DIR/10-configmap.yaml'))['data'].get('sensor_id',''))" 2>/dev/null)"
   echo ""
@@ -397,6 +345,7 @@ cmd_uninstall() {
       while read -r img; do ctr -n k8s.io images rm "$img" >/dev/null 2>&1 || true; done
     for prefix in \
       docker.elastic.co/elasticsearch/elasticsearch \
+      docker.elastic.co/beats/filebeat \
       docker.io/library/redis \
       docker.io/library/busybox; do
       ctr -n k8s.io images ls 2>/dev/null | awk '{print $1}' | sort -u |
@@ -450,6 +399,7 @@ cmd_save_images() {
     project_images+=("$img")
   done < <(grep "name: ghcr.io/cxiyuan/nss-ndr" "$DEPLOY_DIR/kustomization.yaml" | sed 's/.*name: //' | sort -u)
   local base_images=(
+    "docker.elastic.co/beats/filebeat:9.3.3"
     "docker.elastic.co/elasticsearch/elasticsearch:9.3.3"
     "docker.io/library/redis:7-alpine"
     "docker.io/library/busybox:1.36"

@@ -116,12 +116,8 @@ var fieldDefs = []FieldSpec{
 var resourceTargets = map[string][3]string{
 	"suricata":           {"daemonsets", "nss-suricata", "suricata"},
 	"zeek":               {"daemonsets", "nss-zeek", "zeek"},
+	"filebeat":           {"daemonsets", "nss-filebeat", "filebeat"},
 	"elasticsearch":      {"deployments", "nss-elasticsearch", "elasticsearch"},
-	"kibana":             {"deployments", "nss-kibana", "kibana"},
-	"logstash":           {"deployments", "nss-logstash", "logstash"},
-	"redis":              {"deployments", "nss-redis", "redis"},
-	"elastic-agent":      {"daemonsets", "nss-elastic-agent", "elastic-agent"},
-	"fleet-server":       {"deployments", "nss-fleet-server", "fleet-server"},
 	"ndr-manager":        {"deployments", "nss-ndr-manager", "ndr-manager"},
 	"xdr-push":           {"deployments", "nss-xdr-push", "xdr-push"},
 	"filecheck":          {"deployments", "nss-strelka-filecheck", "filecheck"},
@@ -142,10 +138,9 @@ func resourceFieldDefs() []FieldSpec {
 	order := 60
 	for _, c := range comps {
 		label := map[string]string{
-			"suricata": "Suricata", "zeek": "Zeek", "elasticsearch": "Elasticsearch",
-			"kibana": "Kibana", "logstash": "Logstash", "redis": "Redis",
-			"elastic-agent": "采集 Agent", "fleet-server": "Fleet Server",
-			"ndr-manager": "管理后台", "xdr-push": "告警推送",
+			"suricata": "检测引擎", "zeek": "网络元数据", "filebeat": "日志采集",
+			"elasticsearch": "数据存储",
+			"ndr-manager":   "管理后台", "xdr-push": "告警推送",
 			"filecheck": "文件检查", "strelka-backend": "Strelka 扫描",
 			"strelka-manager": "Strelka 管理", "strelka-frontend": "Strelka 前端",
 			"strelka-filestream": "Strelka 文件流",
@@ -185,12 +180,8 @@ func defaultResources() map[string]any {
 	return map[string]any{
 		"suricata":           map[string]any{"requests": map[string]any{"cpu": "100m", "memory": "256Mi"}, "limits": map[string]any{"cpu": "4", "memory": "4Gi"}},
 		"zeek":               map[string]any{"requests": map[string]any{"cpu": "100m", "memory": "256Mi"}, "limits": map[string]any{"cpu": "4", "memory": "4Gi"}},
+		"filebeat":           map[string]any{"requests": map[string]any{"cpu": "50m", "memory": "128Mi"}, "limits": map[string]any{"cpu": "1", "memory": "512Mi"}},
 		"elasticsearch":      map[string]any{"requests": map[string]any{"cpu": "200m", "memory": "2Gi"}, "limits": map[string]any{"cpu": "2", "memory": "4Gi"}},
-		"kibana":             map[string]any{"requests": map[string]any{"cpu": "100m", "memory": "256Mi"}, "limits": map[string]any{"cpu": "1", "memory": "1.5Gi"}},
-		"logstash":           map[string]any{"requests": map[string]any{"cpu": "100m", "memory": "256Mi"}, "limits": map[string]any{"cpu": "1", "memory": "2Gi"}},
-		"redis":              map[string]any{"requests": map[string]any{"cpu": "100m", "memory": "128Mi"}, "limits": map[string]any{"cpu": "500m", "memory": "512Mi"}},
-		"elastic-agent":      map[string]any{"requests": map[string]any{"cpu": "100m", "memory": "256Mi"}, "limits": map[string]any{"cpu": "1", "memory": "1Gi"}},
-		"fleet-server":       map[string]any{"requests": map[string]any{"cpu": "100m", "memory": "256Mi"}, "limits": map[string]any{"cpu": "1", "memory": "1Gi"}},
 		"ndr-manager":        map[string]any{"requests": map[string]any{"cpu": "100m", "memory": "256Mi"}, "limits": map[string]any{"cpu": "500m", "memory": "512Mi"}},
 		"xdr-push":           map[string]any{"requests": map[string]any{"cpu": "100m", "memory": "128Mi"}, "limits": map[string]any{"cpu": "500m", "memory": "256Mi"}},
 		"filecheck":          map[string]any{"requests": map[string]any{"cpu": "50m", "memory": "128Mi"}, "limits": map[string]any{"cpu": "200m", "memory": "512Mi"}},

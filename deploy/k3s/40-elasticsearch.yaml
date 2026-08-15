@@ -73,11 +73,6 @@ spec:
                 secretKeyRef:
                   name: nss-ndr-secrets
                   key: filebeat-password
-            - name: KIBANA_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: nss-ndr-secrets
-                  key: kibana-password
             - name: XDR_PASSWORD
               valueFrom:
                 secretKeyRef:

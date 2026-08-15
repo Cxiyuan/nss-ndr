@@ -121,14 +121,13 @@ func applyConfig(comment string) error {
 
 	// 2. 滚动重启受影响 workload（DaemonSet 需重建 pod 加载新配置）
 	restarted := []string{}
-	for _, ds := range []string{"nss-suricata", "nss-zeek", "nss-elastic-agent"} {
+	for _, ds := range []string{"nss-suricata", "nss-zeek", "nss-filebeat"} {
 		if err := rolloutRestart("daemonsets", ds); err != nil {
 			return fmt.Errorf("重启 %s 失败: %w", ds, err)
 		}
 		restarted = append(restarted, ds)
 	}
-	for _, dep := range []string{"nss-elasticsearch", "nss-kibana", "nss-logstash", "nss-redis",
-		"nss-fleet-server", "nss-xdr-push", "nss-ndr-manager",
+	for _, dep := range []string{"nss-elasticsearch", "nss-xdr-push", "nss-ndr-manager",
 		"nss-strelka-frontend", "nss-strelka-backend", "nss-strelka-filestream",
 		"nss-strelka-manager", "nss-strelka-filecheck"} {
 		if err := rolloutRestart("deployments", dep); err != nil {

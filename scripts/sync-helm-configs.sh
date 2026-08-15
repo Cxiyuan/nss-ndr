@@ -13,7 +13,7 @@ cp images/zeek/files/policy/cve-2020-0601/* "$DEST/policy/cve-2020-0601/"
 mkdir -p "$DEST/policy/intel"
 cp images/zeek/files/policy/intel/* "$DEST/policy/intel/"
 cp images/zeek/files/config.zeek "$DEST/"
-cp images/kibana/kibana.yml "$DEST/"
+cp images/filebeat/filebeat.yml "$DEST/"
 mkdir -p "$DEST/strelka/taste"
 cp images/strelka-backend/files/backend.yaml \
    images/strelka-backend/files/logging.yaml \

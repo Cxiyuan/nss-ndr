@@ -9,13 +9,12 @@ docs/                     # 设计文档（调研报告、架构设计）
 images/
   suricata/               # Suricata 8.0.5 镜像（NIDS + pcap-log）
   zeek/                   # Zeek 8.0.8 镜像（元数据 + 文件提取）
-  elastic-agent/          # Elastic Agent（Fleet 托管，对齐 SO 采集层）
-  fleet-init/             # Fleet 供给（输出/策略/集成/令牌，对齐 SO so-elastic-fleet-setup）
+  filebeat/               # standalone filebeat（采集 Suricata/Zeek/Strelka 日志直连 ES）
   strelka-backend/        # Strelka 扫描 worker（YARA/exiftool/PE/PDF...，参照 SO）
   strelka-manager/        # Strelka frontend / filestream / manager（target/strelka Go）
   strelka-rules/          # YARA 规则编译（initContainer，securityonion-yara）
   filecheck/              # Zeek 提取文件搬运 + SHA1 去重（filecheck）
-  kibana-init/            # Kibana NDR 看板自动导入（sidecar）
+  ndr-manager/            # 探针管理后台（配置/规则/状态 + XDR 分析任务执行）
 deploy/k3s/               # k3s 清单（namespace/ConfigMap/PV/DaemonSet）
 configs/                  # 探针配置文件示例（probe.yaml）
 scripts/                  # 配置渲染等开发工具
@@ -70,12 +69,10 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
 - 推送 `master` 分支或 `v*` tag 时，`.github/workflows/build-images.yml` 自动构建 Suricata/Zeek 镜像并推送到 GHCR：
 - `ghcr.io/cxiyuan/nss-ndr/nss-ndr-suricata:latest` / `:<git-sha>` / `:<tag>`
 - `ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek:latest` / `:<git-sha>` / `:<tag>`
-  - 另有 `nss-ndr-es-init`、`nss-ndr-elastic-agent`、`nss-ndr-kibana`（M1/M8）
-  - 另有 `nss-ndr-detections`、`nss-ndr-xdr-push`（M2）
+  - 另有 `nss-ndr-es-init`、`nss-ndr-ndr-manager`、`nss-ndr-xdr-push`
   - 另有 `nss-ndr-strelka-backend`、`nss-ndr-strelka-manager`、`nss-ndr-strelka-rules`、
     `nss-ndr-filecheck`（文件提取 + Strelka）
-  - 另有 `nss-ndr-kibana-init`（Kibana NDR 看板导入）
-  - 另有 `nss-ndr-elastic-agent`、`nss-ndr-fleet-init`（采集 + Fleet）
+  - filebeat 使用官方镜像 `docker.elastic.co/beats/filebeat:9.3.3`（不构建）
 - 也可在 GitHub Actions 页面手动触发（workflow_dispatch）。
 - 固定部署版本：把 `deploy/k3s/kustomization.yaml` 中 `images[].newTag` 改为对应 git sha。
 - 前提：基础镜像 `ghcr.io/security-onion-solutions/so-suricata:3.1.0`、`so-zeek:3.1.0` 可被构建机拉取（public）。
@@ -87,10 +84,10 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
   - k3s 路径：`deploy.sh install` 自动生成 `deploy/k3s/25-secret.yaml`
     （elastic 默认 `nss-ndr@2026`，其余服务账号随机；也可参照 `deploy/k3s/25-secret.yaml.example` 手工修改）
   - Helm 路径：`values.secrets`（elastic 默认已固化 `nss-ndr@2026`）
-  - es-init 会自动创建 filebeat / kibana_system / xdr-push 应用用户。
-- Kibana/ES 登录账号：`elastic`，默认密码 `nss-ndr@2026`；NDR 看板由 kibana-init 自动导入。
+  - es-init 会自动创建 filebeat / xdr-push 应用用户。
+- ES 管理员：`elastic`，默认密码 `nss-ndr@2026`（仅内部使用，不对用户开放）。
 
-### Fleet 部署说明（M9）
+### 采集与上报（2026-08-15 架构）
 
 ```bash
 # 一键部署（自动生成证书/凭据/ConfigMap 并 apply）
@@ -100,15 +97,14 @@ bash releases/deploy.sh save-images
 # 单步操作：render（渲染 ConfigMap）/ load-images（本地加载镜像）/ uninstall（卸载）
 ```
 
-启动顺序与供给：
+NDR 定位：采集 + 存储 + 上报线索 + 执行 XDR 下发的分析任务；XDR 为流程编排与决策平台。
 
-1. ES/Kibana 就绪后，`fleet-init` Job 自动执行供给（幂等，可重复跑）：
-   - 创建 ES 输出 `grid-elasticsearch` 与 Logstash 输出 `so-manager_logstash`（5055，mTLS）
-   - 对齐 SO 顺序：ES 输出临时设为全局默认 → 创建 `fleet_server` 集成 →
-     把 FleetServer 策略输出钉到 ES（此时等于默认，basic license 不拦按策略覆盖）→
-     Logstash 恢复全局默认；数据策略 `nss-ndr` 走 Logstash，FleetServer 走 ES
-   - 创建 suricata/zeek/strelka 三个 filestream 集成、enrollment token，
-     写 Secret `nss-fleet-enrollment`（es_service_token / enrollment_token / ca_fingerprint）
+1. **采集**：standalone filebeat（DaemonSet）读取 `/nsm` 下 Suricata eve、Zeek 日志、Strelka 结果，
+   按文件名/事件类型映射 ingest pipeline，直连 ES 写入 data stream（无 Kibana/Fleet/Logstash 依赖）
+2. **线索上报**：xdr-push 定时把 `logs-suricata.alerts-so` 中的检测线索推送到 XDR Webhook
+3. **分析任务**：XDR 通过 `POST /api/xdr/task`（Bearer 令牌）下发检索分析任务，
+   NDR 作为执行者在本地元数据上完成关联分析并返回结构化结果（后台任务，不向探针用户展示）
+4. **管理 UI**：仅设备管理（参数配置 / 规则启停 / 状态），不提供数据浏览
 2. `fleet-server` 用 Secret 中的 service token 启动（容器必需 `FLEET_URL` 自注册 + `FLEET_CA` 信任）。
 3. `elastic-agent` DaemonSet 用 enrollment token 接入（容器模式**必须 `FLEET_ENROLL=1`**，
    否则以 standalone 跑默认配置不注册；`FLEET_CA` 指向挂载的 CA 证书）。

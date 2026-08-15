@@ -1,0 +1,61 @@
+# standalone filebeat：采集 /nsm 下 Suricata/Zeek/Strelka 日志直连 ES（无 Fleet/Kibana 依赖）
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nss-filebeat
+  namespace: nss-ndr
+  labels:
+    app: nss-filebeat
+spec:
+  selector:
+    matchLabels:
+      app: nss-filebeat
+  template:
+    metadata:
+      labels:
+        app: nss-filebeat
+    spec:
+      hostNetwork: false
+      containers:
+        - name: filebeat
+          image: docker.elastic.co/beats/filebeat:9.3.3
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ES_HOST
+              value: "http://nss-elasticsearch:9200"
+            - name: ES_USERNAME
+              value: "filebeat"
+            - name: ES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nss-ndr-secrets
+                  key: filebeat-password
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/filebeat/filebeat.yml
+              subPath: filebeat.yml
+              readOnly: true
+            - name: nsm
+              mountPath: /nsm
+              readOnly: true
+            - name: data
+              mountPath: /usr/share/filebeat/data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: nss-ndr-config
+            items:
+              - key: filebeat.yml
+                path: filebeat.yml
+        - name: nsm
+          persistentVolumeClaim:
+            claimName: nss-ndr-nsm
+        - name: data
+          emptyDir: {}

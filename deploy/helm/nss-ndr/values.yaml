@@ -63,20 +63,14 @@ probeConfig:
     retry_max: 5
     event_types:
       - suricata.alert
-      - zeek.notice
 
 # 凭据（部署前修改）
 secrets:
   elastic: nss-ndr@2026
   filebeat: CHANGE_ME_filebeat
-  kibana: CHANGE_ME_kibana
-  kibanaEncryption: CHANGE_ME_kibana_encryption
-  kibanaEncryptedSavedObjects: CHANGE_ME_kibana_eso
-  kibanaReporting: CHANGE_ME_kibana_reporting
   xdrPush: CHANGE_ME_xdr
 
 service:
-  kibanaNodePort: 30601
   detectionsNodePort: 30602
 
 cleaner:
@@ -90,6 +84,3 @@ resources:
   zeek:
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: "4", memory: 4Gi}
-  logstash:
-    requests: {cpu: 100m, memory: 256Mi}
-    limits: {cpu: "1", memory: 2Gi}
