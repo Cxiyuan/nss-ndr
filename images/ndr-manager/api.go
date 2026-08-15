@@ -539,7 +539,11 @@ func apiEvidenceSigma(w http.ResponseWriter, r *http.Request) {
 		if ts := parseInterval(sy.Correlation.Timespan); ts > 0 {
 			window = ts
 		}
-		matches, err := executeCorrelationRule(rule, sy.Correlation, window, true)
+		alertPolicy := "strict"
+		if c, err := loadFull(); err == nil && c.Detections.AlertPolicy != "" {
+			alertPolicy = c.Detections.AlertPolicy
+		}
+		matches, err := executeCorrelationRule(rule, sy.Correlation, window, true, alertPolicy)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return

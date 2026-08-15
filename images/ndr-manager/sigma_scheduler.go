@@ -149,7 +149,11 @@ func executeSigmaRule(r SigmaRule, window time.Duration) error {
 		if ts := parseInterval(sy.Correlation.Timespan); ts > 0 {
 			window = ts
 		}
-		matches, err := executeCorrelationRule(r, sy.Correlation, window, false)
+		alertPolicy := "strict"
+		if c, err := loadFull(); err == nil && c.Detections.AlertPolicy != "" {
+			alertPolicy = c.Detections.AlertPolicy
+		}
+		matches, err := executeCorrelationRule(r, sy.Correlation, window, false, alertPolicy)
 		if err != nil {
 			return err
 		}
@@ -309,7 +313,12 @@ type correlationMatch struct {
 //	required=confirm-> 仅确认条件命中即告警（Zeek-only 场景）
 //
 // dryRun=true 时不写 ES 告警，供证据预览接口使用。
-func executeCorrelationRule(r SigmaRule, corr *sigmaCorrelation, window time.Duration, dryRun bool) ([]correlationMatch, error) {
+// allowFallback 是否允许"未确认回退"输出：strict 策略下仅输出确认告警
+func allowFallback(alertPolicy, fallback string) bool {
+	return alertPolicy != "strict" && fallback != ""
+}
+
+func executeCorrelationRule(r SigmaRule, corr *sigmaCorrelation, window time.Duration, dryRun bool, alertPolicy string) ([]correlationMatch, error) {
 	groupBy := corr.GroupBy
 	if groupBy == "" {
 		groupBy = "network.community_id"
@@ -373,11 +382,11 @@ func executeCorrelationRule(r SigmaRule, corr *sigmaCorrelation, window time.Dur
 		for key, hs := range clueKeys {
 			if ch, ok := confirmKeys[key]; ok {
 				matches = append(matches, correlationMatch{Key: key, ClueHits: hs, ConfirmHits: ch, Confirmed: true})
-			} else if corr.Fallback == "clue_only" {
+			} else if allowFallback(alertPolicy, corr.Fallback) && corr.Fallback == "clue_only" {
 				matches = append(matches, correlationMatch{Key: key, ClueHits: hs, Confirmed: false})
 			}
 		}
-		if corr.Fallback == "confirm_only" {
+		if allowFallback(alertPolicy, corr.Fallback) && corr.Fallback == "confirm_only" {
 			for key, ch := range confirmKeys {
 				if _, ok := clueKeys[key]; !ok {
 					matches = append(matches, correlationMatch{Key: key, ConfirmHits: ch, Confirmed: false})

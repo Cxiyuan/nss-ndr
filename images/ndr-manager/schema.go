@@ -93,6 +93,9 @@ var fieldDefs = []FieldSpec{
 	// 检测
 	{Key: "detections.default_ruleset", Label: "默认规则集", Type: "select", Options: []string{"none", "builtin"},
 		Group: "detections", Order: 30, Section: cfgDetections, Help: "none=不加载内置规则；builtin=启用内置规则集"},
+	{Key: "detections.alert_policy", Label: "告警输出策略", Type: "select", Options: []string{"strict", "balanced"},
+		Group: "detections", Order: 31, Section: cfgDetections,
+		Help: "strict=仅输出经网络元数据确认的告警（高质量、低噪音，推荐）；balanced=线索未确认时降级输出低置信度告警（告警更全但有噪音）"},
 
 	// XDR 推送
 	{Key: "xdr.webhook.url", Label: "Webhook 地址", Type: "string", Group: "xdr", Order: 40, Section: cfgXdr},

@@ -78,6 +78,8 @@ type FullConfig struct {
 	} `yaml:"elasticsearch"`
 	Detections struct {
 		DefaultRuleset string `yaml:"default_ruleset"`
+		// AlertPolicy 事件告警输出策略：strict=仅输出 Zeek 确认的告警；balanced=未确认线索降级输出低置信度告警
+		AlertPolicy string `yaml:"alert_policy"`
 	} `yaml:"detections"`
 	Xdr struct {
 		Webhook struct {
@@ -123,6 +125,7 @@ func defaultConfig() FullConfig {
 	c.Elasticsearch.Retention.MetadataDays = 60
 	c.Elasticsearch.Retention.AlertsDays = 365
 	c.Detections.DefaultRuleset = "none"
+	c.Detections.AlertPolicy = "strict"
 	c.Xdr.TimeoutS = 10
 	c.Xdr.PushIntervalS = 2
 	c.Xdr.RetryMax = 5
