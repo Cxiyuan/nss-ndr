@@ -48,13 +48,10 @@ scripts/                  # 配置渲染等开发工具
 cp configs/probe.yaml.example configs/probe.yaml
 $EDITOR configs/probe.yaml
 
-# 2. 渲染 k3s 清单中的 ConfigMap
-python3 releases/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
-# 注意：10-configmap.yaml 为生成物不入库；镜像口(interface)为部署环境参数，
-# 必须在本步骤前于 probe.yaml 中按服务器实际网卡填写（空值会渲染失败）
-
-# 3. 部署到 k3s
-kubectl apply -k deploy/k3s/
+# 2. 一键部署（渲染 ConfigMap、生成凭据/证书、本地加载离线镜像、apply、等待就绪）
+bash releases/deploy.sh install -i enp5s0
+# 注意：镜像口(interface)为部署环境参数，必须按服务器实际网卡填写（空值会渲染失败）
+# 离线部署：releases/images 存在时自动本地加载镜像，不依赖网络拉取
 kubectl -n nss-ndr get pods
 ```
 
@@ -87,8 +84,8 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
 
 - 节点需设置 `vm.max_map_count=262144`（`sysctl -w vm.max_map_count=262144`，写入 `/etc/sysctl.d/` 持久化）。
 - M2/M3：ES 已启用 xpack security；部署前生成凭据：
-  - k3s 路径：`bash releases/gen-secret.sh`（elastic 默认 `nss-ndr@2026`，其余服务账号随机；
-    也可参照 `deploy/k3s/25-secret.yaml.example` 手工修改）
+  - k3s 路径：`deploy.sh install` 自动生成 `deploy/k3s/25-secret.yaml`
+    （elastic 默认 `nss-ndr@2026`，其余服务账号随机；也可参照 `deploy/k3s/25-secret.yaml.example` 手工修改）
   - Helm 路径：`values.secrets`（elastic 默认已固化 `nss-ndr@2026`）
   - es-init 会自动创建 filebeat / kibana_system / xdr-push 应用用户。
 - Kibana/ES 登录账号：`elastic`，默认密码 `nss-ndr@2026`；NDR 看板由 kibana-init 自动导入。
@@ -96,12 +93,11 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
 ### Fleet 部署说明（M9）
 
 ```bash
-# 证书（fleet-server / elastic-agent / logstash 双向 TLS 共用同一 CA）
-bash releases/gen-certs.sh
-# 渲染 ConfigMap + 生成 Secret 后整体应用
-python3 releases/render-configs.py configs/probe.yaml deploy/k3s/10-configmap.yaml
-bash releases/gen-secret.sh
-kubectl apply -k deploy/k3s/
+# 一键部署（自动生成证书/凭据/ConfigMap 并 apply）
+bash releases/deploy.sh install -i enp5s0
+# 离线镜像：先在本机导出（需 skopeo）
+bash releases/deploy.sh save-images
+# 单步操作：render（渲染 ConfigMap）/ load-images（本地加载镜像）/ uninstall（卸载）
 ```
 
 启动顺序与供给：
