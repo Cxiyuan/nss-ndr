@@ -28,7 +28,7 @@ func buildPayload(h Hit, probeID string) map[string]any {
 	netw, _ := get("network").(map[string]any)
 	obs, _ := get("observer").(map[string]any)
 	host, _ := get("host").(map[string]any)
-	// detections.alerts：source/destination/network 在 event_data（原始命中文档）中
+	// Suricata 线索：source/destination/network 在文档顶层；zeek 元数据在 event_data 兜底
 	source := get("source")
 	if source == nil && ed != nil {
 		if v, ok := ed["source"]; ok {
@@ -47,6 +47,14 @@ func buildPayload(h Hit, probeID string) map[string]any {
 		}
 	}
 	raw := get("event_data")
+	if raw == nil {
+		// Suricata 线索文档：原始 eve 行在 event.original / message
+		if v := get("event.original"); v != nil {
+			raw = v
+		} else {
+			raw = get("message")
+		}
+	}
 
 	return map[string]any{
 		"schema_version": "1.0",

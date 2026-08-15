@@ -1,11 +1,9 @@
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import Detections from "./Detections";
-import Sigma from "./Sigma";
 import Rules from "./Rules";
 
 const subs = [
   { to: "/rules/detections", label: "事件检测" },
-  { to: "/rules/alerts", label: "事件告警" },
   { to: "/rules/custom", label: "自定义规则" },
 ];
 
@@ -28,7 +26,6 @@ export default function RulesIndex() {
         <Routes>
           <Route index element={<Navigate to="/rules/detections" replace />} />
           <Route path="detections" element={<Detections />} />
-          <Route path="alerts" element={<Sigma />} />
           <Route path="custom" element={<Rules />} />
         </Routes>
       </section>

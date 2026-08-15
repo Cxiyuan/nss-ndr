@@ -42,8 +42,8 @@ func suricataCommand(method string) (map[string]any, error) {
 		return nil, err
 	}
 	var resp struct {
-		Return  string            `json:"return"`
-		Message json.RawMessage   `json:"message"`
+		Return  string          `json:"return"`
+		Message json.RawMessage `json:"message"`
 	}
 	_ = json.Unmarshal([]byte(line), &resp)
 	out := map[string]any{"return": resp.Return}

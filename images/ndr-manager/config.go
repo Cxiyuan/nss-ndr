@@ -27,14 +27,14 @@ const (
 // FullConfig 是 probe.yaml 的完整结构（渲染与展示用）
 type FullConfig struct {
 	Probe struct {
-		ID                   string   `yaml:"id"`
-		Interface            string   `yaml:"interface"`
-		HomeNet              []string `yaml:"home_net"`
-		ExternalNet          string   `yaml:"external_net"`
-		BPF                  string   `yaml:"bpf"`
-		MinFreeGB            int      `yaml:"min_free_gb"`
-		DiskPressureThreshold int     `yaml:"disk_pressure_threshold"`
-		CleanupInterval      string   `yaml:"cleanup_interval"`
+		ID                    string   `yaml:"id"`
+		Interface             string   `yaml:"interface"`
+		HomeNet               []string `yaml:"home_net"`
+		ExternalNet           string   `yaml:"external_net"`
+		BPF                   string   `yaml:"bpf"`
+		MinFreeGB             int      `yaml:"min_free_gb"`
+		DiskPressureThreshold int      `yaml:"disk_pressure_threshold"`
+		CleanupInterval       string   `yaml:"cleanup_interval"`
 	} `yaml:"probe"`
 	Suricata struct {
 		Enabled         bool `yaml:"enabled"`
@@ -78,14 +78,14 @@ type FullConfig struct {
 	} `yaml:"elasticsearch"`
 	Detections struct {
 		DefaultRuleset string `yaml:"default_ruleset"`
-		// AlertPolicy 事件告警输出策略：strict=仅输出 Zeek 确认的告警；balanced=未确认线索降级输出低置信度告警
-		AlertPolicy string `yaml:"alert_policy"`
 	} `yaml:"detections"`
 	Xdr struct {
 		Webhook struct {
 			URL    string `yaml:"url"`
 			Secret string `yaml:"secret"`
 		} `yaml:"webhook"`
+		// TaskToken XDR 下发分析任务的 Bearer 令牌（NDR 作为执行者接收任务）
+		TaskToken     string   `yaml:"task_token"`
 		TimeoutS      int      `yaml:"timeout_s"`
 		PushIntervalS int      `yaml:"push_interval_s"`
 		RetryMax      int      `yaml:"retry_max"`
@@ -125,11 +125,10 @@ func defaultConfig() FullConfig {
 	c.Elasticsearch.Retention.MetadataDays = 60
 	c.Elasticsearch.Retention.AlertsDays = 365
 	c.Detections.DefaultRuleset = "none"
-	c.Detections.AlertPolicy = "strict"
 	c.Xdr.TimeoutS = 10
 	c.Xdr.PushIntervalS = 2
 	c.Xdr.RetryMax = 5
-	c.Xdr.EventTypes = []string{"suricata.alert", "zeek.notice", "detections.alerts"}
+	c.Xdr.EventTypes = []string{"suricata.alert"}
 	return c
 }
 

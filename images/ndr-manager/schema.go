@@ -90,13 +90,6 @@ var fieldDefs = []FieldSpec{
 	{Key: "elasticsearch.retention.alerts_days", Label: "ES 告警留存天数", Type: "number", Min: num(1), Max: num(3650), Step: 1,
 		Unit: "天", Group: "retention", Order: 25, Section: cfgElasticsearch},
 
-	// 检测
-	{Key: "detections.default_ruleset", Label: "默认规则集", Type: "select", Options: []string{"none", "builtin"},
-		Group: "detections", Order: 30, Section: cfgDetections, Help: "none=不加载内置规则；builtin=启用内置规则集"},
-	{Key: "detections.alert_policy", Label: "告警输出策略", Type: "select", Options: []string{"strict", "balanced"},
-		Group: "detections", Order: 31, Section: cfgDetections,
-		Help: "strict=仅输出经网络元数据确认的告警（高质量、低噪音，推荐）；balanced=线索未确认时降级输出低置信度告警（告警更全但有噪音）"},
-
 	// XDR 推送
 	{Key: "xdr.webhook.url", Label: "Webhook 地址", Type: "string", Group: "xdr", Order: 40, Section: cfgXdr},
 	{Key: "xdr.webhook.secret", Label: "HMAC 签名密钥", Type: "secret", Group: "xdr", Order: 41, Section: cfgXdr},
@@ -104,6 +97,8 @@ var fieldDefs = []FieldSpec{
 		Group: "xdr", Order: 42, Section: cfgXdr},
 	{Key: "xdr.push_interval_s", Label: "推送周期", Type: "number", Min: num(1), Max: num(60), Step: 1, Unit: "秒",
 		Group: "xdr", Order: 43, Section: cfgXdr},
+	{Key: "xdr.task_token", Label: "分析任务令牌", Type: "secret", Group: "xdr", Order: 44, Section: cfgXdr,
+		Help: "XDR 平台调用本探针分析任务接口（POST /api/xdr/task）时使用的 Bearer 令牌；NDR 作为执行者在本地元数据上完成关联分析"},
 	{Key: "xdr.retry_max", Label: "最大重试次数", Type: "number", Min: num(0), Max: num(10), Step: 1,
 		Group: "xdr", Order: 44, Section: cfgXdr},
 	{Key: "xdr.event_types", Label: "推送事件白名单", Type: "list", Group: "xdr", Order: 45, Section: cfgXdr,
@@ -119,20 +114,20 @@ var fieldDefs = []FieldSpec{
 
 // 资源类组件：key -> (kind, workload, container)
 var resourceTargets = map[string][3]string{
-	"suricata":          {"daemonsets", "nss-suricata", "suricata"},
-	"zeek":              {"daemonsets", "nss-zeek", "zeek"},
-	"elasticsearch":     {"deployments", "nss-elasticsearch", "elasticsearch"},
-	"kibana":            {"deployments", "nss-kibana", "kibana"},
-	"logstash":          {"deployments", "nss-logstash", "logstash"},
-	"redis":             {"deployments", "nss-redis", "redis"},
-	"elastic-agent":     {"daemonsets", "nss-elastic-agent", "elastic-agent"},
-	"fleet-server":      {"deployments", "nss-fleet-server", "fleet-server"},
-	"ndr-manager":       {"deployments", "nss-ndr-manager", "ndr-manager"},
-	"xdr-push":          {"deployments", "nss-xdr-push", "xdr-push"},
-	"filecheck":         {"deployments", "nss-strelka-filecheck", "filecheck"},
-	"strelka-backend":   {"deployments", "nss-strelka-backend", "backend"},
-	"strelka-manager":   {"deployments", "nss-strelka-manager", "manager"},
-	"strelka-frontend":  {"deployments", "nss-strelka-frontend", "frontend"},
+	"suricata":           {"daemonsets", "nss-suricata", "suricata"},
+	"zeek":               {"daemonsets", "nss-zeek", "zeek"},
+	"elasticsearch":      {"deployments", "nss-elasticsearch", "elasticsearch"},
+	"kibana":             {"deployments", "nss-kibana", "kibana"},
+	"logstash":           {"deployments", "nss-logstash", "logstash"},
+	"redis":              {"deployments", "nss-redis", "redis"},
+	"elastic-agent":      {"daemonsets", "nss-elastic-agent", "elastic-agent"},
+	"fleet-server":       {"deployments", "nss-fleet-server", "fleet-server"},
+	"ndr-manager":        {"deployments", "nss-ndr-manager", "ndr-manager"},
+	"xdr-push":           {"deployments", "nss-xdr-push", "xdr-push"},
+	"filecheck":          {"deployments", "nss-strelka-filecheck", "filecheck"},
+	"strelka-backend":    {"deployments", "nss-strelka-backend", "backend"},
+	"strelka-manager":    {"deployments", "nss-strelka-manager", "manager"},
+	"strelka-frontend":   {"deployments", "nss-strelka-frontend", "frontend"},
 	"strelka-filestream": {"deployments", "nss-strelka-filestream", "filestream"},
 }
 

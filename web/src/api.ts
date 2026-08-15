@@ -66,31 +66,6 @@ export interface Rule {
   updated_at?: string;
 }
 
-export interface SigmaRule {
-  id?: string;
-  title: string;
-  content: string;
-  category?: string;
-  product?: string;
-  service?: string;
-  level?: string;
-  status?: string;
-  schedule?: string;
-  last_run_at?: string;
-  builtin?: boolean;
-  type?: string; // simple | correlation
-  backend?: string;
-  correlation?: {
-    clue_product?: string;
-    confirm_product?: string;
-    group_by: string;
-    timespan?: string;
-    required: string;
-    fallback: string;
-    confidence: string;
-  };
-}
-
 export interface ConfigField {
   key: string;
   label: string;
@@ -175,14 +150,4 @@ export const api = {
     req<any>("POST", `/api/etopen/category/${encodeURIComponent(category)}/${enabled ? "enable" : "disable"}`),
   etopenRule: (id: string, enabled: boolean) =>
     req<any>("POST", `/api/etopen/rule/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`),
-  listSigma: () => req<SigmaRule[]>("GET", "/api/sigma"),
-  createSigma: (r: SigmaRule) => req<SigmaRule>("POST", "/api/sigma", r),
-  updateSigma: (id: string, r: SigmaRule) => req<SigmaRule>("PUT", `/api/sigma/${id}`, r),
-  deleteSigma: (id: string) => req<any>("DELETE", `/api/sigma/${id}`),
-  setSigmaStatus: (id: string, status: string) =>
-    req<any>("POST", `/api/sigma/${id}/${status === "enabled" ? "enable" : "disable"}`),
-  runSigma: (id: string) => req<any>("POST", `/api/sigma/${id}/run`),
-  previewSigma: (id: string) => req<any>("GET", `/api/sigma/${id}/preview`),
-  evidenceSigma: (id: string, window?: string) =>
-    req<any>("GET", `/api/sigma/${id}/evidence${window ? `?window=${encodeURIComponent(window)}` : ""}`),
 };

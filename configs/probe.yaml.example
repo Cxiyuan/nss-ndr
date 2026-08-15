@@ -61,6 +61,5 @@ xdr:
   timeout_s: 10
   push_interval_s: 2          # 告警轮询/推送周期
   retry_max: 5
-  event_types:                # 推送白名单（Phase 0：默认仅 Sigma 确认后的最终告警；
-                              # suricata.alert=线索、zeek.notice=上下文，不再默认外推）
-    - detections.alerts
+  event_types:                # 推送白名单（NDR 只上报检测线索；威胁确认由 XDR 下发分析任务执行）
+    - suricata.alert

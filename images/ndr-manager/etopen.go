@@ -42,11 +42,11 @@ type etopenGroupMeta struct {
 }
 
 type etopenMeta struct {
-	Version string            `json:"version"`
-	Source  string            `json:"source"`
-	SourceURL string          `json:"source_url"`
-	License string            `json:"license"`
-	Groups  []etopenGroupMeta `json:"groups"`
+	Version   string            `json:"version"`
+	Source    string            `json:"source"`
+	SourceURL string            `json:"source_url"`
+	License   string            `json:"license"`
+	Groups    []etopenGroupMeta `json:"groups"`
 }
 
 type etopenCatNode struct {

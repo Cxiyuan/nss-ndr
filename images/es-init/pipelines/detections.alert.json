@@ -1,7 +1,0 @@
-{
-  "description": "NSS-NDR detections.alert（Sigma 检测告警规范）",
-  "processors": [
-    { "set": { "field": "event.kind", "value": "alert" } },
-    { "set": { "field": "event.category", "value": ["detection"] } }
-  ]
-}

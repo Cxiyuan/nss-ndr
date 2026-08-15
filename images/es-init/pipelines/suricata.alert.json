@@ -1,5 +1,5 @@
 {
-  "description": "NSS-NDR suricata.alert（线索 signal：最终告警由 Sigma 关联确认后输出，见 nss.detection.stage=clue）",
+  "description": "NSS-NDR suricata.alert 检测线索（signal），供 XDR 下发分析任务进一步研判",
   "processors": [
     { "set": { "field": "event.kind", "value": "alert" } },
     { "set": { "field": "event.category", "value": ["network"] } },

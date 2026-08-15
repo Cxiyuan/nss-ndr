@@ -58,14 +58,14 @@ func renderAll(c FullConfig) (*renderedData, error) {
 
 	data := map[string]string{}
 	templates := map[string]string{
-		"suricata.yaml": "templates/suricata.yaml",
+		"suricata.yaml":  "templates/suricata.yaml",
 		"threshold.conf": "templates/threshold.conf",
-		"local.zeek":    "templates/local.zeek",
-		"node.cfg":      "templates/node.cfg",
-		"zeekctl.cfg":   "templates/zeekctl.cfg",
-		"networks.cfg":  "templates/networks.cfg",
-		"config.zeek":   "templates/config.zeek",
-		"kibana.yml":    "templates/kibana.yml",
+		"local.zeek":     "templates/local.zeek",
+		"node.cfg":       "templates/node.cfg",
+		"zeekctl.cfg":    "templates/zeekctl.cfg",
+		"networks.cfg":   "templates/networks.cfg",
+		"config.zeek":    "templates/config.zeek",
+		"kibana.yml":     "templates/kibana.yml",
 	}
 	for key, rel := range templates {
 		content, err := tplFS.ReadFile(rel)

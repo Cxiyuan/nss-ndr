@@ -52,11 +52,10 @@ func loadConfig() {
 	if cfg.XDR.RetryMax <= 0 {
 		cfg.XDR.RetryMax = 5
 	}
-	// Phase 0（2026-08-14）：告警出口收敛——默认只推送 Sigma 关联确认后的最终告警。
-	// Suricata 命中（suricata.alert）与 Zeek Notice 属于线索/上下文，不再默认外推；
-	// 如需保留旧行为，可在 probe.yaml 的 xdr.event_types 显式配置。
+	// 架构定位（2026-08-15）：NDR 只上报检测线索（suricata.alert）。
+	// 威胁确认/关联分析由 XDR 下发分析任务，由 NDR 执行；不再推送最终告警。
 	if len(cfg.XDR.EventTypes) == 0 {
-		cfg.XDR.EventTypes = []string{"detections.alerts"}
+		cfg.XDR.EventTypes = []string{"suricata.alert"}
 	}
 }
 
