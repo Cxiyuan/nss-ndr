@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # NSS-NDR 探针一键安装/部署脚本（幂等，可重复执行）
 # 用法:
-#   bash releases/install.sh -i enp5s0 [-c configs/probe.yaml] [-t <镜像tag>] [-p 30603] [--timeout <秒>]
+#   bash releases/install.sh -i enp5s0 [-c configs/probe.yaml] [-t <镜像tag>] [-p 30603] [--timeout <秒>] [--images <dir>]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,6 +14,7 @@ TAG=""
 MANAGER_PORT=30603
 SKIP_CHECKS=0
 TIMEOUT=1800
+IMAGES_DIR=""
 
 usage() {
   echo "用法: $0 [选项]"
@@ -22,6 +23,7 @@ usage() {
   echo "  -t, --tag <镜像tag>      覆盖镜像版本（默认用 kustomization 当前 pin）"
   echo "  -p, --manager-port <端口> 管理后台 NodePort（默认 30603）"
   echo "  --timeout <秒>            组件就绪等待超时（默认 1800，慢网络拉镜像可调大）"
+  echo "  --images <dir>            本地离线镜像目录（默认 releases/images；存在则本地加载，不拉网络）"
   echo "  --skip-checks            跳过环境预检"
   echo "  -h, --help               显示帮助"
   exit "${1:-0}"
@@ -34,6 +36,7 @@ while [[ $# -gt 0 ]]; do
     -t|--tag) TAG="$2"; shift 2 ;;
     -p|--manager-port) MANAGER_PORT="$2"; shift 2 ;;
     --timeout) TIMEOUT="$2"; shift 2 ;;
+    --images) IMAGES_DIR="$2"; shift 2 ;;
     --skip-checks) SKIP_CHECKS=1; shift ;;
     -h|--help) usage 0 ;;
     *) echo "未知参数: $1"; usage 1 ;;
@@ -43,6 +46,32 @@ done
 log()  { echo -e "\033[1;32m[install]\033[0m $*"; }
 warn() { echo -e "\033[1;33m[install]\033[0m $*"; }
 die()  { echo -e "\033[1;31m[install]\033[0m $*" >&2; exit 1; }
+
+# ---------- 本地离线镜像加载（优先于网络拉取） ----------
+load_local_images() {
+  local dir="${IMAGES_DIR:-$ROOT/releases/images}"
+  if [[ ! -d "$dir" ]]; then
+    [[ -n "$IMAGES_DIR" ]] && warn "指定的镜像目录不存在: $dir"
+    return 0
+  fi
+  command -v ctr >/dev/null 2>&1 || { warn "未找到 ctr，跳过本地镜像加载"; return 0; }
+  local tars=("$dir"/*.tar)
+  [[ -e "${tars[0]:-}" ]] || { warn "镜像目录内没有 .tar 文件: $dir"; return 0; }
+  local loaded=0
+  for tar in "${tars[@]}"; do
+    log "本地加载镜像: $(basename "$tar")"
+    if ctr -n k8s.io images import "$tar" >/tmp/ndr-ctr-import.log 2>&1; then
+      loaded=$((loaded+1))
+    elif grep -qiE "already exists|already used|already present" /tmp/ndr-ctr-import.log 2>/dev/null; then
+      log "  镜像已存在，跳过"
+    else
+      warn "镜像加载失败 $(basename "$tar"): $(tail -1 /tmp/ndr-ctr-import.log)"
+    fi
+  done
+  if [[ "$loaded" -gt 0 || -n "$IMAGES_DIR" ]]; then
+    log "本地镜像加载完成（新加载 $loaded 个）✔"
+  fi
+}
 
 # ---------- 环境预检 ----------
 if [[ "$SKIP_CHECKS" != "1" ]]; then
@@ -87,6 +116,9 @@ if [[ -n "$TAG" ]]; then
     log "镜像 tag 覆盖为: $TAG"
   fi
 fi
+
+# 本地离线镜像优先加载（k8s 拉取策略 IfNotPresent，本地已有则不再走网络）
+load_local_images
 
 # ---------- 渲染 ConfigMap ----------
 log "渲染 ConfigMap..."

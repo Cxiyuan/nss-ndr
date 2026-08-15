@@ -9,5 +9,7 @@
 /deploy/k3s/10-configmap.yaml
 # 部署机真实密码（部署时填写，勿入库）
 /deploy/k3s/25-secret.yaml
+# 离线镜像包（体积大，不入库；由 releases/save-images.sh 生成）
+/releases/images/
 web/tsconfig.tsbuildinfo
 .DS_Store
