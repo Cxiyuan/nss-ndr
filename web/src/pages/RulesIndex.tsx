@@ -4,8 +4,8 @@ import Sigma from "./Sigma";
 import Rules from "./Rules";
 
 const subs = [
-  { to: "/rules/detections", label: "事件检测（Suricata）" },
-  { to: "/rules/alerts", label: "事件告警（Sigma）" },
+  { to: "/rules/detections", label: "事件检测" },
+  { to: "/rules/alerts", label: "事件告警" },
   { to: "/rules/custom", label: "自定义规则" },
 ];
 

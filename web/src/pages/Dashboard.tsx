@@ -33,7 +33,7 @@ export default function Dashboard() {
         </div>
       )}
       <p className="hint">
-        通过左侧菜单统一维护探针、Suricata、Zeek、Elasticsearch、告警推送与规则集配置。
+        通过顶部菜单统一维护探针、检测引擎、网络元数据、存储、告警推送与规则集配置。
         修改配置后点击「保存」，再「应用下发」将更新 ConfigMap 并滚动重启组件。
       </p>
     </div>

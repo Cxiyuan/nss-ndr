@@ -56,6 +56,7 @@ export interface Section {
 export interface Rule {
   id?: string;
   name: string;
+  name_cn?: string;
   rule: string;
   threshold?: string;
   type?: string;

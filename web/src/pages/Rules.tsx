@@ -55,7 +55,7 @@ export default function Rules() {
   return (
     <div>
       <div className="row">
-        <h2 style={{ margin: 0 }}>自定义规则（Suricata）</h2>
+        <h2 style={{ margin: 0 }}>自定义规则</h2>
         <button className="btn primary" onClick={() => setEditing({ name: "", rule: "", threshold: "" })}>
           新建规则
         </button>
@@ -64,7 +64,7 @@ export default function Rules() {
         </button>
       </div>
       <p className="hint">
-        自定义单条 Suricata 规则。内置 ET Open 规则集在「事件检测」中按分类勾选加载。
+        自定义单条检测规则。内置检测规则库在「事件检测」中按分类勾选加载。
         <b>内置规则</b>（产品规则库维护）仅可启停，不可编辑/删除。
       </p>
       {msg && <div className="alert ok">{msg}</div>}
@@ -78,21 +78,21 @@ export default function Rules() {
             <input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
           </label>
           <label>
-            Suricata 规则
+            检测规则内容
             <textarea
               rows={4}
               value={editing.rule}
               onChange={(e) => setEditing({ ...editing, rule: e.target.value })}
-              placeholder='alert tcp any any -> any any (msg:"test"; sid:1000001; rev:1;)'
+              placeholder="检测规则内容（由管理员维护）"
             />
           </label>
           <label>
-            threshold（可选）
+            阈值（可选）
             <textarea
               rows={2}
               value={editing.threshold || ""}
               onChange={(e) => setEditing({ ...editing, threshold: e.target.value })}
-              placeholder='threshold gen_id 1, sig_id 1000001, type limit, track by_src, count 1, seconds 60'
+              placeholder="阈值配置（可选）"
             />
           </label>
           <div className="row">

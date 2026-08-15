@@ -514,91 +514,109 @@ th {
   overflow-y: auto;
 }
 
-/* 事件检测：分类树 + 规则明细 */
-.detect-layout {
-  display: flex;
-  gap: 16px;
-  min-height: 0;
-  flex: 1;
+/* 事件检测：可折叠树形布局（组 -> 分类 -> 规则） */
+.detect-page {
+  max-width: 1200px;
 }
-.detect-tree {
-  width: 360px;
-  flex-shrink: 0;
-  overflow-y: auto;
+.detect-tree-full {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tree-node {
   background: #0b1628;
   border: 1px solid #1d2f4a;
   border-radius: 8px;
-  padding: 14px;
-  max-height: calc(100vh - 130px);
+  overflow: hidden;
 }
-.detect-rules {
-  flex: 1;
-  min-width: 0;
-}
-.tree-group {
-  margin-bottom: 14px;
-  border-bottom: 1px solid #16233a;
-  padding-bottom: 12px;
-}
-.tree-group:last-child {
-  border-bottom: none;
-}
-.tree-group-head {
+.tree-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  padding: 9px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.tree-row:hover {
+  background: #10213b;
+}
+.tree-row-group {
+  background: #0d1a2e;
+  font-size: 14px;
+}
+.tree-row-cat {
+  font-size: 13px;
+}
+.tree-row-rule {
+  padding: 6px 12px 6px 34px;
+  font-size: 12px;
+  cursor: default;
+}
+.tree-row-rule:hover {
+  background: #0d1a2e;
+}
+.tree-arrow {
+  display: inline-block;
+  width: 14px;
+  color: #8b98b0;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.tree-arrow.open {
+  transform: rotate(90deg);
+}
+.tree-check {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tree-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+.tree-name {
+  min-width: 0;
+  flex: 1;
 }
 .tree-group-name {
   font-weight: 600;
-  font-size: 14px;
 }
-.tree-group-count {
-  color: #8b98b0;
-  font-size: 12px;
+.tree-name-rule {
+  color: #c3ccdb;
 }
-.tree-cats {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-}
-.tree-cat {
-  padding: 8px 10px;
-  border: 1px solid #1d2f4a;
-  border-radius: 6px;
-  background: #0d1a2e;
-  cursor: pointer;
-}
-.tree-cat:hover {
-  border-color: #2a4060;
-}
-.tree-cat.selected {
-  border-color: #2c7be5;
-  background: #10213b;
-}
-.tree-cat label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 13px;
-}
-.tree-cat label input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-}
-.tree-cat-name {
-  min-width: 0;
-}
-.tree-cat-count {
-  margin-left: auto;
+.tree-count {
   color: #8b98b0;
   font-size: 12px;
   white-space: nowrap;
 }
-.tree-cat .hint {
-  margin-top: 4px;
+.tree-desc {
+  color: #8b98b0;
+  font-size: 12px;
   line-height: 1.5;
+  padding: 0 12px 8px 44px;
+}
+.tree-children {
+  border-top: 1px solid #16233a;
+}
+.tree-node .tree-node {
+  margin: 6px 12px;
+  border-color: #22344f;
+}
+.tree-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.tree-search-row .comment {
+  padding: 6px 10px;
+}
+.tree-more {
+  padding: 6px 12px;
+}
+.tree-empty {
+  padding: 6px 12px;
 }

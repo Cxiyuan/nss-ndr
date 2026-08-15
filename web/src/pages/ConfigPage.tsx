@@ -3,11 +3,11 @@ import { api, ConfigField, ConfigGroup } from "../api";
 
 const sections = [
   { key: "probe", title: "探针基础" },
-  { key: "suricata", title: "Suricata" },
-  { key: "zeek", title: "Zeek" },
-  { key: "elasticsearch", title: "Elasticsearch" },
+  { key: "suricata", title: "检测引擎" },
+  { key: "zeek", title: "网络元数据" },
+  { key: "elasticsearch", title: "数据存储" },
   { key: "xdr", title: "告警推送" },
-  { key: "strelka", title: "Strelka" },
+  { key: "strelka", title: "文件分析" },
   { key: "detections", title: "检测" },
   { key: "resources", title: "资源限制" },
 ];

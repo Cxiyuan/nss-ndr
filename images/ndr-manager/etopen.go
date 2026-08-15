@@ -24,6 +24,8 @@ var (
 	etopenMetaFile = filepath.Join(etopenDir, "categories.json")
 	etopenRulesDir = filepath.Join(etopenDir, "rules")
 	msgRe          = regexp.MustCompile(`msg:"((?:[^"\\]|\\.)*)"`)
+	// 分类 key -> 中文名（importETOpen 导入时构建，规则描述中文化使用）
+	catNameCN = map[string]string{}
 )
 
 type etopenCatMeta struct {
@@ -148,6 +150,7 @@ func importETOpen() error {
 	if err != nil {
 		return fmt.Errorf("读取 ET Open 分类元数据失败: %w", err)
 	}
+	buildCatNameCN(meta)
 	var cur string
 	_ = db.QueryRow("SELECT value FROM configs WHERE key=?", etopenVersionKey).Scan(&cur)
 	if cur == meta.Version {
@@ -212,6 +215,16 @@ func importETOpen() error {
 	return nil
 }
 
+// buildCatNameCN 构建分类 key -> 中文名映射（供规则描述中文化使用）
+func buildCatNameCN(meta *etopenMeta) {
+	catNameCN = map[string]string{}
+	for _, g := range meta.Groups {
+		for _, c := range g.Categories {
+			catNameCN[c.Key] = c.NameCN
+		}
+	}
+}
+
 func isRuleAction(line string) bool {
 	for _, a := range []string{"alert ", "drop ", "pass ", "reject "} {
 		if strings.HasPrefix(line, a) {
@@ -227,6 +240,64 @@ func extractRuleMsg(line string) string {
 		return ""
 	}
 	return m[1]
+}
+
+// 规则正文英文短语 -> 中文（产品化展示：规则描述中文化，不暴露引擎原始规则内容）
+var msgEn2Cn = []struct{ en, cn string }{
+	// 长短语优先（避免被短词拆分翻译）
+	{"Detected in URI", "地址中检测到"}, {"Detected in URL", "地址中检测到"},
+	{"Cross Site Request Forgery", "跨站请求伪造"}, {"Cross-Site Request Forgery", "跨站请求伪造"},
+	{"SQL Injection", "SQL 注入"}, {"SQLi", "SQL 注入"},
+	{"Directory Traversal", "目录遍历"}, {"Path Traversal", "路径穿越"},
+	{"Exploit Kit", "漏洞利用工具包"}, {"User-Agent", "用户代理"}, {"User Agent", "用户代理"},
+	{"Remote Code Execution", "远程代码执行"}, {"Command Injection", "命令注入"},
+	{"Privilege Escalation", "权限提升"}, {"Buffer Overflow", "缓冲区溢出"},
+	{"Potential ", "疑似 "}, {"Potential", "疑似"}, {"Possible ", "疑似 "}, {"Possible", "疑似"},
+	{"Suspicious ", "可疑 "}, {"Suspicious", "可疑"}, {"Malicious ", "恶意 "}, {"Malicious", "恶意"},
+	{"Detected ", "已检测到 "}, {"Detected", "已检测到"}, {"Attempt ", "尝试 "}, {"Attempt", "尝试"},
+	{"Scan ", "扫描 "}, {"Scan", "扫描"}, {"scanner", "扫描器"}, {"Scanner", "扫描器"},
+	{"Malware", "恶意软件"}, {"Backdoor", "后门"}, {"Trojan", "木马"}, {"Worm", "蠕虫"},
+	{"Ransomware", "勒索软件"}, {"Keylogger", "键盘记录器"}, {"Miner", "挖矿程序"}, {"Coinminer", "挖矿程序"},
+	{"C&C ", "命令与控制 "}, {"C&C", "命令与控制"}, {"C2 ", "命令与控制 "}, {"C2", "命令与控制"},
+	{"Checkin", "回连"}, {"Beacon", "回连信号"}, {"Callback", "回连"},
+	{"Exploit", "漏洞利用"}, {"Exploit Kit", "漏洞利用工具包"}, {"Shellcode", "Shellcode"},
+	{"Injection", "注入"},
+	{"Outbound", "出站"}, {"Inbound", "入站"},
+	{"Server", "服务器"}, {"Client", "客户端"}, {"Browser", "浏览器"},
+	{"Traffic", "流量"}, {"Communication", "通信"}, {"Request", "请求"}, {"Response", "响应"},
+	{"File", "文件"}, {"Domain", "域名"}, {"Download", "下载"}, {"Upload", "上传"},
+	{"Connection", "连接"}, {"Execution", "执行"}, {"Command", "命令"},
+	{"Lateral", "横向"}, {"Movement", "移动"}, {"Recon", "侦察"}, {"Probe", "探测"},
+	{"Phishing", "钓鱼"}, {"Password", "密码"}, {"Credential", "凭据"}, {"Brute", "暴力"},
+	{"Botnet", "僵尸网络"}, {"DDoS", "分布式拒绝服务"}, {"DoS ", "拒绝服务 "}, {"DoS", "拒绝服务"},
+	{"DNS ", "DNS "}, {"DNS", "DNS"}, {"HTTP", "HTTP"}, {"HTTPS", "HTTPS"}, {"TLS", "TLS"}, {"SSL", "SSL"},
+	{"SSH", "SSH"}, {"RDP", "RDP"}, {"SMB", "SMB"}, {"FTP", "FTP"}, {"SMTP", "SMTP"},
+	{"URI", "地址"}, {"URL", "地址"},
+	{"XSS", "跨站脚本"}, {"CSRF", "跨站请求伪造"}, {"RCE", "远程代码执行"},
+	{"Authentication", "认证"}, {"Login", "登录"}, {"Session", "会话"},
+	{"Encrypted", "加密"}, {"Certificate", "证书"}, {"Fingerprint", "指纹"}, {"JA3", "JA3 指纹"},
+	{"Packet", "数据包"}, {"Header", "报文头"}, {"Payload", "载荷"},
+	{"Apache", "Apache"}, {"Nginx", "Nginx"}, {"IIS", "IIS"}, {"Tomcat", "Tomcat"},
+	{"Windows", "Windows"}, {"Linux", "Linux"}, {"Unix", "Unix"},
+}
+
+// ruleDescCN 把内置规则 msg 转换为中文描述：`分类中文：正文翻译`
+func ruleDescCN(msg, cat string) string {
+	body := msg
+	// 去掉 "ET xxx" 前缀（前缀已由分类中文名体现）
+	body = regexp.MustCompile(`^(ET|ETPRO|ET OPEN)\s+[A-Za-z0-9_]+`).ReplaceAllString(body, "")
+	for _, kv := range msgEn2Cn {
+		body = strings.ReplaceAll(body, kv.en, kv.cn)
+	}
+	body = strings.TrimSpace(strings.Trim(body, ":- "))
+	catCN := catNameCN[cat]
+	if catCN == "" {
+		catCN = cat
+	}
+	if body == "" {
+		return catCN
+	}
+	return catCN + "：" + body
 }
 
 // etopenTree 返回分类树（分组 -> 分类），含规则总数/启用数与中文说明
@@ -333,6 +404,7 @@ func etopenListRules(cat, q string, offset, limit int) (etopenRulePage, error) {
 		r.Enabled = enabled == 1
 		r.Type = "etopen"
 		r.Category = cat
+		r.NameCN = ruleDescCN(r.Name, cat)
 		page.Rules = append(page.Rules, r)
 	}
 	return page, nil

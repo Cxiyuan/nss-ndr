@@ -13,6 +13,7 @@ import (
 type Rule struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
+	NameCN    string `json:"name_cn,omitempty"` // 中文描述（内置规则由检测库翻译生成）
 	Rule      string `json:"rule"`
 	Threshold string `json:"threshold,omitempty"`
 	Type      string `json:"type"` // custom | builtin
