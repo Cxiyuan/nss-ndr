@@ -28,9 +28,6 @@ jobs:
           - name: zeek
             context: images/zeek
             file: images/zeek/Dockerfile
-          - name: es-init
-            context: images/es-init
-            file: images/es-init/Dockerfile
           - name: mcp-server
             context: images/mcp-server
             file: images/mcp-server/Dockerfile
@@ -40,12 +37,6 @@ jobs:
           - name: ndr-manager
             context: .
             file: images/ndr-manager/Dockerfile
-          - name: xdr-push
-            context: images/xdr-push
-            file: images/xdr-push/Dockerfile
-          - name: cleaner
-            context: images/cleaner
-            file: images/cleaner/Dockerfile
           - name: strelka-backend
             context: images/strelka-backend
             file: images/strelka-backend/Dockerfile
@@ -55,10 +46,6 @@ jobs:
           - name: strelka-rules
             context: images/strelka-rules
             file: images/strelka-rules/Dockerfile
-          - name: filecheck
-            context: images/filecheck
-            file: images/filecheck/Dockerfile
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4

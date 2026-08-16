@@ -53,6 +53,11 @@ func main() {
 	registerAPI(mux)
 	registerStatic(mux)
 
+	// 后台任务（并入的 es-init / xdr-push / cleaner 功能）
+	startESInit()
+	startXdrPush()
+	startCleaner()
+
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
 		addr = ":8080"

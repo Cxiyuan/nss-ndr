@@ -112,6 +112,9 @@ for k, rel in {
     "frontend.yaml": "images/strelka-manager/files/frontend.yaml",
     "filestream.yaml": "images/strelka-manager/files/filestream.yaml",
     "manager.yaml": "images/strelka-manager/files/manager.yaml",
+    "filecheck.py": "images/strelka-manager/filecheck/filecheck.py",
+    "filecheck.yaml": "images/strelka-manager/filecheck/filecheck.yaml",
+    "entrypoint.sh": "images/strelka-manager/filecheck/entrypoint.sh",
 }.items():
     render(rel, "strelka/" + k)
 render("images/strelka-backend/files/taste/taste.yara", "strelka/taste.yara")
@@ -360,16 +363,12 @@ cmd_save_images() {
   local project_images=(
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-suricata"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek"
-    "ghcr.io/cxiyuan/nss-ndr/nss-ndr-es-init"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-mcp-server"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-agent"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-manager"
-    "ghcr.io/cxiyuan/nss-ndr/nss-ndr-xdr-push"
-    "ghcr.io/cxiyuan/nss-ndr/nss-ndr-cleaner"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-backend"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-manager"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-rules"
-    "ghcr.io/cxiyuan/nss-ndr/nss-ndr-filecheck"
   )
   local base_images=(
     "docker.elastic.co/beats/filebeat:9.3.3"

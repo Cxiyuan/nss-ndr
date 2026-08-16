@@ -21,6 +21,8 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /ndr-manager .
 FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
 COPY --from=build /ndr-manager /usr/local/bin/ndr-manager
+# ES ingest pipelines / ILM / 索引模板（由 ndr-manager 启动时导入，替代 es-init 服务）
+COPY images/es-init/pipelines/ /opt/ndr-manager/pipelines/
 # 内置规则集（so_extractions / so_filters，默认禁用）
 COPY images/detections/builtin-rules/ /opt/so/builtin-rules/
 # ET Open 内置规则集（35 个分类，约 3.9 万条，默认全部禁用，WebUI 勾选加载）

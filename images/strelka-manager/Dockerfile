@@ -15,11 +15,14 @@ LABEL maintainer="Security Onion Solutions, LLC"
 COPY --from=build /go/bin/strelka-manager /usr/local/bin/
 COPY --from=build /go/bin/strelka-filestream /usr/local/bin/
 COPY --from=build /go/bin/strelka-frontend /usr/local/bin/
+# filecheck（Zeek 提取文件搬运 + SHA1 去重，随 manager 镜像发布）
+COPY filecheck/ /opt/so/conf/strelka/
+RUN chmod +x /opt/so/conf/strelka/entrypoint.sh
 
 RUN addgroup -g 939 strelka && \
     adduser -u 939 -G strelka strelka --disabled-password \
     -h /etc/strelka --no-create-home strelka && \
-    apk add --no-cache jq && \
+    apk add --no-cache jq python3 py3-pip py3-watchdog py3-yaml && \
     mkdir /var/log/strelka/ && \
     touch /var/log/strelka/strelka.log && \
     chown -R 939:939 /var/log/strelka/

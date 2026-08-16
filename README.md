@@ -13,8 +13,8 @@ images/
   strelka-backend/        # Strelka 扫描 worker（YARA/exiftool/PE/PDF...，参照 SO）
   strelka-manager/        # Strelka frontend / filestream / manager（target/strelka Go）
   strelka-rules/          # YARA 规则编译（initContainer，securityonion-yara）
-  filecheck/              # Zeek 提取文件搬运 + SHA1 去重（filecheck）
   ndr-manager/            # 探针管理后台（配置/规则/状态 + XDR 分析任务执行）
+  strelka-manager/        # Strelka 控制面 + filecheck（文件搬运并入）
 deploy/docker/            # docker-compose 部署（compose / .env.example）
 configs/                  # 探针配置文件示例（probe.yaml）
 scripts/                  # 配置渲染等开发工具
@@ -69,9 +69,9 @@ cd deploy/docker && docker compose ps
 - 推送 `master` 分支或 `v*` tag 时，`.github/workflows/build-images.yml` 自动构建 Suricata/Zeek 镜像并推送到 GHCR：
 - `ghcr.io/cxiyuan/nss-ndr/nss-ndr-suricata:latest` / `:<git-sha>` / `:<tag>`
 - `ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek:latest` / `:<git-sha>` / `:<tag>`
-  - 另有 `nss-ndr-es-init`、`nss-ndr-ndr-manager`、`nss-ndr-xdr-push`
+  - 另有 `nss-ndr-ndr-manager`（内置 ES 初始化 / 线索上报 / 数据清理）
   - 另有 `nss-ndr-strelka-backend`、`nss-ndr-strelka-manager`、`nss-ndr-strelka-rules`、
-    `nss-ndr-filecheck`（文件提取 + Strelka）
+    （文件提取 + Strelka；filecheck 已并入 strelka-manager）
   - filebeat 使用官方镜像 `docker.elastic.co/beats/filebeat:9.3.3`（不构建）
 - 也可在 GitHub Actions 页面手动触发（workflow_dispatch）。
 - 固定部署版本：`deploy.sh save-images --tag <git-sha>` 导出对应版本镜像包。
@@ -82,7 +82,7 @@ cd deploy/docker && docker compose ps
 - 节点需设置 `vm.max_map_count=262144`（`sysctl -w vm.max_map_count=262144`，写入 `/etc/sysctl.d/` 持久化）。
 - M2/M3：ES 已启用 xpack security；部署前生成凭据：
   - `deploy.sh install` 自动生成 `deploy/docker/.env`（elastic 默认 `nss-ndr@2026`，其余随机）
-  - es-init 会自动创建 filebeat / xdr-push 应用用户。
+  - ndr-manager 启动时自动初始化 ES（pipeline/索引模板/应用用户 filebeat、xdr-push）。
 - ES 管理员：`elastic`，默认密码 `nss-ndr@2026`（仅内部使用，不对用户开放）。
 
 ### 采集与上报（2026-08-15 架构）
@@ -99,7 +99,7 @@ NDR 定位：采集 + 存储 + 上报线索 + 执行 XDR 下发的分析任务�
 
 1. **采集**：standalone filebeat（DaemonSet）读取 `/nsm` 下 Suricata eve、Zeek 日志、Strelka 结果，
    按文件名/事件类型映射 ingest pipeline，直连 ES 写入 data stream（无 Kibana/Fleet/Logstash 依赖）
-2. **线索上报**：xdr-push 定时把 `logs-suricata.alerts-so` 中的检测线索推送到 XDR Webhook
+2. **线索上报**：ndr-manager 内置任务定时把 `logs-suricata.alerts-so` 中的检测线索推送到 XDR Webhook
 3. **分析任务**：XDR 通过 `POST /api/xdr/task`（Bearer 令牌）下发检索分析任务，
    NDR 作为执行者在本地元数据上完成关联分析并返回结构化结果（后台任务，不向探针用户展示）
 4. **管理 UI**：仅设备管理（参数配置 / 规则启停 / 状态），不提供数据浏览

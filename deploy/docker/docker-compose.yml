@@ -45,22 +45,6 @@ services:
       timeout: 5s
       retries: 30
 
-  # ---------- ES 初始化（pipeline / ILM / 索引模板 / 应用用户）----------
-  es-init:
-    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-es-init
-    container_name: nss-es-init
-    restart: unless-stopped
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    environment:
-      ES_URL: "http://elasticsearch:9200"
-      ES_SECURITY: "true"
-      ES_USER: "elastic"
-      ES_PASS: ${ELASTIC_PASSWORD}
-      FB_PASSWORD: ${FB_PASSWORD}
-      XDR_PASSWORD: ${XDR_PASSWORD}
-
   # ---------- 采集（host 网络抓包）----------
   suricata:
     image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-suricata
@@ -74,9 +58,6 @@ services:
     volumes:
       - /opt/ndr/so:/opt/so
       - *nsm-vol
-    depends_on:
-      - es-init
-
   zeek:
     image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek
     container_name: nss-zeek
@@ -88,9 +69,6 @@ services:
     volumes:
       - /opt/ndr/so:/opt/so
       - *nsm-vol
-    depends_on:
-      - es-init
-
   # ---------- 日志采集（直连 ES）----------
   filebeat:
     image: docker.elastic.co/beats/filebeat:9.3.3
@@ -113,6 +91,9 @@ services:
     restart: unless-stopped
     environment:
       LISTEN_ADDR: ":8080"
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      FB_PASSWORD: ${FB_PASSWORD}
+      XDR_PASSWORD: ${XDR_PASSWORD}
       <<: *common-env
     ports:
       - "${MANAGER_PORT:-30603}:8080"
@@ -120,9 +101,6 @@ services:
       - *so-vol
       - /opt/ndr/so/rules/suricata:/opt/so/rules/suricata
       - /var/run/suricata:/var/run/suricata
-    depends_on:
-      - es-init
-
   # ---------- 分析（MCP + Agent）----------
   mcp-server:
     image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-mcp-server
@@ -145,18 +123,6 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       - mcp-server
-
-  # ---------- 线索上报 ----------
-  xdr-push:
-    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-xdr-push
-    container_name: nss-xdr-push
-    restart: unless-stopped
-    environment:
-      <<: *common-env
-    volumes:
-      - *so-vol
-    depends_on:
-      - es-init
 
   # ---------- 文件分析（Strelka）----------
   strelka-coordinator:
@@ -209,17 +175,10 @@ services:
       - /opt/ndr/so/conf/strelka:/etc/strelka:ro
 
   strelka-filecheck:
-    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-filecheck
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-manager
     container_name: nss-strelka-filecheck
     restart: unless-stopped
+    command: ["/opt/so/conf/strelka/entrypoint.sh"]
     volumes:
       - *nsm-vol
-
-  # ---------- 数据清理 ----------
-  cleaner:
-    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-cleaner
-    container_name: nss-cleaner
-    restart: unless-stopped
-    volumes:
-      - *so-vol
-      - *nsm-vol
+      - /opt/ndr/so:/opt/so
