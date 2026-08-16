@@ -1,6 +1,6 @@
 # NSS-NDR 流量探针
 
-NDR 流量探针：Suricata（NIDS + 全包）+ Zeek（元数据）的容器化流量检测单元，部署在单节点 k3s，告警通过 Webhook 实时推送到主平台 XDR。
+NDR 流量探针：Suricata（NIDS + 全包）+ Zeek（元数据）的容器化流量检测单元，部署在单节点 k3s，检测线索通过 Webhook 实时推送到主平台 XDR。
 
 ## 目录结构
 

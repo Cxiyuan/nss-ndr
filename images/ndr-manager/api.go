@@ -33,6 +33,8 @@ func registerAPI(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/password", requireAuth(apiChangePassword))
 	// XDR 分析任务下发（Bearer 令牌认证，见 apiXDRTask）
 	mux.HandleFunc("POST /api/xdr/task", apiXDRTask)
+	// XDR 分析任务（Agent 模式）：本地小模型 + MCP 工具自主分析
+	mux.HandleFunc("POST /api/xdr/agent/task", apiXDRAgentTask)
 	mux.HandleFunc("GET /api/config", requireAuth(apiGetFullConfig))
 	mux.HandleFunc("GET /api/config/schema", requireAuth(apiConfigSchema))
 	mux.HandleFunc("PUT /api/config", requireAuth(apiSaveFormConfig))

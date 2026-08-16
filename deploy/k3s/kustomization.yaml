@@ -10,6 +10,8 @@ resources:
   - 31-zeek-daemonset.yaml
   - 40-elasticsearch.yaml
   - 43-filebeat-daemonset.yaml
+  - 44-mcp-server.yaml
+  - 45-ndr-agent.yaml
   - 46-strelka.yaml
   - 51-xdr-push.yaml
   - 60-cleaner-cronjob.yaml
@@ -22,6 +24,10 @@ images:
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek
     newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-es-init
+    newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-mcp-server
+    newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579
+  - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-agent
     newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579
   - name: ghcr.io/cxiyuan/nss-ndr/nss-ndr-xdr-push
     newTag: 03ecfcf5c7e30fabe315c5e77a28bac3c19f8579

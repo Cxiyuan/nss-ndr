@@ -322,3 +322,61 @@ func apiXDRTask(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, result)
 }
+
+// apiXDRAgentTask XDR 分析任务入口（Agent 模式）：任务转发给本地 Agent 服务，
+// 由 Agent（小模型 + MCP 工具）自主分析，返回结论与工具调用链。
+func apiXDRAgentTask(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	c, err := loadFull()
+	if err != nil || c.Xdr.TaskToken == "" || token != c.Xdr.TaskToken {
+		writeErr(w, http.StatusUnauthorized, "XDR 任务令牌无效")
+		return
+	}
+	if !c.Xdr.AgentEnabled {
+		writeErr(w, http.StatusBadRequest, "本地分析 Agent 未启用（参数配置-告警推送-启用本地分析 Agent）")
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "请求体读取失败")
+		return
+	}
+	var req map[string]any
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, "请求体解析失败")
+		return
+	}
+	if req["task_id"] == nil || req["task_id"] == "" {
+		writeErr(w, http.StatusBadRequest, "task_id 不能为空")
+		return
+	}
+	if req["instruction"] == nil || req["instruction"] == "" {
+		writeErr(w, http.StatusBadRequest, "instruction（分析任务描述）不能为空")
+		return
+	}
+
+	agentURL := c.Xdr.AgentURL
+	if agentURL == "" {
+		agentURL = "http://nss-ndr-agent:8081/analyze"
+	}
+	httpReq, err := http.NewRequest(http.MethodPost, agentURL, bytes.NewReader(body))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := newTaskESClient().client.Do(httpReq)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "本地 Agent 不可达: "+err.Error())
+		return
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		writeErr(w, http.StatusBadGateway, fmt.Sprintf("Agent 返回 %d: %s", resp.StatusCode, string(data)))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}

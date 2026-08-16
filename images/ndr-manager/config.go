@@ -85,7 +85,10 @@ type FullConfig struct {
 			Secret string `yaml:"secret"`
 		} `yaml:"webhook"`
 		// TaskToken XDR 下发分析任务的 Bearer 令牌（NDR 作为执行者接收任务）
-		TaskToken     string   `yaml:"task_token"`
+		TaskToken string `yaml:"task_token"`
+		// AgentURL 本地分析 Agent 服务地址（Agent 通过 MCP 工具分析 XDR 任务）
+		AgentURL      string   `yaml:"agent_url"`
+		AgentEnabled  bool     `yaml:"agent_enabled"`
 		TimeoutS      int      `yaml:"timeout_s"`
 		PushIntervalS int      `yaml:"push_interval_s"`
 		RetryMax      int      `yaml:"retry_max"`
@@ -129,6 +132,8 @@ func defaultConfig() FullConfig {
 	c.Xdr.PushIntervalS = 2
 	c.Xdr.RetryMax = 5
 	c.Xdr.EventTypes = []string{"suricata.alert"}
+	c.Xdr.AgentURL = "http://nss-ndr-agent:8081/analyze"
+	c.Xdr.AgentEnabled = true
 	return c
 }
 

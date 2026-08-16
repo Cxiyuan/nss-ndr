@@ -31,6 +31,12 @@ jobs:
           - name: es-init
             context: images/es-init
             file: images/es-init/Dockerfile
+          - name: mcp-server
+            context: images/mcp-server
+            file: images/mcp-server/Dockerfile
+          - name: ndr-agent
+            context: images/ndr-agent
+            file: images/ndr-agent/Dockerfile
           - name: ndr-manager
             context: .
             file: images/ndr-manager/Dockerfile

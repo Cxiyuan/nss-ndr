@@ -1,0 +1,51 @@
+# NSS-NDR 本地分析 Agent：接收 XDR 任务，通过 MCP 调用工具集分析；LLM 走 Ollama（可配置）
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nss-ndr-agent
+  namespace: nss-ndr
+  labels:
+    app: nss-ndr-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nss-ndr-agent
+  template:
+    metadata:
+      labels:
+        app: nss-ndr-agent
+    spec:
+      containers:
+        - name: ndr-agent
+          image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-agent
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MCP_URL
+              value: "http://nss-mcp-server:8000/mcp"
+            - name: LLM_URL
+              value: "http://nss-ollama:11434/v1/chat/completions"
+            - name: LLM_MODEL
+              value: ""   # 本地模型后续确定；留空则结构化降级（直调工具）
+          ports:
+            - containerPort: 8081
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nss-ndr-agent
+  namespace: nss-ndr
+spec:
+  selector:
+    app: nss-ndr-agent
+  ports:
+    - port: 8081
+      targetPort: 8081
+      name: agent
