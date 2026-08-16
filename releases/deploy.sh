@@ -26,9 +26,10 @@ NSS-NDR 探针统一部署脚本（docker-compose）
 
 用法:
   bash releases/deploy.sh install -i <网卡> [选项]
-      -i, --interface <网卡>   抓包网卡（必填，如 enp5s0/eth1）
+      -i, --interface <网卡>   抓包网卡（默认自动检测物理网卡并交互确认）
       -c, --config <文件>      probe 配置（默认 configs/probe.yaml，不存在则从示例复制）
       -p, --manager-port <端口> 管理后台端口（默认 30603）
+      -y, --yes                非交互：自动安装 Docker、采用推荐默认值，不逐项确认
       --skip-checks            跳过环境预检
 
   bash releases/deploy.sh uninstall [-y]
@@ -147,29 +148,81 @@ EOF
 
 # ============ install ============
 cmd_install() {
-  local interface="" config_file="" manager_port=30603 skip_checks=0
+  local interface="" config_file="" manager_port=30603 skip_checks=0 assume_yes=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -i|--interface) interface="$2"; shift 2 ;;
       -c|--config) config_file="$2"; shift 2 ;;
       -p|--manager-port) manager_port="$2"; shift 2 ;;
+      -y|--yes) assume_yes=1; shift ;;
       --skip-checks) skip_checks=1; shift ;;
       -h|--help) usage 0 ;;
       *) echo "未知参数: $1"; usage 1 ;;
     esac
   done
-  [[ -n "$interface" ]] || die "缺少 -i/--interface（抓包网卡必填）"
+
+  # ---------- 环境检测与准备 ----------
+  confirm() { # 确认函数：非交互自动 yes
+    local prompt="$1"
+    [[ "$assume_yes" == "1" ]] && { echo "[非交互] $prompt -> 是"; return 0; }
+    read -r -p "$prompt [y/N] " ans
+    [[ "$ans" == "y" || "$ans" == "Y" ]]
+  }
 
   if [[ "$skip_checks" != "1" ]]; then
-    log "环境预检..."
-    command -v docker >/dev/null || die "缺少 docker（请先安装：curl -fsSL https://get.docker.com | sh）"
+    log "环境检测..."
+    if ! command -v docker >/dev/null 2>&1; then
+      warn "未检测到 Docker。"
+      if confirm "是否自动安装 Docker（官方脚本，需要 root）？"; then
+        curl -fsSL https://get.docker.com | sh || die "Docker 自动安装失败，请手动安装后重试"
+        systemctl enable --now docker >/dev/null 2>&1 || true
+        log "Docker 已安装"
+      else
+        die "请先安装 Docker（curl -fsSL https://get.docker.com | sh）"
+      fi
+    fi
     docker compose version >/dev/null 2>&1 || die "缺少 docker compose 插件"
-    [[ -f /etc/os-release ]] && . /etc/os-release
     if [[ "$(sysctl -n vm.max_map_count 2>/dev/null || echo 0)" -lt 262144 ]]; then
       log "设置 vm.max_map_count=262144（ES 需要）..."
       sysctl -w vm.max_map_count=262144 >/dev/null
       echo "vm.max_map_count=262144" > /etc/sysctl.d/99-nss-ndr.conf 2>/dev/null || true
     fi
+  fi
+
+  # ---------- 抓包网卡确认 ----------
+  if [[ -z "$interface" ]]; then
+    local ifaces=()
+    while IFS= read -r iface; do
+      ifaces+=("$iface")
+    done < <(ls /sys/class/net 2>/dev/null | grep -vE '^(lo|veth|flannel|cni|docker|br-|virbr|tun|tap|kube|dummy)' || true)
+    if [[ ${#ifaces[@]} -eq 0 ]]; then
+      die "未发现可用物理网卡，请用 -i <网卡> 指定"
+    fi
+    if [[ ${#ifaces[@]} -eq 1 ]]; then
+      interface="${ifaces[0]}"
+      log "检测到唯一物理网卡: $interface"
+    else
+      log "检测到以下物理网卡："
+      local idx=0
+      for iface in "${ifaces[@]}"; do
+        idx=$((idx+1))
+        echo "  [$idx] $iface"
+      done
+      if [[ "$assume_yes" == "1" ]]; then
+        interface="${ifaces[0]}"
+        log "[非交互] 自动选择网卡: $interface"
+      else
+        read -r -p "请选择抓包网卡编号 [1-$idx]：" sel
+        sel=${sel:-1}
+        [[ "$sel" =~ ^[0-9]+$ && "$sel" -ge 1 && "$sel" -le "$idx" ]] || die "无效选择"
+        interface="${ifaces[$((sel-1))]}"
+      fi
+    fi
+  fi
+  log "抓包网卡: $interface"
+
+  if [[ "$skip_checks" != "1" ]]; then
+    : # 已在上方完成
   fi
 
   # probe 配置
@@ -189,6 +242,34 @@ cmd_install() {
   rm -f "$env_file.bak"
   sed -i.bak "s/^PROBE_ID=.*/PROBE_ID=$(python3 -c "import yaml;print(yaml.safe_load(open('$config_file'))['probe']['id'])" 2>/dev/null || echo nss-001)/" "$env_file"
   rm -f "$env_file.bak"
+
+  # ---------- ES 堆内存自动设置（按宿主机内存）----------
+  local mem_gb es_heap
+  mem_gb=$(awk '/MemTotal/{printf "%d", $2/1024/1024}' /proc/meminfo 2>/dev/null || echo 8)
+  es_heap=$((mem_gb / 4))            # 约总内存 1/4
+  [[ $es_heap -lt 2 ]] && es_heap=2
+  [[ $es_heap -gt 8 ]] && es_heap=8
+  log "宿主机内存 ${mem_gb}G，ES 堆内存自动设为 ${es_heap}G"
+  sed -i.bak "s/^ES_HEAP_GB=.*/ES_HEAP_GB=$es_heap/" "$env_file"
+  rm -f "$env_file.bak"
+
+  # ---------- 部署前配置汇总确认 ----------
+  if [[ "$assume_yes" != "1" ]]; then
+    local probe_id
+    probe_id=$(grep "^PROBE_ID=" "$env_file" | cut -d= -f2)
+    echo ""
+    echo "================ 部署配置确认 ================"
+    echo "  探针 ID      : $probe_id"
+    echo "  抓包网卡     : $interface"
+    echo "  管理后台端口 : $manager_port"
+    echo "  ES 堆内存    : ${es_heap}G"
+    echo "  数据目录     : $NDR_HOME"
+    echo "=============================================="
+    if ! confirm "确认以上配置并开始部署？"; then
+      echo "已取消"
+      exit 0
+    fi
+  fi
 
   mkdir -p "$NDR_HOME/es-data" "$NDR_HOME/nsm" "$NDR_HOME/so" "$NDR_HOME/yara" "$NDR_HOME/filebeat-data"
   log "启动 docker compose ..."
