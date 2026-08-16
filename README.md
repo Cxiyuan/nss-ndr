@@ -64,6 +64,19 @@ cd deploy/docker && docker compose ps
 配置渲染：`deploy.sh install` 自动渲染引擎配置到 `/opt/ndr/so/conf/`（suricata/zeek/filebeat/strelka），
 凭据写入 `deploy/docker/.env`（gitignored）。
 
+### 发布包（.run 自解压，面向 Linux）
+
+```bash
+# 打包（部署脚本 + docker-compose + 离线镜像包 → 单个 .run 文件）
+bash releases/package-release.sh --tag <版本>
+# 产物：releases/nss-ndr-<版本>.run（Linux 上直接运行）
+
+chmod +x nss-ndr-<版本>.run
+./nss-ndr-<版本>.run install -i enp5s0      # 解压并部署（离线镜像随包内置，不拉网络）
+./nss-ndr-<版本>.run --dir /opt/nss-ndr     # 仅解压
+./nss-ndr-<版本>.run --list                 # 查看包内容
+```
+
 ## 镜像构建（GitHub Actions）
 
 - 推送 `master` 分支或 `v*` tag 时，`.github/workflows/build-images.yml` 自动构建 Suricata/Zeek 镜像并推送到 GHCR：
