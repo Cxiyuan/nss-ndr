@@ -29,6 +29,7 @@ NSS-NDR 探针统一部署脚本（docker-compose）
       -i, --interface <网卡>   抓包网卡（默认自动检测物理网卡并交互确认）
       -c, --config <文件>      probe 配置（默认 configs/probe.yaml，不存在则从示例复制）
       -p, --manager-port <端口> 管理后台端口（默认 30603）
+      --images <dir>          离线镜像目录（默认 releases/images；存在则部署前 docker load 全部镜像，不拉网络）
       -y, --yes                非交互：自动安装 Docker、采用推荐默认值，不逐项确认
       --skip-checks            跳过环境预检
 
@@ -147,13 +148,31 @@ EOF
 }
 
 # ============ install ============
+load_images_into_docker() {
+  local dir="$1"
+  [[ -d "$dir" ]] || { warn "离线镜像目录不存在，跳过本地加载: $dir"; return 0; }
+  command -v docker >/dev/null 2>&1 || return 0
+  local loaded=0
+  for tar in "$dir"/*.tar; do
+    [[ -f "$tar" ]] || continue
+    log "docker load: $(basename "$tar")"
+    if docker load -i "$tar" >/tmp/ndr-docker-load.log 2>&1; then
+      loaded=$((loaded+1))
+    else
+      warn "加载失败 $(basename "$tar"): $(tail -1 /tmp/ndr-docker-load.log)"
+    fi
+  done
+  log "离线镜像加载完成（$loaded 个，含基础镜像）✔"
+}
+
 cmd_install() {
-  local interface="" config_file="" manager_port=30603 skip_checks=0 assume_yes=0
+  local interface="" config_file="" manager_port=30603 skip_checks=0 assume_yes=0 images_dir=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -i|--interface) interface="$2"; shift 2 ;;
       -c|--config) config_file="$2"; shift 2 ;;
       -p|--manager-port) manager_port="$2"; shift 2 ;;
+      --images) images_dir="$2"; shift 2 ;;
       -y|--yes) assume_yes=1; shift ;;
       --skip-checks) skip_checks=1; shift ;;
       -h|--help) usage 0 ;;
@@ -270,6 +289,9 @@ cmd_install() {
       exit 0
     fi
   fi
+
+  # ---------- 离线镜像加载（含基础镜像，部署全程不依赖网络拉取）----------
+  load_images_into_docker "${images_dir:-$ROOT/releases/images}"
 
   mkdir -p "$NDR_HOME/es-data" "$NDR_HOME/nsm" "$NDR_HOME/so" "$NDR_HOME/yara" "$NDR_HOME/filebeat-data"
   log "启动 docker compose ..."
@@ -392,18 +414,7 @@ cmd_load_images() {
       *) dir="$1"; shift ;;
     esac
   done
-  command -v docker >/dev/null || die "缺少 docker"
-  local loaded=0
-  for tar in "$dir"/*.tar; do
-    [[ -f "$tar" ]] || continue
-    log "docker load: $(basename "$tar")"
-    if docker load -i "$tar" >/tmp/ndr-docker-load.log 2>&1; then
-      loaded=$((loaded+1))
-    else
-      warn "加载失败 $(basename "$tar"): $(tail -1 /tmp/ndr-docker-load.log)"
-    fi
-  done
-  log "镜像加载完成（$loaded 个）✔"
+  load_images_into_docker "$dir"
 }
 
 # ============ 入口 ============
