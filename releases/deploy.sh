@@ -369,6 +369,18 @@ cmd_save_images() {
       save_one "$b" "$out/$(echo "$b" | tr '/:' '__').tar"
     done
   fi
+  # 镜像清单（install/load-images 可按清单核对）
+  {
+    echo "# NSS-NDR 离线镜像包（tag=${tag:-latest}，生成时间 $(date -u +%Y-%m-%dT%H:%M:%SZ)）"
+    for img in "${project_images[@]}"; do
+      echo "${img}:${tag:-latest}"
+    done
+    if [[ "$include_base" == "1" ]]; then
+      for b in "${base_images[@]}"; do
+        echo "$b"
+      done
+    fi
+  } > "$out/manifest.txt"
   echo "完成：镜像已导出到 $out（docker load -i <tar> 加载）"
 }
 
