@@ -6,9 +6,8 @@
 /web/dist/
 # 部署环境参数（不入库）
 /configs/probe.local.yaml
-/deploy/k3s/10-configmap.yaml
-# 部署机真实密码（部署时填写，勿入库）
-/deploy/k3s/25-secret.yaml
+# docker-compose 部署凭据（部署时生成，勿入库）
+/deploy/docker/.env
 # 离线镜像包（体积大，不入库；由 releases/save-images.sh 生成）
 /releases/images/
 web/tsconfig.tsbuildinfo

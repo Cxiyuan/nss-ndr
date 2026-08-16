@@ -1,6 +1,6 @@
 # NSS-NDR 流量探针
 
-NDR 流量探针：Suricata（NIDS + 全包）+ Zeek（元数据）的容器化流量检测单元，部署在单节点 k3s，检测线索通过 Webhook 实时推送到主平台 XDR。
+NDR 流量探针：Suricata（NIDS + 全包）+ Zeek（元数据）的容器化流量检测单元，以 docker-compose 部署，检测线索通过 Webhook 实时推送到主平台 XDR。
 
 ## 目录结构
 
@@ -15,7 +15,7 @@ images/
   strelka-rules/          # YARA 规则编译（initContainer，securityonion-yara）
   filecheck/              # Zeek 提取文件搬运 + SHA1 去重（filecheck）
   ndr-manager/            # 探针管理后台（配置/规则/状态 + XDR 分析任务执行）
-deploy/k3s/               # k3s 清单（namespace/ConfigMap/PV/DaemonSet）
+deploy/docker/            # docker-compose 部署（compose / .env.example）
 configs/                  # 探针配置文件示例（probe.yaml）
 scripts/                  # 配置渲染等开发工具
 ```
@@ -47,22 +47,22 @@ scripts/                  # 配置渲染等开发工具
 cp configs/probe.yaml.example configs/probe.yaml
 $EDITOR configs/probe.yaml
 
-# 2. 一键部署（渲染 ConfigMap、生成凭据/证书、本地加载离线镜像、apply、等待就绪）
+# 2. 一键部署（渲染配置、生成 .env、本地加载离线镜像、docker compose up、等待就绪）
 bash releases/deploy.sh install -i enp5s0
 # 注意：镜像口(interface)为部署环境参数，必须按服务器实际网卡填写（空值会渲染失败）
 # 离线部署：releases/images 存在时自动本地加载镜像，不依赖网络拉取
-kubectl -n nss-ndr get pods
+cd deploy/docker && docker compose ps
 ```
 
-## Helm 部署
+## docker compose 部署
 
 ```bash
-# 修改 deploy/helm/nss-ndr/values.yaml（探针配置/凭据）后：
-helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-namespace
+# 启动：bash releases/deploy.sh install -i enp5s0
+# 常用：cd deploy/docker && docker compose ps / logs -f suricata / down
 ```
 
-> `deploy/helm/nss-ndr/configs/` 与 `images/*/files/` 保持同步，改引擎配置后运行
-> `scripts/sync-helm-configs.sh`。
+配置渲染：`deploy.sh install` 自动渲染引擎配置到 `/opt/ndr/so/conf/`（suricata/zeek/filebeat/strelka），
+凭据写入 `deploy/docker/.env`（gitignored）。
 
 ## 镜像构建（GitHub Actions）
 
@@ -74,16 +74,14 @@ helm upgrade --install nss deploy/helm/nss-ndr --namespace nss-ndr --create-name
     `nss-ndr-filecheck`（文件提取 + Strelka）
   - filebeat 使用官方镜像 `docker.elastic.co/beats/filebeat:9.3.3`（不构建）
 - 也可在 GitHub Actions 页面手动触发（workflow_dispatch）。
-- 固定部署版本：把 `deploy/k3s/kustomization.yaml` 中 `images[].newTag` 改为对应 git sha。
+- 固定部署版本：`deploy.sh save-images --tag <git-sha>` 导出对应版本镜像包。
 - 前提：基础镜像 `ghcr.io/security-onion-solutions/so-suricata:3.1.0`、`so-zeek:3.1.0` 可被构建机拉取（public）。
 
 ### 部署前提（ES）
 
 - 节点需设置 `vm.max_map_count=262144`（`sysctl -w vm.max_map_count=262144`，写入 `/etc/sysctl.d/` 持久化）。
 - M2/M3：ES 已启用 xpack security；部署前生成凭据：
-  - k3s 路径：`deploy.sh install` 自动生成 `deploy/k3s/25-secret.yaml`
-    （elastic 默认 `nss-ndr@2026`，其余服务账号随机；也可参照 `deploy/k3s/25-secret.yaml.example` 手工修改）
-  - Helm 路径：`values.secrets`（elastic 默认已固化 `nss-ndr@2026`）
+  - `deploy.sh install` 自动生成 `deploy/docker/.env`（elastic 默认 `nss-ndr@2026`，其余随机）
   - es-init 会自动创建 filebeat / xdr-push 应用用户。
 - ES 管理员：`elastic`，默认密码 `nss-ndr@2026`（仅内部使用，不对用户开放）。
 
@@ -109,17 +107,10 @@ NDR 定位：采集 + 存储 + 上报线索 + 执行 XDR 下发的分析任务�
 3. `elastic-agent` DaemonSet 用 enrollment token 接入（容器模式**必须 `FLEET_ENROLL=1`**，
    否则以 standalone 跑默认配置不注册；`FLEET_CA` 指向挂载的 CA 证书）。
 
-关键注意（产品部署通用，非环境特例）：
+### 拉取 GHCR 镜像
 
-- 不得把卷挂载到 `/usr/share/elastic-agent/data`：官方镜像该目录含二进制本体
-  （`elastic-agent` 是到 `data/elastic-agent-*/elastic-agent` 的软链），挂空目录会启动失败（127）。
-- 策略须启用 `monitoring_enabled: ["logs"]`，否则 agent 监控组件回退到容器内置默认
-  ES 输出（`http:9200`）报 DNS 错误；启用后监控走 Logstash（`use_output: so-manager_logstash`）。
-- 首次部署按上述顺序由 Job 自动完成；重装时先删干净再应用（参考部署机清理流程）。
-
-### k3s 拉取 GHCR 镜像
-
-镜像包已设为 **public**（workflow 自动设置），k3s 节点无需凭据即可拉取。若后续改回私有：
+镜像包已设为 **public**（workflow 自动设置），部署节点无需凭据即可拉取；
+离线环境用 `deploy.sh save-images` 导出、`deploy.sh load-images` 加载。
 
 ```bash
 # 用带 read:packages 权限的 PAT 在 k3s 节点创建 secret

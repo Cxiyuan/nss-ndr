@@ -1,0 +1,225 @@
+# NSS-NDR 探针 docker-compose 部署（2026-08-16 起替代 k3s）
+#
+# 架构：采集（suricata/zeek/filebeat）→ ES 存储 → 管理（ndr-manager）+ 分析（mcp-server/ndr-agent）
+#       + 上报线索（xdr-push）+ 文件分析（strelka）
+# 使用：
+#   1) 复制 .env.example 为 .env 并填写（或 deploy.sh install 自动生成）
+#   2) 渲染配置文件到 conf/（deploy.sh install 自动执行 render）
+#   3) docker compose up -d
+name: nss-ndr
+
+x-common-env: &common-env
+  ES_HOST: ${ES_HOST:-http://elasticsearch:9200}
+  ES_USERNAME: ${ES_USERNAME:-xdr-push}
+  ES_PASSWORD: ${XDR_PASSWORD}
+
+x-nsm-vol: &nsm-vol
+  - /opt/ndr/nsm:/nsm
+
+x-so-vol: &so-vol
+  - /opt/ndr/so:/opt/so
+
+services:
+  # ---------- 存储 ----------
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.3.3
+    container_name: nss-elasticsearch
+    restart: unless-stopped
+    environment:
+      node.name: nss-es
+      cluster.name: nss-ndr
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      ES_JAVA_OPTS: "-Xms${ES_HEAP_GB:-2}g -Xmx${ES_HEAP_GB:-2}g"
+      ingest.geoip.downloader.enabled: "false"
+    volumes:
+      - /opt/ndr/es-data:/usr/share/elasticsearch/data
+    ports:
+      - "127.0.0.1:9200:9200"
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # ---------- ES 初始化（pipeline / ILM / 索引模板 / 应用用户）----------
+  es-init:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-es-init
+    container_name: nss-es-init
+    restart: unless-stopped
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ES_URL: "http://elasticsearch:9200"
+      ES_SECURITY: "true"
+      ES_USER: "elastic"
+      ES_PASS: ${ELASTIC_PASSWORD}
+      FB_PASSWORD: ${FB_PASSWORD}
+      XDR_PASSWORD: ${XDR_PASSWORD}
+
+  # ---------- 采集（host 网络抓包）----------
+  suricata:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-suricata
+    container_name: nss-suricata
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    environment:
+      INTERFACE: ${INTERFACE}
+      NSS_SENSORNAME: ${PROBE_ID}
+    volumes:
+      - /opt/ndr/so:/opt/so
+      - *nsm-vol
+    depends_on:
+      - es-init
+
+  zeek:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek
+    container_name: nss-zeek
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    environment:
+      NSS_SENSORNAME: ${PROBE_ID}
+    volumes:
+      - /opt/ndr/so:/opt/so
+      - *nsm-vol
+    depends_on:
+      - es-init
+
+  # ---------- 日志采集（直连 ES）----------
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:9.3.3
+    container_name: nss-filebeat
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+    volumes:
+      - /opt/ndr/so/conf/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - *nsm-vol
+      - /opt/ndr/filebeat-data:/usr/share/filebeat/data
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # ---------- 管理后台 ----------
+  ndr-manager:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-manager
+    container_name: nss-ndr-manager
+    restart: unless-stopped
+    environment:
+      LISTEN_ADDR: ":8080"
+      <<: *common-env
+    ports:
+      - "${MANAGER_PORT:-30603}:8080"
+    volumes:
+      - *so-vol
+      - /opt/ndr/so/rules/suricata:/opt/so/rules/suricata
+      - /var/run/suricata:/var/run/suricata
+    depends_on:
+      - es-init
+
+  # ---------- 分析（MCP + Agent）----------
+  mcp-server:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-mcp-server
+    container_name: nss-mcp-server
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+    depends_on:
+      - elasticsearch
+
+  ndr-agent:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-agent
+    container_name: nss-ndr-agent
+    restart: unless-stopped
+    environment:
+      MCP_URL: "http://mcp-server:8000/mcp"
+      LLM_URL: ${LLM_URL:-http://host.docker.internal:11434/v1/chat/completions}
+      LLM_MODEL: ${LLM_MODEL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - mcp-server
+
+  # ---------- 线索上报 ----------
+  xdr-push:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-xdr-push
+    container_name: nss-xdr-push
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+    volumes:
+      - *so-vol
+    depends_on:
+      - es-init
+
+  # ---------- 文件分析（Strelka）----------
+  strelka-coordinator:
+    image: docker.io/library/redis:7-alpine
+    container_name: nss-strelka-coordinator
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--dir", "/nsm/strelka/coord-redis-data"]
+    volumes: [*nsm-vol]
+
+  strelka-gatekeeper:
+    image: docker.io/library/redis:7-alpine
+    container_name: nss-strelka-gatekeeper
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--dir", "/nsm/strelka/gk-redis-data"]
+    volumes: [*nsm-vol]
+
+  strelka-frontend:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-manager
+    container_name: nss-strelka-frontend
+    restart: unless-stopped
+    command: ["strelka-frontend"]
+    volumes:
+      - /opt/ndr/so/conf/strelka:/etc/strelka:ro
+      - *nsm-vol
+
+  strelka-backend:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-backend
+    container_name: nss-strelka-backend
+    restart: unless-stopped
+    command: ["strelka-backend"]
+    volumes:
+      - /opt/ndr/so/conf/strelka:/etc/strelka:ro
+      - /opt/ndr/yara:/etc/yara:ro
+
+  strelka-filestream:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-manager
+    container_name: nss-strelka-filestream
+    restart: unless-stopped
+    command: ["strelka-filestream"]
+    volumes:
+      - /opt/ndr/so/conf/strelka:/etc/strelka:ro
+      - *nsm-vol
+
+  strelka-manager:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-manager
+    container_name: nss-strelka-manager
+    restart: unless-stopped
+    command: ["strelka-manager"]
+    volumes:
+      - /opt/ndr/so/conf/strelka:/etc/strelka:ro
+
+  strelka-filecheck:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-filecheck
+    container_name: nss-strelka-filecheck
+    restart: unless-stopped
+    volumes:
+      - *nsm-vol
+
+  # ---------- 数据清理 ----------
+  cleaner:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-cleaner
+    container_name: nss-cleaner
+    restart: unless-stopped
+    volumes:
+      - *so-vol
+      - *nsm-vol

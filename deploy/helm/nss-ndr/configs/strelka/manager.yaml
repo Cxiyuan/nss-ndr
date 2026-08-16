@@ -1,3 +1,0 @@
-coordinator:
-  addr: nss-strelka-coordinator:6380
-  db: 0
