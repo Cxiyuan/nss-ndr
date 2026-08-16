@@ -353,7 +353,6 @@ cmd_save_images() {
     "docker.elastic.co/beats/filebeat:9.3.3"
     "docker.elastic.co/elasticsearch/elasticsearch:9.3.3"
     "docker.io/library/redis:7-alpine"
-    "docker.io/library/busybox:1.36"
   )
   save_one() {
     local src="$1" out_file="$2"
