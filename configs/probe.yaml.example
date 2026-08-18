@@ -58,6 +58,11 @@ xdr:
   webhook:
     url: https://xdr.example.com/api/v1/alerts/webhook   # XDR 接收地址（可改）
     secret: ""                                          # 可选 HMAC 签名密钥
+  task_token: ""                                         # XDR 调 POST /api/xdr/task 的 Bearer 令牌
+  agent_task_token: ""                                   # XDR 调 POST /api/xdr/agent/task 的 Bearer 令牌（与 task_token 分离）
+  agent_token: ""                                        # ndr-manager → ndr-agent 转发鉴权令牌（与 docker-compose AGENT_TOKEN 一致）
+  agent_enabled: true
+  agent_url: http://nss-ndr-agent:8081/analyze           # Agent 服务地址
   timeout_s: 10
   push_interval_s: 2          # 告警轮询/推送周期
   retry_max: 5

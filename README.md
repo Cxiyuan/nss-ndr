@@ -78,8 +78,20 @@ test/                     # 端到端测试流量生成脚本
   tds/profinet/http2/intel/cve-2020-0601/标准脚本集）+ config.zeek（JA4）；suricata 补
   so-suricata-testrule（单规则 pcap 验证）与 so-suricata-rulestats（规则统计，含 ndr-manager
   API /api/suricata/stats）
-- [x] M11：本地分析 Agent（ndr-agent + mcp-server）——LLM 小模型 + MCP 工具集，
+- [x] M11：本地分析 Agent（ndr-agent + mcp-server + 内置 ollama）——LLM 小模型 + MCP 工具集，
   对 XDR 下发的分析任务做推理与噪声过滤，输出结构化结论与证据链
+- [x] M11b：内置 ollama CPU 优化镜像（Qwen3-0.6B-Q5_K_M）——消除对外部 Ollama 的依赖；
+  entrypoint 自动检测核数、设置 NUM_THREADS、强制 CUDA_VISIBLE_DEVICES=""、KEEP_ALIVE=24h
+- [x] M11c：本地执行分析能力加固
+  - 鉴权分离：`xdr.task_token`（结构化任务）/ `xdr.agent_task_token`（研判任务）独立
+  - Agent `/analyze` 端点加 Bearer Token 鉴权（与 `xdr.agent_token` 对应）
+  - `xdr.task` 与 `xdr.agent_task` 入口调 `audit()` 写审计日志
+  - Agent MCP 连接加超时（`MCP_TIMEOUT=30s`）
+  - Agent 加并发信号量（`AGENT_MAX_CONCURRENCY=3`，防 Ollama 过载）
+  - 结构化降级覆盖所有 6 个 MCP 工具（query_files / aggregate_stats / correlate_session / query_metadata）
+  - `query_metadata` 工具接受 `size` 参数（默认 200，上限 1000）
+  - LLM 端点支持 API Key（`LLM_API_KEY`，用于远端 OpenAI 兼容服务）
+  - xdr_task 数据集级错误透出（不再静默），任务失败响应带 `task_id`
 - [x] M12：本地 Web 运维监控可视化 —— Dashboard 页提供流量处理波形图、今日告警
   线索分时柱状图、当日事件分布、组件健康、磁盘用量、Cleaner 状态、XDR 推送统计；
   后端 4 个端点 `/api/monitoring/{traffic,workload,health,alerts-today}`，每 30s 自动刷新

@@ -43,6 +43,9 @@ jobs:
           - name: strelka-manager
             context: images/strelka-manager
             file: images/strelka-manager/Dockerfile
+          - name: ollama
+            context: images/ollama
+            file: images/ollama/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v4

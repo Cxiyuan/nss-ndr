@@ -111,7 +111,8 @@ def list_datasets() -> dict:
 
 @mcp.tool()
 def query_metadata(target: dict, datasets: list[str] | None = None,
-                   window_seconds: int = 3600, conditions: dict | None = None) -> dict:
+                   window_seconds: int = 3600, conditions: dict | None = None,
+                   size: int | None = None) -> dict:
     """按目标（community_id/src_ip/dst_ip/uid）与时间窗检索指定数据集的元数据事件。
 
     Args:
@@ -119,11 +120,13 @@ def query_metadata(target: dict, datasets: list[str] | None = None,
         datasets: 数据集列表（conn/dns/http/ssl/smb_files/smb_mapping/ntlm/files/ssh），默认全查
         window_seconds: 回溯窗口（秒），默认 3600
         conditions: 附加 term 条件，如 {"http.response.status_code": 200}
+        size: 单数据集最大返回事件数（默认 MCP_MAX_EVENTS=200，上限 1000）
     """
     if not target or not any(target.values()):
         return {"error": "target 至少需要 community_id/src_ip/dst_ip/uid 之一"}
     ds_list = datasets or list(DATASETS.keys())
     start, end = _time_range(window_seconds)
+    sz = min(size or MAX_EVENTS, 1000)
     result = {"window_seconds": window_seconds, "from": start.isoformat(), "to": end.isoformat(),
               "target": target, "datasets": {}}
     for ds in ds_list:
@@ -136,7 +139,7 @@ def query_metadata(target: dict, datasets: list[str] | None = None,
         for k, v in (conditions or {}).items():
             filters.append({"term": {k: v}})
         try:
-            events = _search_events("logs-zeek-so", filters)
+            events = _search_events("logs-zeek-so", filters, size=sz)
         except Exception as e:  # 数据集可能尚无数据
             events = []
         result["datasets"][ds] = {"count": len(events), "events": events}

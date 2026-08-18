@@ -3,6 +3,7 @@
 /images/*/xdr-push
 /images/ndr-manager/ndr-manager
 /images/ndr-manager/web/dist/
+/images/ollama/models/*.gguf
 /web/node_modules/
 /web/dist/
 # 部署环境参数（不入库）

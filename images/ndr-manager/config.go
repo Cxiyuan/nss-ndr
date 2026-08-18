@@ -84,11 +84,14 @@ type FullConfig struct {
 			URL    string `yaml:"url"`
 			Secret string `yaml:"secret"`
 		} `yaml:"webhook"`
-		// TaskToken XDR 下发分析任务的 Bearer 令牌（NDR 作为执行者接收任务）
+		// TaskToken XDR 下发结构化检索任务的 Bearer 令牌（NDR 作为执行者接收任务）
 		TaskToken string `yaml:"task_token"`
+		// AgentTaskToken XDR 下发 Agent 研判任务的 Bearer 令牌（与 TaskToken 分离，便于权限控制）
+		AgentTaskToken string `yaml:"agent_task_token"`
 		// AgentURL 本地分析 Agent 服务地址（Agent 通过 MCP 工具分析 XDR 任务）
 		AgentURL      string   `yaml:"agent_url"`
 		AgentEnabled  bool     `yaml:"agent_enabled"`
+		AgentToken    string   `yaml:"agent_token"` // ndr-manager → Agent 的转发鉴权令牌
 		TimeoutS      int      `yaml:"timeout_s"`
 		PushIntervalS int      `yaml:"push_interval_s"`
 		RetryMax      int      `yaml:"retry_max"`
@@ -134,6 +137,7 @@ func defaultConfig() FullConfig {
 	c.Xdr.EventTypes = []string{"suricata.alert"}
 	c.Xdr.AgentURL = "http://nss-ndr-agent:8081/analyze"
 	c.Xdr.AgentEnabled = true
+	// TaskToken 与 AgentTaskToken 默认均留空，由部署方写入（探针首次启动后通过 Web UI / API 配置）
 	return c
 }
 

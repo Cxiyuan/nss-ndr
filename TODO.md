@@ -100,10 +100,27 @@ NDR 仍保留 Suricata 规则管理（内置 + ET Open + 自定义）作为**线
   - [x] ndr-agent（Python FastAPI）：OpenAI 兼容协议（Ollama），MCP streamable HTTP 客户端，工具调用循环
   - [x] mcp-server（Python）：暴露 6 个工具——query_metadata / correlate_session /
         aggregate_stats / get_clue / query_files / list_datasets，全部直连本地 ES，数据不出设备
-  - [x] ndr-manager 新增 `POST /api/xdr/agent/task`（Bearer 令牌认证）→ 转发到 ndr-agent
+  - [x] ndr-manager 新增 `POST /api/xdr/task`（结构化检索）+ `POST /api/xdr/agent/task`（Agent 研判）
   - [x] 结构化降级：未配置 LLM 时直接调工具汇总
-  - [x] docker-compose 集成（ndr-manager / mcp-server / ndr-agent 三件套）
+  - [x] docker-compose 集成（ndr-manager / mcp-server / ndr-agent / ollama 四件套）
   - [x] 配置项：`xdr.agent_enabled`（启用开关）+ `xdr.agent_url`（Agent 地址，默认 `http://nss-ndr-agent:8081/analyze`）
+- [x] **M11b 内置 ollama CPU 优化镜像**（nss-ndr-ollama）
+  - [x] 烘入 Qwen3-0.6B-Q5_K_M.gguf（~424 MB，CPU 友好量化）
+  - [x] Modelfile：`qwen3-ndr` 模型，CPU 参数（num_ctx=4096, temperature=0.1）
+  - [x] entrypoint：自动 `nproc` → NUM_THREADS、强制 CUDA_VISIBLE_DEVICES=""、KEEP_ALIVE=24h、预热可选
+  - [x] 健康检查 `/api/tags`
+  - [x] docker-compose：ndr-agent 默认指向 `http://ollama:11434`，`LLM_MODEL=qwen3-ndr`
+  - [x] .gitignore：忽略 `images/ollama/models/*.gguf`
+- [x] **M11c 本地执行分析能力加固**（基于审核）
+  - [x] 鉴权分离：`xdr.task_token`（结构化）/ `xdr.agent_task_token`（研判）/ `xdr.agent_token`（→Agent）独立
+  - [x] Agent `/analyze` 端点 Bearer 鉴权（常量时间比较，默认拒绝）
+  - [x] `xdr.task` / `xdr.agent_task` 入口写审计日志（`audit()`）
+  - [x] Agent MCP 连接超时（`MCP_TIMEOUT=30s`）
+  - [x] Agent 并发信号量（`AGENT_MAX_CONCURRENCY=3`，防 Ollama 过载）
+  - [x] 结构化降级覆盖 6 个工具（query_files / aggregate_stats / correlate_session / query_metadata）
+  - [x] `query_metadata` 工具接受 `size` 参数（上限 1000）
+  - [x] LLM 端点支持 API Key（`LLM_API_KEY`）
+  - [x] `executeXDRTask` 数据集级错误透出（`result.errors`），任务失败响应带 `task_id`
 - [x] **M12 本地 Web 运维监控可视化**
   - [x] 后端 4 个端点（`monitoring.go`）：`/api/monitoring/traffic`（流量波形）、
         `/api/monitoring/workload`（当日工作量）、`/api/monitoring/health`（组件/ES/磁盘/cleaner）、

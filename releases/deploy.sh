@@ -297,6 +297,28 @@ cmd_install() {
   load_images_into_docker "${images_dir:-$ROOT/releases/images}"
 
   mkdir -p "$NDR_HOME/es-data" "$NDR_HOME/nsm" "$NDR_HOME/so" "$NDR_HOME/yara" "$NDR_HOME/filebeat-data"
+
+  # ---------- Ollama GGUF 外挂：若项目根或 images/ollama/models/ 有 GGUF，自动拷到挂载目录 ----------
+  OLLAMA_DIR="${OLLAMA_MODELS_DIR:-/opt/ndr/ollama-models}"
+  GGUF_NAME="${OLLAMA_GGUF_NAME:-Qwen3-0.6B-Q5_K_M.gguf}"
+  if [[ ! -f "$OLLAMA_DIR/$GGUF_NAME" ]]; then
+    local gguf_src=""
+    if [[ -f "$ROOT/images/ollama/models/$GGUF_NAME" ]]; then
+      gguf_src="$ROOT/images/ollama/models/$GGUF_NAME"
+    elif [[ -f "$ROOT/$GGUF_NAME" ]]; then
+      gguf_src="$ROOT/$GGUF_NAME"
+    fi
+    if [[ -n "$gguf_src" ]]; then
+      mkdir -p "$OLLAMA_DIR"
+      log "拷贝 GGUF 模型权重：$gguf_src → $OLLAMA_DIR/$GGUF_NAME"
+      cp "$gguf_src" "$OLLAMA_DIR/$GGUF_NAME"
+    else
+      warn "未找到 $GGUF_NAME；ollama 容器将无法启动 LLM 任务（仅结构化降级可用）"
+      warn "请将 GGUF 放到 $OLLAMA_DIR/$GGUF_NAME 后重启：docker compose restart ollama"
+      mkdir -p "$OLLAMA_DIR"
+    fi
+  fi
+
   log "启动 docker compose ..."
   (cd "$COMPOSE_DIR" && docker compose up -d)
   log "等待组件就绪..."
@@ -315,6 +337,7 @@ cmd_install() {
   echo "  探针管理后台 : http://<本机IP>:$manager_port   （初始账号 admin / admin，登录后请改密）"
   echo "  镜像口       : $interface"
   echo "  XDR 任务接口 : POST http://<本机IP>:$manager_port/api/xdr/task 与 /api/xdr/agent/task（Bearer 令牌）"
+  echo "  Ollama GGUF  : $OLLAMA_DIR/$GGUF_NAME"
   echo "  常用命令     : cd $COMPOSE_DIR && docker compose ps / logs -f <服务>"
   echo ""
 }

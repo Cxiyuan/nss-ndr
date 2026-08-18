@@ -121,7 +121,7 @@ func executeXDRTask(req xdrTaskRequest) (map[string]any, error) {
 		return nil, fmt.Errorf("task_id 不能为空")
 	}
 	if req.Target.CommunityID == "" && req.Target.SourceIP == "" && req.Target.DestIP == "" && req.Target.UID == "" {
-		return nil, fmt.Errorf("target 至少需要 community_id / src_ip / dst_ip / uid 之一")
+		return nil, fmt.Errorf("task_id=%s target 至少需要 community_id / src_ip / dst_ip / uid 之一", req.TaskID)
 	}
 	window := req.WindowSeconds
 	if window <= 0 {
@@ -157,15 +157,18 @@ func executeXDRTask(req xdrTaskRequest) (map[string]any, error) {
 		"group_by": groupBy,
 		"datasets": map[string]any{},
 		"summary":  map[string]any{},
+		"errors":   map[string]any{}, // 数据集级错误（不再静默吞）
 	}
 
 	datasetsOut := result["datasets"].(map[string]any)
+	errorsOut := result["errors"].(map[string]any)
 	summary := result["summary"].(map[string]any)
 	totalAll := 0
 
 	for _, ds := range datasets {
 		esDS, ok := taskDatasetMap[strings.ToLower(ds)]
 		if !ok {
+			errorsOut[ds] = "unknown dataset"
 			continue
 		}
 		filters := []any{
@@ -201,7 +204,8 @@ func executeXDRTask(req xdrTaskRequest) (map[string]any, error) {
 		}
 		hits, err := client.search(body)
 		if err != nil {
-			// 数据集索引可能尚未产生数据，视为 0 命中
+			// 数据集级错误透出（XDR 可区分"空结果"与"ES 失败"）
+			errorsOut[ds] = err.Error()
 			hits = nil
 		}
 		events := make([]map[string]any, 0, len(hits))
@@ -216,6 +220,10 @@ func executeXDRTask(req xdrTaskRequest) (map[string]any, error) {
 		totalAll += len(events)
 	}
 	summary["total"] = totalAll
+	if len(errorsOut) > 0 {
+		// 部分失败 → 整体仍返回 200，但 status 标记为 partial
+		result["status"] = "partial"
+	}
 	return result, nil
 }
 
@@ -302,12 +310,12 @@ func summarizeTaskEvent(s map[string]any) map[string]any {
 	return out
 }
 
-// apiXDRTask XDR 分析任务下发入口（Bearer 令牌认证，非探针用户会话）
+// apiXDRTask XDR 结构化检索任务入口（Bearer 令牌 = xdr.task_token）
 func apiXDRTask(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	c, err := loadFull()
 	if err != nil || c.Xdr.TaskToken == "" || token != c.Xdr.TaskToken {
-		writeErr(w, http.StatusUnauthorized, "XDR 任务令牌无效")
+		writeErr(w, http.StatusUnauthorized, "task_token 无效")
 		return
 	}
 	var req xdrTaskRequest
@@ -317,19 +325,27 @@ func apiXDRTask(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := executeXDRTask(req)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		// 错误响应也带 task_id，便于 XDR 关联
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"task_id": req.TaskID,
+			"status":  "error",
+			"error":   err.Error(),
+		})
 		return
 	}
+	audit("xdr.task.execute", req.TaskID, fmt.Sprintf("target=%v datasets=%v", req.Target, datasetsList(req.Datasets)))
 	writeJSON(w, http.StatusOK, result)
 }
 
-// apiXDRAgentTask XDR 分析任务入口（Agent 模式）：任务转发给本地 Agent 服务，
-// 由 Agent（小模型 + MCP 工具）自主分析，返回结论与工具调用链。
+// apiXDRAgentTask XDR 研判任务入口（Bearer 令牌 = xdr.agent_task_token，独立于 task_token）
+// 转发给本地 Agent 服务（小模型 + MCP 工具）自主分析。
 func apiXDRAgentTask(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	c, err := loadFull()
-	if err != nil || c.Xdr.TaskToken == "" || token != c.Xdr.TaskToken {
-		writeErr(w, http.StatusUnauthorized, "XDR 任务令牌无效")
+	if err != nil || c.Xdr.AgentTaskToken == "" || token != c.Xdr.AgentTaskToken {
+		writeErr(w, http.StatusUnauthorized, "agent_task_token 无效")
 		return
 	}
 	if !c.Xdr.AgentEnabled {
@@ -346,7 +362,8 @@ func apiXDRAgentTask(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "请求体解析失败")
 		return
 	}
-	if req["task_id"] == nil || req["task_id"] == "" {
+	taskID, _ := req["task_id"].(string)
+	if taskID == "" {
 		writeErr(w, http.StatusBadRequest, "task_id 不能为空")
 		return
 	}
@@ -354,6 +371,7 @@ func apiXDRAgentTask(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "instruction（分析任务描述）不能为空")
 		return
 	}
+	audit("xdr.agent_task.execute", taskID, fmt.Sprintf("instruction_len=%d", len(fmt.Sprint(req["instruction"]))))
 
 	agentURL := c.Xdr.AgentURL
 	if agentURL == "" {
@@ -365,6 +383,10 @@ func apiXDRAgentTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	// ndr-manager → Agent 的转发鉴权（Agent 自己再校验）
+	if c.Xdr.AgentToken != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.Xdr.AgentToken)
+	}
 	resp, err := newTaskESClient().client.Do(httpReq)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "本地 Agent 不可达: "+err.Error())
@@ -379,4 +401,11 @@ func apiXDRAgentTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
+}
+
+func datasetsList(in []string) string {
+	if len(in) == 0 {
+		return "[default]"
+	}
+	return strings.Join(in, ",")
 }

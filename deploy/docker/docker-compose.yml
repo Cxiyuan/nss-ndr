@@ -103,7 +103,26 @@ services:
       - *so-vol
       - /opt/ndr/so/rules/suricata:/opt/so/rules/suricata
       - /var/run/suricata:/var/run/suricata
-  # ---------- 分析（MCP + Agent）----------
+  # ---------- 分析（Ollama + MCP + Agent）----------
+  ollama:
+    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-ollama
+    container_name: nss-ollama
+    restart: unless-stopped
+    # CPU 优化线程数（默认 = nproc，可通过环境变量覆盖）
+    environment:
+      OLLAMA_NUM_THREADS: ${OLLAMA_NUM_THREADS:-}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-24h}
+      OLLAMA_GGUF_PATH: ${OLLAMA_GGUF_PATH:-/models/Qwen3-0.6B-Q5_K_M.gguf}
+    # 外挂 GGUF 模型权重（不在镜像内）
+    volumes:
+      - ${OLLAMA_MODELS_DIR:-/opt/ndr/ollama-models}:/models:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags >/dev/null && ollama list 2>/dev/null | grep -q qwen3-ndr || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+
   mcp-server:
     image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-mcp-server
     container_name: nss-mcp-server
@@ -111,7 +130,8 @@ services:
     environment:
       <<: *common-env
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
 
   ndr-agent:
     image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-agent
@@ -119,12 +139,17 @@ services:
     restart: unless-stopped
     environment:
       MCP_URL: "http://mcp-server:8000/mcp"
-      LLM_URL: ${LLM_URL:-http://host.docker.internal:11434/v1/chat/completions}
-      LLM_MODEL: ${LLM_MODEL:-}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      # 默认指向本探针内置的 ollama 服务（CPU 优化版）
+      LLM_URL: ${LLM_URL:-http://ollama:11434/v1/chat/completions}
+      LLM_MODEL: ${LLM_MODEL:-qwen3-ndr}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      AGENT_TOKEN: ${AGENT_TOKEN:-}
+      AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-6}
     depends_on:
-      - mcp-server
+      mcp-server:
+        condition: service_started
+      ollama:
+        condition: service_healthy
 
   # ---------- 文件分析（Strelka）----------
   strelka-coordinator:
