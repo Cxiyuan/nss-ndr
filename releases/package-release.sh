@@ -78,20 +78,45 @@ while [ $# -gt 0 ]; do
     -h|--help)
       echo "NSS-NDR 探针发布包"
       echo "用法:"
-      echo "  $0 [--dir <解压目录>] [命令...]"
-      echo "  $0 install -i enp5s0         解压并执行部署"
-      echo "  $0 uninstall -y              解压并执行卸载"
+      echo "  $0 [--dir <解压目录>] install -i <网卡> [-y]"
+      echo "  $0 [--dir <解压目录>] uninstall -y"
+      echo "  $0 [--dir <解压目录>] <其他 deploy.sh 子命令>"
       echo "  $0 --list                    查看包内容"
       exit 0
       ;;
-    *) break ;;
+    install)
+      NEED_I=1; [ -n "$2" ] && { case "$2" in -i|--interface) NEED_I=0;; esac; }
+      [ $NEED_I -eq 1 ] && { echo "错误: install 必须指定 -i <网卡>"; exit 1; }
+      break ;;
+    uninstall|save-images|load-images|render)
+      break ;;
+    *) echo "未知命令: $1"; exit 1 ;;
   esac
 done
 CMD="$*"
 
+# Docker 预检（install/uninstall/load-images 前）
+case "$CMD" in
+  install*|uninstall*|load-images*)
+    command -v docker >/dev/null 2>&1 || { echo "错误: 未检测到 docker，请先安装 Docker（https://get.docker.com）"; exit 1; }
+    docker compose version >/dev/null 2>&1 || { echo "错误: 未检测到 docker compose v2 插件"; exit 1; }
+    ;;
+esac
+
 [ -z "$TARGET" ] && TARGET="./nss-ndr"
 echo "解压发布包到 $TARGET ..."
 mkdir -p "$TARGET"
+# 目录非空警告
+if [ -n "$(ls -A "$TARGET" 2>/dev/null)" ]; then
+  echo "警告: 目标目录 $TARGET 非空，解压会合并覆盖现有文件" >&2
+  echo "  （如需全新部署，请先清空该目录或指定新目录）" >&2
+fi
+# 磁盘空间预检（解压 5.6GB + ES+pcap 至少需 15GB 可用）
+FREE_GB=$(df -PB 1G "$TARGET" 2>/dev/null | tail -1 | awk "{print \\\$4}" | sed "s/G//")
+if [ -n "$FREE_GB" ] && [ "$FREE_GB" -lt 15 ] 2>/dev/null; then
+  echo "错误: 目标目录所在磁盘仅 ${FREE_GB}GB 可用，至少需要 15GB" >&2
+  exit 1
+fi
 LINE=$(awk '/^__ARCHIVE_BELOW__/ {print NR+1; exit}' "$SELF")
 tail -n +"$LINE" "$SELF" | tar -xf - -C "$TARGET"
 chmod +x "$TARGET/deploy.sh" "$TARGET/test/traffic-test.sh" 2>/dev/null || true

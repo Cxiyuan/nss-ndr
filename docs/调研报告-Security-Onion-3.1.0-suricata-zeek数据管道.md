@@ -1,9 +1,17 @@
 # Security Onion 3.1.0 Suricata + Zeek 流量分析数据管道调研
 
+> **本文档性质：历史调研记录（2026 年早期）**
+> **当前定位：仅作参考资料保留，不作为 NDR 现行设计依据**
+>
 > 调研对象：Security Onion 3.1.0（tag `3.1.0-20260521`，热修复 `3.1.0-20260528`）
 > 调研方式：官方文档（docs.securityonion.net/en/3/main）+ 官方发布说明 + 源码级分析
 > （GitHub `Security-Onion-Solutions/securityonion` 3.1.0 分支、`securityonion-image` 容器镜像）
-> 用途：为本项目 NDR 探针（同样采用 Suricata + Zeek 架构）提供设计与定制参考
+> 调研目的：为本项目 NDR 探针（同样采用 Suricata + Zeek 架构）提供设计与定制参考
+>
+> **与现行设计的边界差异（2026-08-15 重新校准）**：
+> - 本调研描述了 SO 的 Kibana / SOC 看板 / Sigma 关联规则 等能力，**这些能力在 NDR 中均已下线**——可视化与 Sigma 由 XDR 平台承担，NDR 不内置
+> - NDR 从 SO 复用的资产仅限：suricata/zeek 配置与脚本、ingest pipelines、ILM/索引模板、Strelka 镜像与配置（详见 `架构设计-NDR探针-容器化-k3s.md` §7）
+> - 阅读本文档时，请注意区分"NDR 实际实现的范围"与"SO 完整覆盖的范围"
 
 ---
 

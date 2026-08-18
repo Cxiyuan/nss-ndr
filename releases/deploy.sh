@@ -357,7 +357,8 @@ cmd_save_images() {
     esac
   done
   command -v skopeo >/dev/null || die "缺少 skopeo（brew install skopeo / apt install skopeo）"
-  [[ -z "$tag" ]] && tag=$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo latest)
+  # 默认 tag 用 12 字符短 SHA，与 tar 文件名 `${tag:0:12}` 与 package-release.sh 的 `--short=12` 对齐
+  [[ -z "$tag" ]] && tag=$(git -C "$ROOT" rev-parse --short=12 HEAD 2>/dev/null || echo latest)
   out="${out:-$ROOT/releases/images}"
   mkdir -p "$out"
   local project_images=(
@@ -368,7 +369,7 @@ cmd_save_images() {
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-manager"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-backend"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-manager"
-    "ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-rules"
+    # strelka-rules 由 strelka-backend 构建时内置，compose 不单独导出
   )
   local base_images=(
     "docker.elastic.co/beats/filebeat:9.3.3"

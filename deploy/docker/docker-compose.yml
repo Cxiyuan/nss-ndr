@@ -1,7 +1,9 @@
 # NSS-NDR 探针 docker-compose 部署（2026-08-16 起替代 k3s）
 #
-# 架构：采集（suricata/zeek/filebeat）→ ES 存储 → 管理（ndr-manager）+ 分析（mcp-server/ndr-agent）
-#       + 上报线索（xdr-push）+ 文件分析（strelka）
+# 架构：采集（suricata/zeek/standalone-filebeat）→ ES 存储 → 管理（ndr-manager）
+#       + 分析（mcp-server/ndr-agent）+ 上报线索（ndr-manager 内置）+ 文件分析（strelka）
+# 注：docker-compose 部署使用 standalone filebeat 直连 ES，链路最短；
+#     elastic-agent（k3s 时期方案，含 Fleet/Logstash/Redis）当前未启用。
 # 使用：
 #   1) 复制 .env.example 为 .env 并填写（或 deploy.sh install 自动生成）
 #   2) 渲染配置文件到 conf/（deploy.sh install 自动执行 render）

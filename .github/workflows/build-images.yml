@@ -43,9 +43,6 @@ jobs:
           - name: strelka-manager
             context: images/strelka-manager
             file: images/strelka-manager/Dockerfile
-          - name: strelka-rules
-            context: images/strelka-rules
-            file: images/strelka-rules/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v4

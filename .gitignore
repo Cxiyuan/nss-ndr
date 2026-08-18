@@ -1,6 +1,7 @@
 /images/*/bin/
 /images/*/detections
 /images/*/xdr-push
+/images/ndr-manager/ndr-manager
 /images/ndr-manager/web/dist/
 /web/node_modules/
 /web/dist/
@@ -10,5 +11,7 @@
 /deploy/docker/.env
 # 离线镜像包（体积大，不入库；由 releases/save-images.sh 生成）
 /releases/images/
+# 发布包 .run（5GB+，不入库；由 releases/package-release.sh 重新生成）
+/releases/*.run
 web/tsconfig.tsbuildinfo
 .DS_Store

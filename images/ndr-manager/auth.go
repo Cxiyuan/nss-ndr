@@ -120,7 +120,7 @@ func apiLogin(w http.ResponseWriter, r *http.Request) {
 	sessionMu.Lock()
 	sessions[token] = userSession{username: body.Username, expiresAt: time.Now().Add(sessionTTL)}
 	sessionMu.Unlock()
-	// 同源 cookie：iframe 内 Kibana 代理等子资源请求免 Authorization header
+	// 同源 cookie：iframe 等同源子资源请求免 Authorization header（仅本探针管理后台 UI 使用）
 	http.SetCookie(w, &http.Cookie{
 		Name:     "ndr_session",
 		Value:    token,
