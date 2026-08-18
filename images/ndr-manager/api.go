@@ -63,6 +63,12 @@ func registerAPI(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/etopen/rule/{id}/enable", requireAuth(apiETOpenRule(true)))
 	mux.HandleFunc("POST /api/etopen/rule/{id}/disable", requireAuth(apiETOpenRule(false)))
 
+	// 运维监控可视化（仅本系统自身运维指标，不展示具体安全事件内容）
+	mux.HandleFunc("GET /api/monitoring/traffic", requireAuth(apiMonitoringTraffic))
+	mux.HandleFunc("GET /api/monitoring/workload", requireAuth(apiMonitoringWorkload))
+	mux.HandleFunc("GET /api/monitoring/health", requireAuth(apiMonitoringHealth))
+	mux.HandleFunc("GET /api/monitoring/alerts-today", requireAuth(apiMonitoringAlertsToday))
+
 }
 
 func apiHealth(w http.ResponseWriter, _ *http.Request) {

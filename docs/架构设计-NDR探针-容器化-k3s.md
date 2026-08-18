@@ -1,23 +1,59 @@
 # NDR 探针架构设计（容器化 · 目标 k3s）
 
-> 版本：v0.1（开发前设计稿，待评审）
-> 关联文档：[调研报告-Security-Onion-3.1.0-suricata-zeek数据管道.md](调研报告-Security-Onion-3.1.0-suricata-zeek数据管道.md)
+> 版本：v0.2（2026-08-15 重新校准定位）
+> 关联文档：[调研报告-Security-Onion-3.1.0-suricata-zeek数据管道.md](调研报告-Security-Onion-3.1.0-suricata-zeek数据管道.md)（历史调研，不再作为现行设计依据）
 > 本设计大量复用 SO 3.1.0 已验证的配置资产（详见 §7）。
 
 ---
 
 ## 1. 定位与范围
 
-- 本单元是 **NDR 流量探针**：负责镜像口流量采集、检测、元数据生成、全包留存、告警产生与归一化，并将告警推送到主平台 **XDR**。
-- 部署形态：**每台探针 = 一个单节点 k3s**；k3s 等基础设施本身不纳入开发范围，本单元交付的是**容器镜像 + k8s 清单/Helm Chart + 配置文件**。
-- 探针本地职责：Zeek 元数据可检索（ES）、全包文件（pcap-log）+ 告警留存、Detections 式规则管理。
-- 探针不建 SIEM；检索用本地 ES + Kibana，告警推送由独立 XDR 推送服务完成。
+### 1.1 项目定位（边界声明）
+
+本单元是 **NDR 网络流量探针**，定位为**网络流量数据生产侧的探针单元**，承担以下职责：
+
+- **采集**：尽可能贴近数据生产侧，捕获并落盘尽可能完整的网络数据包（pcap 全包 + Zeek 元数据 + 文件提取）
+- **检测**：内置 Suricata NIDS 实时命中（内置 + ET Open + 自定义规则）
+- **线索上报**：把检测命中（suricata.alert）按白名单实时 POST 到 XDR Webhook
+- **执行 XDR 下发的分析任务**：在本地元数据上完成检索 / 关联分析并返回结构化结果
+- **LLM 噪声过滤**（ndr-agent + mcp-server）：本地小模型 + MCP 工具集，对 XDR 下发的"是否为真实威胁"类分析任务做推理降噪
+- **本地 Web 后台**：仅设备管理（参数 / 规则 / 状态 / 历史审计）
+
+### 1.2 明确不在 NDR 范围内（划归 XDR）
+
+- **Sigma 规则库与关联规则编排**：Sigma 是 XDR 的关联分析与最终裁决手段，NDR 不内置、不维护、不调度
+- **安全数据可视化 / SOC / Hunt / 跨会话关联 / 跨探针聚合 / 工单研判**：划归 XDR 平台
+
+### 1.3 本地 Web 后台——运维监控可视化（不提供安全数据可视化）
+
+NDR Web 后台**只展示本探针自身的运维监控指标**，用于设备管理与运行状态查看，**不展示具体告警事件的内容**：
+
+| 类别 | 指标示例 | 数据来源 |
+|---|---|---|
+| **流量处理波形图** | 实时抓包速率（pps / bps）时序曲线 | Suricata / Zeek stats socket（如 `suricatasc iface-stats` / `zeekctl netstats`） |
+| **当日工作量统计** | 当日事件总量、按 dataset 分布、当日告警线索量、Strelka 已处理文件数、XDR 推送成功/失败计数 | ES 聚合查询（`logs-zeek-so` / `logs-suricata.alerts-so` / `logs-strelka-so`）+ ndr-manager 本地游标计数 |
+| **系统健康** | 各容器组件运行状态、ES 索引健康（黄/红）、磁盘用量、cleaner 状态、采集队列堆积 | ndr-manager 拉取 `docker compose ps` / ES `_cluster/health` / `df` / `du` |
+| **配置 / 规则 / 审计** | 参数配置表单、ET Open 规则启停树、配置版本历史、操作审计日志 | ndr-manager SQLite |
+
+**NDR Web 后台刻意不展示的内容**（划归 XDR）：
+
+- 具体告警的事件详情、五元组载荷、Suricata 规则匹配 payload 明文
+- 跨协议关联视图（community_id 时序、横向移动路径）
+- Sigma 关联规则展示、攻击链时间线、IOC 检索
+- 多探针联合视图、告警合并去重、研判工单
+
+> 一句话总结：**NDR Web = 本探针运维监控（"这台机器在干什么、干了多少"）；XDR Web = 安全数据研判（"这些事件意味着什么、要不要处置"）**。
+
+### 1.4 部署形态
+
+- 每台探针 = 单节点 docker-compose（2026-08-16 起替代原 k3s）；基础设施不纳入开发范围
+- 交付内容：容器镜像 + docker-compose 清单 + 配置文件 + 发布包脚本（`.run` 自解压）
 
 ## 2. 总体架构
 
 ```mermaid
 flowchart LR
-    subgraph K3S["探针节点（单节点 k3s）"]
+    subgraph NODE["探针节点（docker-compose 单机）"]
         TAP[("镜像口/TAP (hostNetwork)")]
         SUR["suricata<br/>NIDS + pcap-log"]
         ZK["zeek<br/>元数据 + 文件提取"]
@@ -27,11 +63,11 @@ flowchart LR
         EXTRACT[("/nsm/zeek/extracted/")]
         FB["elastic-agent<br/>(filestream + 管道路由)"]
         ES["elasticsearch<br/>单节点 + ingest pipelines"]
-        KIB["kibana<br/>(检索/仪表盘)"]
-        DET["detections 服务<br/>(规则管理 API + UI)"]
-        XDRP["xdr-push 服务<br/>(告警推送)"]
-        CLEAN["pcap-cleaner<br/>(阈值清理)"]
-        CFG["ConfigMap: 探针配置<br/>(留存/阈值/XDR 地址等)"]
+        MG["ndr-manager<br/>(配置 / 规则 / 线索推送 / cleaner / ES init)"]
+        MCP["mcp-server<br/>(本地 ES 工具集)"]
+        AG["ndr-agent<br/>(LLM 噪声过滤)"]
+        STR["strelka-*<br/>(文件分析)"]
+        CFG["ConfigMap / conf/<br/>探针配置<br/>(留存/阈值/XDR 地址等)"]
 
         TAP --> SUR & ZK
         SUR --> EVE
@@ -40,34 +76,42 @@ flowchart LR
         ZK --> EXTRACT
         EVE --> FB
         ZLOG --> FB
+        ZK --> STR
+        STR --> FB
         FB --> ES
-        ES --> KIB
-        DET -. 规则文件/重载 .-> SUR
-        DET -. 规则元数据 .-> ES
-        ES -. 轮询新告警 .-> XDRP
-        XDRP -. "REST/Webhook/Kafka" .-> XDR["主平台 XDR"]
-        CLEAN --> SURPCAP
-        CFG -.-> SUR & ZK & CLEAN & XDRP
+        ES --> MG
+        MG -. 规则文件/热加载 .-> SUR
+        MG -. 推送告警 .-> XDR["主平台 XDR"]
+        XDR -. "POST /api/xdr/task<br/>(Bearer 令牌)" .-> MG
+        XDR -. "POST /api/xdr/agent/task" .-> MG
+        MG --> AG
+        AG <--> MCP
+        MCP --> ES
+        CFG -.-> MG & SUR & ZK
     end
 ```
+
+- XDR 通过 `POST /api/xdr/task` 下发结构化检索任务 → MG 直接查询 ES 返回结果
+- XDR 通过 `POST /api/xdr/agent/task` 下发"研判类"任务 → MG 转发到 AG（LLM）→ AG 通过 MCP 工具调 ES
+- 数据可视化、跨探针关联、Sigma 编排均在 XDR 侧，NDR 不持有这些组件
 
 ## 3. 容器清单（一次交付）
 
 | 容器 | 职责 | 运行方式 | 说明 |
 |---|---|---|---|
-| `so-suricata` | NIDS 检测 + eve.json + pcap-log 全包 | hostNetwork + privileged + DaemonSet | 基于 SO 镜像瘦身，AF_PACKET 抓包 |
-| `so-zeek` | 协议元数据 + 文件提取 | hostNetwork + privileged + DaemonSet | 基于 SO 镜像瘦身，JSON 日志 |
-| `elastic-agent` | 采集 eve/zeek/strelka 日志 → Logstash | DaemonSet（Fleet 托管） | Fleet 策略下发 filestream 集成，`@metadata.pipeline` 路由（对齐 SO） |
+| `suricata` | NIDS 检测 + eve.json + pcap-log 全包 | hostNetwork + privileged | 基于 SO 镜像瘦身，AF_PACKET 抓包 |
+| `zeek` | 协议元数据 + 文件提取 | hostNetwork + privileged | 基于 SO 镜像瘦身，JSON 日志 |
+| `elastic-agent` | 采集 eve/zeek/strelka 日志 → Logstash/ES | DaemonSet（Fleet 托管） | Fleet 策略下发 filestream 集成，`@metadata.pipeline` 路由（对齐 SO） |
 | `fleet-server` | Fleet Server（agent 策略/令牌/输出下发） | Deployment（8220） | 对齐 SO Fleet 托管；fleet-init 自动供给 |
-| `elasticsearch` | 本地元数据/告警存储 + ingest pipeline 归一化 | Deployment + LocalPV | 单节点，ILM 自动清理 |
-| `kibana` | 检索/仪表盘 | Deployment | 可选但建议保留 |
-| `detections` | 规则管理（CRUD/启停/阈值/自定义规则）+ 规则下发 | Deployment | 自研（Go/Python），含轻量 UI |
-| `xdr-push` | 消费新告警 → 推送 XDR，重试/去重/断点 | Deployment | 自研（Go），见 §6.3 |
-| `cleaner` | 按配置阈值清理全包/过期日志/提取文件 | CronJob | 留存天数 + 存储上限双阈值，见 §5.9 |
+| `elasticsearch` | 本地元数据/告警存储 + ingest pipeline 归一化 | Deployment + LocalPV | 单节点，ILM 自动清理；数据可视化由 XDR 负责 |
+| `ndr-manager` | 配置/规则/线索推送/cleaner/ES init 统一管理 | Deployment（30603） | 自研 Go + SQLite + 内嵌 React SPA |
+| `mcp-server` | 向本地 Agent 暴露分析工具集（查询本地 ES） | Deployment | Python FastMCP，streamable HTTP |
+| `ndr-agent` | LLM 小模型 + MCP 工具调用，对 XDR 任务做噪声过滤 | Deployment（8081） | OpenAI 兼容协议（Ollama），未配置模型时降级为结构化任务 |
+| `strelka-*` | 文件静态分析（YARA/exiftool/PE/PDF...） | Deployment + Redis | 参照 SO 3.1.0 六组件 |
 
-> 说明：采集链路与 SO 一致——elastic-agent（Fleet 托管）→ Logstash（5055，mTLS）→
-> Redis 队列 → Logstash → ES；FleetServer 策略输出钉 ES、数据策略走 Logstash
-> （basic license 下按 SO 顺序供给实现，见 §5.3）。告警推送由 `xdr-push` 轮询 ES 实现。
+> 说明：xdr-push / detections / cleaner / es-init 四个原独立服务已全部并入 `ndr-manager`（统一后台）；
+> 数据可视化（Kibana/仪表盘）划归 XDR，NDR 镜像与清单不再包含可视化组件；
+> 告警推送仍由 `ndr-manager` 内部 goroutine 轮询 ES 实现（详见 §5.7）。
 
 ## 4. 数据管道设计
 
@@ -85,9 +129,9 @@ flowchart LR
    - `logs-suricata.alerts-so`（Suricata 命中线索 signal，管道显式 `_index` 路由，`nss.detection.stage=clue`）
    - `logs-zeek.notice` 归入 `logs-zeek-so`（`event.dataset=zeek.notice`）
    - `logs-strelka-so`（文件分析，若启用）
-   - `logs-detections.alerts-*`（Detections 派生告警，若启用）
    - `logs-soc-so`（探针自身服务日志）
-6. **告警推送**：`xdr-push` 监听三个告警相关数据流（高频轮询游标，默认 2s），按推送白名单过滤后**实时主动 POST 到配置文件中维护的 Webhook URL**（XDR 侧以该 URL 接收）。Phase 0 起默认白名单仅 `detections.alerts`（Sigma 关联确认后的最终告警）；`suricata.alert`（线索）、`zeek.notice`（上下文）不再默认外推，如需外推在 `xdr.event_types` 显式配置。
+   - ~~`logs-detections.alerts-*`~~：已下线。最终裁决由 XDR 完成，NDR 不维护 detections 数据流（仅生产 `suricata.alert` 线索）
+6. **告警推送**：`ndr-manager` 内置 xdr-push goroutine 监听告警相关数据流（高频轮询游标，默认 2s），按推送白名单过滤后**实时主动 POST 到配置文件中维护的 Webhook URL**（XDR 侧以该 URL 接收）。默认白名单仅 `suricata.alert`（线索，标记 `nss.detection.stage=clue`）；最终裁决由 XDR 完成，不在 NDR 维护 detections.alerts 索引。如需外推 `zeek.notice` 等上下文事件，在 `xdr.event_types` 显式配置。
 
 ### 4.2 事件模型（ECS 子集，与 SO 一致）
 
@@ -235,32 +279,38 @@ flowchart LR
 - 认证：本地自签 CA + 内置用户（filebeat/detections/xdr-push 各一）。
 - 资源：heap 默认 1-2GB（可配）；数据目录 LocalPV。
 
-### 5.5 kibana（可选）
+### 5.5 Suricata 规则管理（ndr-manager 内置）
 
-- 与 ES 同版本；提供元数据检索与告警查询；默认只读用户。
+- **存储**：规则文件（`/opt/so/rules/suricata/all-rulesets.rules`，由 ndr-manager 渲染生成）+ SQLite 元数据表（`rules` 表，`type ∈ {custom, builtin, etopen}`）。
+- **规则来源**：
+  - `custom` — 用户/管理员通过 Web UI 新增的单条规则
+  - `builtin` — 镜像内置规则集（`so_filters.rules` / `so_extraction.rules`，默认禁用，仅启停）
+  - `etopen` — Emerging Threats Open 内置规则包（35 分类，约 3.9 万条，默认全部禁用，按分类勾选启用）
+- **API**：
+  - 规则 CRUD（仅 custom 可编辑/删除；builtin/etopen 仅可启停）
+  - 阈值/抑制（规则内嵌 `threshold` 关键字，热加载即生效）
+  - 分类树批量启停（ET Open）
+  - 规则下发 → 渲染 `all-rulesets.rules` → 通过 unix socket 触发 suricata 热加载
+  - 规则统计：`GET /api/suricata/stats`（对齐 SO `so-suricata-rulestats`）
+- **UI**：Web UI 的"事件检测"页（ET Open 分类树）+ "自定义规则"页（CRUD），中文规则描述自动翻译。
+- **不再涉及 Sigma**：Sigma 规则及其关联规则编排由 XDR 平台承担，NDR 仅生产线索（suricata.alert），不做最终裁决。
 
-### 5.6 detections（规则管理服务，自研）
+> 历史说明：M2 时期存在独立 `detections` 服务（API + 轻量 UI）+ `logs-detections.*` 索引。2026-08-15 起并入 `ndr-manager`，Sigma 相关能力（`logs-detections.alerts-so` 数据流、pySigma 转换器、调度器、证据预览 API）下线，由 XDR 平台替代。
 
-- 存储：规则文件（`/opt/so/rules/suricata/`）+ 规则元数据索引（`logs-detections.*`，复用 SO detections 数据流设计）。
-- API：
-  - 规则 CRUD（内置规则集/自定义规则分开管理）
-  - 启用/禁用、阈值/抑制（threshold/suppress）
-  - 规则集分组（如 ET 类、自研类、SO_FILTERS/SO_EXTRACTIONS 类）
-  - 规则下发 → 写规则文件 → `so-suricata-reload-rules`（suricatasc）
-  - 规则命中统计（从 ES 聚合告警索引）
-- UI：先交付 REST API + 轻量管理页（后续迭代完整 SOC 式界面）。
-
-### 5.7 xdr-push（告警推送服务，自研 Go）
+### 5.7 线索推送（ndr-manager 内置 xdr-push goroutine）
 
 - 输入：高频轮询 ES（`search_after`，默认 `push_interval_s=2`，可配）`logs-suricata.alerts-so` + `zeek.notice` 新文档；用文档 `_id` 做游标与去重（`metadata._id` 幂等）。
 - 转换：ES 文档 → Webhook 告警报文（见 §5.8 报文规范），字段裁剪 + 枚举映射 + 探针标识。
 - 输出：**Webhook**——配置文件中维护 `xdr.webhook.url` 变量；每产生一条新告警即主动 POST（实时推送），不依赖 XDR 轮询。
 - 可靠性：
   - 本地持久化游标（PV），探针重启断点续传，不重复推送已确认文档。
-  - 失败重试（指数退避 + 上限），超时重试，超限进入死信（本地 `logs-xdr-push-dlq` 或文件）。
+  - 失败重试（指数退避 + 上限），超时重试，超限进入死信（本地 `state/xdr-push-dlq.jsonl`）。
   - 报文含 `alert_id`（ES 文档 `_id`）作为幂等键，XDR 可据此去重。
   - 可选 HMAC-SHA256 签名头（`xdr.webhook.secret` 配置，未配置则不签名）。
-- 配置：Webhook URL/Secret/超时/重试/推送间隔/推送白名单（Phase 0 默认 `detections.alerts`；suricata.alert=线索、zeek.notice=上下文，不默认外推）。
+- 配置：Webhook URL/Secret/超时/重试/推送间隔/推送白名单。
+  - **默认白名单仅 `suricata.alert`**（线索，标记 `nss.detection.stage=clue`）
+  - 最终裁决由 XDR 完成，NDR 不再维护 `logs-detections.alerts-so` 索引
+  - 如需外推 `zeek.notice` 等上下文事件，在 `xdr.event_types` 显式配置
 
 ### 5.8 Webhook 告警报文规范（v1 草案，供 XDR 侧对接）
 
@@ -307,64 +357,79 @@ flowchart LR
 - 安全：可选 `X-NDR-Signature: sha256=hex(hmac_sha256(secret, body))`，XDR 可校验来源。
 - `pcap.file`：全包已落盘时的文件引用，XDR 可按需通过探针 API 拉取（后续能力）。
 
-### 5.9 Sigma 关联检测（三层信号模型，Phase 1-3）
+### 5.9 本地分析 Agent（LLM 噪声过滤）
 
-**模型**：Suricata 规则命中 = 线索（signal），Zeek 元数据 = 上下文（context），Sigma 关联规则 = 最终裁决（alert）。
-只有关联规则确认后写入 `logs-detections.alerts-so` 的才作为告警外推（xdr-push 默认白名单仅 `detections.alerts`）。
+**定位**：XDR 下发的"是否为真实威胁 / 是否为噪声 / 风险等级如何"类研判任务，由 NDR 端的本地小模型 + MCP 工具集完成推理，最终结论回到 XDR 用于流程编排。
 
-**关联规则语法**（NSS-NDR 扩展段，兼容普通 Sigma 规则）：
+**调用链**：
 
-```yaml
-title: 关联规则示例
-status: test
-level: medium
-backend: auto                # eql | esql | auto（默认 EQL 执行，auto 额外生成 ES|QL 供预览）
-correlation:
-  clue:                      # 阶段1 线索（默认 suricata）
-    logsource: { product: suricata }
-    detection:
-      selection: { rule.name|contains: "ET MALWARE" }
-      condition: selection
-  confirm:                   # 阶段2 确认（默认 zeek）
-    logsource: { product: zeek, category: dns }
-    detection:
-      selection: { dns.question.name|endswith: ".xyz" }
-      condition: selection
-  group_by: network.community_id   # 两侧关联键（默认 community_id）
-  timespan: 5m                    # 时间窗（默认跟随 schedule）
-  required: both                  # both | clue | confirm
-  fallback: none                  # none | clue_only | confirm_only
-  confidence: medium              # low | medium | high
+```
+XDR ──POST /api/xdr/agent/task (Bearer)──► ndr-manager
+                                              │ (转发)
+                                              ▼
+                                        ndr-agent (FastAPI:8081)
+                                              │  (MCP streamable HTTP)
+                                              ▼
+                                        mcp-server (MCP:8000)
+                                              │  (查询)
+                                              ▼
+                                        elasticsearch (本地)
 ```
 
-**执行引擎**（ndr-manager 调度器）：
+**MCP 工具集**（`mcp-server` 暴露）：
 
-- 两阶段执行：阶段1 线索查询（`logs-suricata.alerts-so`）→ 按 `group_by` 取键集合；阶段2 用键集合过滤确认查询（`logs-zeek-so`，terms 过滤，上限 500 键）→ 求交/回退。
-- `required=both` 时仅两侧都命中的键出告警；`fallback=clue_only/confirm_only` 时未确认侧按 `low` 置信度出回退告警（`nss.correlation.confirmed=false`）。
-- `required=clue`（仅线索）与 `required=confirm`（Zeek-only）保留单侧能力，避免纯关联造成的漏报。
-- 告警携带证据：`nss.correlation.{key, confirmed, clue_hits, confirm_hits}`，`event_data` 兼容 xdr-push 推送；告警自带 `rule.type=correlation`、`rule.confidence`。
-- 证据预览：`GET /api/sigma/{id}/evidence`（dry-run 不写告警），UI 提供关联规则模板、策略/置信度展示与证据明细。
+| 工具 | 用途 | 关键参数 |
+|---|---|---|
+| `list_datasets` | 列出可分析的元数据集 | — |
+| `query_metadata` | 按目标（community_id/src_ip/dst_ip/uid）+ 时间窗检索指定数据集 | target / datasets / window_seconds / conditions |
+| `correlate_session` | 按 community_id 拉取会话全链路元数据 | community_id / window_seconds |
+| `aggregate_stats` | 按目标 + 时间窗做 top-N 聚合 | target / window_seconds / field / top_n |
+| `get_clue` | 检索 Suricata 告警线索（`logs-suricata.alerts-so`） | target / window_seconds |
+| `query_files` | 查询文件分析结果（`logs-strelka-so`） | mime_type / md5 / window_seconds |
 
-**ES|QL 评估结论（Phase 3）**：已接入 pySigma ES|QL 输出（`backend=esql` 时经 `/_query` 执行，失败自动回退 EQL，转换失败不阻断）。评估结论：
+**Agent 工作模式**（`ndr-agent`）：
 
-1. SigmaHQ 的 ES|QL correlation 规则使用 `DATE_TRUNC()` 静态时间桶，非滑动窗口，跨桶边界事件会漏报——本项目关联引擎保持自研两阶段（真滑动窗口），不采用 ES|QL correlation 作为执行引擎；
-2. ES|QL 返回扁平列而非 `_source`，不适合作为告警证据载体，故执行默认仍走 EQL（保留完整文档）；
-3. ES|QL 作为查询表示（预览/Kibana 使用）与简单规则的可选执行后端保留，待真实 ES 环境验证后按需推广。
+1. **LLM 模式**（默认，`LLM_MODEL` 非空）：
+   - OpenAI 兼容协议调 Ollama（`http://host.docker.internal:11434/v1/chat/completions`）
+   - 工具调用循环：LLM 收到任务 + 工具列表 → 自主选工具 → MCP 调用 → 把工具结果回灌 LLM → 直至 LLM 给出结论
+   - 上限 `MAX_STEPS=6` 步防死循环
+   - 输出：`{ ok, conclusion, llm_used, llm_model, evidence:[{tool, args, result}] }`
+2. **结构化降级**（`LLM_MODEL` 留空）：
+   - 直接调 `query_metadata` / `correlate_session` 等工具汇总
+   - 适用于 XDR 下发的 target + datasets 明确的任务
 
-### 5.10 cleaner（数据清理任务，CronJob）
+**数据本地性**：
+
+- mcp-server 与 ES 同机部署，**所有查询均走本地 ES，数据不出 NDR**
+- 任务执行结果（结论 + 证据链）仅通过 HTTP 返回给 XDR，不持久化到 ES
+
+**配置**：
+
+- `xdr.agent_enabled`（默认 `true`）：是否启用 Agent 模式入口
+- `xdr.agent_url`（默认 `http://nss-ndr-agent:8081/analyze`）：Agent HTTP 地址
+- `xdr.task_token`：Bearer 令牌，XDR 调用本探针任务接口的认证凭据（与分析任务共享）
+
+**辅助：结构化分析任务入口**（`POST /api/xdr/task`）
+
+- 适用于不需 LLM 推理、目标明确（target/datasets/window_seconds）的检索任务
+- NDR 直接查 ES 返回结构化结果，不经 LLM
+- 与 Agent 入口共用 Bearer 令牌
+
+### 5.10 cleaner（数据清理任务，ndr-manager 内置 goroutine）
 
 - 职责：统一清理**磁盘原始文件**（防止流量盘写满），与 ES 侧 ILM（清理索引，防止索引盘写满）配套，两层互不替代。
-- 运行形态：DaemonSet/CronJob，以 hostPath 挂载 `/nsm` 运行；容器内直接 `df`（文件系统级容量）与 `du`（目录级用量），不依赖部署方分区方案（见 §4.3.3）。
-- 磁盘状态上报：每次运行将各挂载点/目录用量（`df -P`、`du -sb`）、剩余空间、触发动作写入 `logs-soc-so` 与状态页，供运维与 XDR 侧探针状态查询。
+- 运行形态：ndr-manager 内部 goroutine，按 `probe.cleanup_interval` 周期执行；以 hostPath 挂载 `/nsm` 运行；容器内直接 `df`（文件系统级容量）与 `du`（目录级用量），不依赖部署方分区方案（见 §4.3.3）。
+- 磁盘状态上报：每次运行将各挂载点/目录用量（`df -P`、`du -sb`）、剩余空间、触发动作写入 `/opt/so/state/cleaner-status.json`，供运维查看与 XDR 侧探针状态查询。
 - 清理对象与规则（全部来自探针配置文件）：
   - `/nsm/suripcap/`：按 `suricata.pcap.retention_days`（天数）与 `suricata.pcap.storage_limit_gb`（目录总量上限）**双阈值**，先按天、再按总量删除最旧文件（取先到者）。
   - `/nsm/suricata/eve-*.json`：按 `suricata.eve.retention_days`（默认 7 天）删除已轮转且已被 elastic-agent 采集的旧文件。
   - `/nsm/zeek/logs/<rotated>/`：按 `zeek.history_retention_days`（默认 30 天）删除轮转历史（gz）。
   - `/nsm/zeek/extracted/`：按 `zeek.extraction.max_days`（默认 7 天）删除提取文件。
-- 逻辑：CronJob 按 `probe.cleanup_interval`（默认 1h）扫描，分两级：
+  - `/nsm/strelka/processed/`、`/nsm/strelka/log/`：按 `strelka.retention.processed_days` / `log_days`（启用 Strelka 时生效）。
+- 逻辑：分两级：
   1. **常规清理**：按留存天数/容量阈值删除过期文件（eve 旧文件、zeek 历史目录、提取文件、超阈值全包）。
-  2. **磁盘压力兜底**：若 `/nsm` 用量 > `probe.disk_pressure_threshold`（默认 90%），循环删除最旧文件（顺序：zeek 历史 → 提取 → 全包），直到用量回落（借鉴 SO `zeek_clean` 机制）。
-- 低水位保护：每次清理后校验 `/nsm` 剩余空间，仍低于 `probe.min_free_gb`（默认 20GB）时向本地日志/状态页告警。
+  2. **磁盘压力兜底**：若 `/nsm` 用量 > `probe.disk_pressure_threshold`（默认 90%），循环删除最旧文件（顺序：zeek 历史 → 提取 → strelka 已扫描 → 全包），直到用量回落（借鉴 SO `zeek_clean` 机制）。
+- 低水位保护：每次清理后校验 `/nsm` 剩余空间，仍低于 `probe.min_free_gb`（默认 20GB）时向本地日志告警。
 
 ## 6. 配置管理
 
@@ -398,16 +463,17 @@ elasticsearch:
   retention:
     metadata_days: 60
     alerts_days: 365
-detections:
-  default_ruleset: none        # 默认不加载任何规则
 xdr:
   webhook:
     url: https://xdr.example.com/api/v1/alerts/webhook   # XDR 接收地址（配置文件维护，可改）
     secret: ""                                            # 可选 HMAC 签名密钥
+  task_token: ""                                          # XDR 调本探针任务接口的 Bearer 令牌
+  agent_enabled: true                                     # 启用本地分析 Agent（LLM 噪声过滤）
+  agent_url: http://nss-ndr-agent:8081/analyze           # 本地 Agent 地址
   timeout_s: 10
   push_interval_s: 2
   retry_max: 5
-  event_types: [detections.alerts]   # Phase 0：默认仅推 Sigma 确认后的最终告警
+  event_types: [suricata.alert]   # 推送白名单：默认仅推 suricata 线索；最终裁决由 XDR 完成
 ```
 
 - 变更策略：ConfigMap 更新 → 相关容器 watch 或重启（k3s 天然支持）；后续可演进为 CRD。
@@ -429,21 +495,27 @@ xdr:
 
 ## 8. 开发里程碑
 
+> 历史已下线里程碑（M5 Sigma 检测 / M7 Kibana 看板）见 `TODO.md` 历史段，不再作为现行范围。
+
 ### M0：镜像与容器化跑通（1-2 周）
-- 交付：suricata / zeek 瘦身镜像、k3s manifest（DaemonSet + PV + ConfigMap）、启动脚本。
+- 交付：suricata / zeek 瘦身镜像、docker-compose 清单、配置模板、启动脚本。
 - 验收：两引擎从镜像口抓包，eve.json 与 zeek JSON 日志正常落盘，无默认规则也能跑（0 告警）。
 
-### M1：本地检索闭环（1-2 周）
-- 交付：filebeat、elasticsearch、kibana；ingest pipeline 导入；数据流与 ILM。
-- 验收：Zeek 元数据可检索（conn/dns/http/ssl），ECS 字段正确，`event.dataset=zeek.conn`，Kibana 可见。
+### M1：数据采集与归一化（1-2 周）
+- 交付：filebeat / elasticsearch；ingest pipeline 导入（81 个：zeek.* + suricata.* + strelka.* + common）；数据流与 ILM。
+- 验收：Zeek 元数据按 ECS 归一化入 ES（conn/dns/http/ssl/tls/smb/...），`event.dataset=zeek.conn` 正确，可被 XDR 通过 MCP 工具查询；不内置可视化组件。
 
 ### M2：告警与规则管理闭环（2-3 周）
-- 交付：detections 服务（API + 轻量 UI）、xdr-push 服务、suricata 规则热加载。
-- 验收：自定义规则命中 → `logs-detections.alerts-so`（Sigma 确认后的最终告警）→ xdr-push **实时 POST Webhook URL**（XDR 沙箱接收）→ 本地告警可检索；规则启停/阈值生效；重试、断点续传、幂等去重正常。
+- 交付：ndr-manager（含原 detections / xdr-push / cleaner / es-init 四服务并入）；suricata 规则热加载。
+- 验收：自定义 / ET Open / 内置规则命中 → `logs-suricata.alerts-so` → xdr-push **实时 POST Webhook URL**（XDR 沙箱接收）；规则启停/阈值生效；重试、断点续传、幂等去重正常。
 
 ### M3：全包与运维完善（2 周）
-- 交付：pcap-log 全包 + pcap-cleaner 阈值清理、文件提取 + Strelka（可选）、健康检查/日志聚合、Helm Chart 化。
+- 交付：pcap-log 全包 + cleaner 阈值清理、文件提取 + Strelka、健康检查/审计日志、Helm Chart 化（k3s 时期产物，docker-compose 保留等效逻辑）。
 - 验收：pcap 留存天数/存储上限可配置并自动清理；探针重启自愈；告警不丢失。
+
+### M11：本地分析 Agent（LLM 噪声过滤，2026-08-15）
+- 交付：ndr-agent（FastAPI + OpenAI 兼容 LLM）+ mcp-server（MCP streamable HTTP，6 个工具）。
+- 验收：XDR 下发 `POST /api/xdr/agent/task` → Agent 通过 MCP 工具查本地 ES → LLM 给出"是否为真实威胁"的结论与证据链；未配置 LLM 时降级为结构化任务。
 
 ## 9. 扩展位（本期不做，设计预留）
 
@@ -456,10 +528,10 @@ xdr:
 ## 10. 待确认项（需要 XDR 侧/产品侧输入）
 
 1. **Webhook 报文规范确认**：§5.8 草案（字段/幂等键/HMAC）是否与 XDR 侧约定一致，XDR 侧若有既有格式要求请提供。
-2. **ES 版本与许可**：沿用 Elasticsearch 9.3.3（与 SO 资产 100% 兼容，但为 Elastic License 2.0）；如需 Apache 2.0 可换 OpenSearch（ingest pipeline 大体兼容，需小改）。建议默认 ES 9.3.3。
-3. **Kibana 是否保留**：检索优先用 Kibana 还是后续自研 UI（detections 页是否合并检索）？
-4. **detections UI 范围**：先 REST API + 极简页，还是直接要 SOC 式完整界面？
-5. **规则集初始来源**：默认空（已定）；内置 SO_FILTERS/SO_EXTRACTIONS 是否默认启用还是作为可选规则包。
+2. **XDR 下发任务 schema**：`POST /api/xdr/task` 与 `POST /api/xdr/agent/task` 的请求/响应字段（target / datasets / window_seconds / conditions / instruction）是否与 XDR 编排系统对齐；如 XDR 侧有既定 schema 请提供。
+3. **ES 版本与许可**：沿用 Elasticsearch 9.3.3（与 SO 资产 100% 兼容，但为 Elastic License 2.0）；如需 Apache 2.0 可换 OpenSearch（ingest pipeline 大体兼容，需小改）。建议默认 ES 9.3.3。
+4. **LLM 模型对接**：默认指向 host.docker.internal:11434（Ollama，OpenAI 兼容）；需确认 XDR 下发"研判类"任务时携带的 instruction 格式与预期输出 schema。
+5. **规则集初始来源**：默认空（已定）；ET Open 35 分类按需勾选启用；SO_FILTERS/SO_EXTRACTIONS 作为内置规则集（默认禁用，仅可启停）。
 
 ## 11. 技术风险与对策
 

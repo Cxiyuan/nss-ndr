@@ -115,6 +115,83 @@ export interface ETOpenRulePage {
   rules: Rule[];
 }
 
+// ---- 运维监控（仅本探针自身运维指标）----
+
+export interface TrafficSample {
+  ts: string;
+  eps: number;
+  bps: number;
+}
+
+export interface DatasetCount {
+  dataset: string;
+  count: number;
+}
+
+export interface XdrPushStats {
+  success: number;
+  failed: number;
+  dlq: number;
+  last_success?: string;
+  last_failed?: string;
+}
+
+export interface WorkloadStats {
+  total_events_today: number;
+  events_by_dataset: DatasetCount[];
+  alerts_today: number;
+  strelka_files_today: number;
+  xdr_push: XdrPushStats;
+  generated_at: string;
+  es_error?: string;
+}
+
+export interface ComponentHealth {
+  name: string;
+  state: string;
+}
+
+export interface ESHealth {
+  status: string;
+  nodes: number;
+  error?: string;
+}
+
+export interface DiskUsage {
+  mount: string;
+  usage_pct: number;
+  free_gb: number;
+}
+
+export interface CleanerStatus {
+  last_run?: string;
+  removed_files: number;
+  removed_bytes: number;
+  pressure_triggered: boolean;
+  fs_usage_pct: number;
+  error?: string;
+}
+
+export interface HealthStats {
+  components: ComponentHealth[];
+  es: ESHealth;
+  disk: DiskUsage[];
+  cleaner: CleanerStatus;
+  generated_at: string;
+}
+
+export interface AlertBucket {
+  hour: string;
+  count: number;
+}
+
+export interface AlertsTodayStats {
+  buckets: AlertBucket[];
+  total: number;
+  generated_at: string;
+  es_error?: string;
+}
+
 export const api = {
   login: (username: string, password: string) =>
     req<any>("POST", "/api/login", { username, password }),
@@ -150,4 +227,10 @@ export const api = {
     req<any>("POST", `/api/etopen/category/${encodeURIComponent(category)}/${enabled ? "enable" : "disable"}`),
   etopenRule: (id: string, enabled: boolean) =>
     req<any>("POST", `/api/etopen/rule/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`),
+
+  // 运维监控（仅本系统自身运维指标）
+  monitoringTraffic: () => req<{ samples: TrafficSample[] }>("GET", "/api/monitoring/traffic"),
+  monitoringWorkload: () => req<WorkloadStats>("GET", "/api/monitoring/workload"),
+  monitoringHealth: () => req<HealthStats>("GET", "/api/monitoring/health"),
+  monitoringAlertsToday: () => req<AlertsTodayStats>("GET", "/api/monitoring/alerts-today"),
 };

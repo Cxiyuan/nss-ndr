@@ -151,6 +151,7 @@ func (w *xdrWebhookClient) Push(h xdrHit) error {
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				recordXdrPushSuccess()
 				return nil
 			}
 			lastErr = fmt.Errorf("webhook 返回 %d", resp.StatusCode)
@@ -159,6 +160,7 @@ func (w *xdrWebhookClient) Push(h xdrHit) error {
 		}
 		time.Sleep(time.Duration(attempt*attempt) * time.Second)
 	}
+	recordXdrPushFailed()
 	return fmt.Errorf("重试 %d 次仍失败: %w", w.cfg.XDR.RetryMax, lastErr)
 }
 
