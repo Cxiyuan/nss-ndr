@@ -104,16 +104,6 @@ render("images/zeek/files/zeekctl.cfg", "zeekctl.cfg")
 render("images/zeek/files/networks.cfg", "networks.cfg")
 render("images/zeek/files/config.zeek", "config.zeek")
 render("images/filebeat/filebeat.yml", "filebeat.yml")
-# IOC 库（运维可编辑；check_ioc 工具每次调用重新加载，无需重启 mcp-server）
-# 路径：$NDR_HOME/so/ioc.json（与 docker-compose 挂载点 /opt/ndr/so/ioc.json 对齐）
-if [[ -f "$ROOT/images/ndr-manager/templates/ioc.example.json" ]]; then
-    IOC_FILE="$NDR_HOME/so/ioc.json"
-    mkdir -p "$(dirname "$IOC_FILE")"
-    if [[ ! -f "$IOC_FILE" ]]; then
-        cp "$ROOT/images/ndr-manager/templates/ioc.example.json" "$IOC_FILE"
-        log "已生成 IOC 库: $IOC_FILE（运维可编辑后立即生效）"
-    fi
-fi
 copy_tree("images/zeek/files/policy", "policy")
 for k, rel in {
     "backend.yaml": "images/strelka-backend/files/backend.yaml",
@@ -151,8 +141,6 @@ MANAGER_PORT=30603
 ES_HOST=http://elasticsearch:9200
 ES_USERNAME=xdr-push
 ES_HEAP_GB=2
-LLM_URL=http://host.docker.internal:11434/v1/chat/completions
-LLM_MODEL=
 XDR_WEBHOOK_URL=
 XDR_WEBHOOK_SECRET=
 XDR_TASK_TOKEN=
@@ -306,28 +294,7 @@ cmd_install() {
   # ---------- 离线镜像加载（含基础镜像，部署全程不依赖网络拉取）----------
   load_images_into_docker "${images_dir:-$ROOT/releases/images}"
 
-  mkdir -p "$NDR_HOME/es-data" "$NDR_HOME/nsm" "$NDR_HOME/so" "$NDR_HOME/yara" "$NDR_HOME/filebeat-data" "$NDR_HOME/agent-state"
-
-  # ---------- Ollama GGUF 外挂：若项目根或 images/ollama/models/ 有 GGUF，自动拷到挂载目录 ----------
-  OLLAMA_DIR="${OLLAMA_MODELS_DIR:-/opt/ndr/ollama-models}"
-  GGUF_NAME="${OLLAMA_GGUF_NAME:-Qwen3-0.6B-Q5_K_M.gguf}"
-  if [[ ! -f "$OLLAMA_DIR/$GGUF_NAME" ]]; then
-    local gguf_src=""
-    if [[ -f "$ROOT/images/ollama/models/$GGUF_NAME" ]]; then
-      gguf_src="$ROOT/images/ollama/models/$GGUF_NAME"
-    elif [[ -f "$ROOT/$GGUF_NAME" ]]; then
-      gguf_src="$ROOT/$GGUF_NAME"
-    fi
-    if [[ -n "$gguf_src" ]]; then
-      mkdir -p "$OLLAMA_DIR"
-      log "拷贝 GGUF 模型权重：$gguf_src → $OLLAMA_DIR/$GGUF_NAME"
-      cp "$gguf_src" "$OLLAMA_DIR/$GGUF_NAME"
-    else
-      warn "未找到 $GGUF_NAME；ollama 容器将无法启动 LLM 任务（仅结构化降级可用）"
-      warn "请将 GGUF 放到 $OLLAMA_DIR/$GGUF_NAME 后重启：docker compose restart ollama"
-      mkdir -p "$OLLAMA_DIR"
-    fi
-  fi
+  mkdir -p "$NDR_HOME/es-data" "$NDR_HOME/nsm" "$NDR_HOME/so" "$NDR_HOME/yara" "$NDR_HOME/filebeat-data"
 
   log "启动 docker compose ..."
   (cd "$COMPOSE_DIR" && docker compose up -d)
@@ -346,8 +313,7 @@ cmd_install() {
   echo ""
   echo "  探针管理后台 : http://<本机IP>:$manager_port   （初始账号 admin / admin，登录后请改密）"
   echo "  镜像口       : $interface"
-  echo "  XDR 任务接口 : POST http://<本机IP>:$manager_port/api/xdr/task 与 /api/xdr/agent/task（Bearer 令牌）"
-  echo "  Ollama GGUF  : $OLLAMA_DIR/$GGUF_NAME"
+  echo "  XDR Webhook  : POST http://<本机IP>:$manager_port/api/xdr/push（HMAC 签名）"
   echo "  常用命令     : cd $COMPOSE_DIR && docker compose ps / logs -f <服务>"
   echo ""
 }
@@ -397,8 +363,6 @@ cmd_save_images() {
   local project_images=(
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-suricata"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-zeek"
-    "ghcr.io/cxiyuan/nss-ndr/nss-ndr-mcp-server"
-    "ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-agent"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-manager"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-backend"
     "ghcr.io/cxiyuan/nss-ndr/nss-ndr-strelka-manager"

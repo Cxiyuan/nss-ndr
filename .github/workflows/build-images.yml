@@ -28,12 +28,6 @@ jobs:
           - name: zeek
             context: images/zeek
             file: images/zeek/Dockerfile
-          - name: mcp-server
-            context: images/mcp-server
-            file: images/mcp-server/Dockerfile
-          - name: ndr-agent
-            context: images/ndr-agent
-            file: images/ndr-agent/Dockerfile
           - name: ndr-manager
             context: .
             file: images/ndr-manager/Dockerfile
@@ -43,9 +37,6 @@ jobs:
           - name: strelka-manager
             context: images/strelka-manager
             file: images/strelka-manager/Dockerfile
-          - name: ollama
-            context: images/ollama
-            file: images/ollama/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v4

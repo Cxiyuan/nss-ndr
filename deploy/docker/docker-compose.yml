@@ -1,7 +1,7 @@
 # NSS-NDR 探针 docker-compose 部署（2026-08-16 起替代 k3s）
 #
 # 架构：采集（suricata/zeek/standalone-filebeat）→ ES 存储 → 管理（ndr-manager）
-#       + 分析（mcp-server/ndr-agent）+ 上报线索（ndr-manager 内置）+ 文件分析（strelka）
+#       + 上报线索（ndr-manager 内置）+ 文件分析（strelka）
 # 注：docker-compose 部署使用 standalone filebeat 直连 ES，链路最短；
 #     elastic-agent（k3s 时期方案，含 Fleet/Logstash/Redis）当前未启用。
 # 使用：
@@ -103,74 +103,6 @@ services:
       - *so-vol
       - /opt/ndr/so/rules/suricata:/opt/so/rules/suricata
       - /var/run/suricata:/var/run/suricata
-  # ---------- 分析（Ollama + MCP + Agent）----------
-  ollama:
-    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-ollama
-    container_name: nss-ollama
-    restart: unless-stopped
-    # CPU 优化线程数（默认 = nproc，可通过环境变量覆盖）
-    environment:
-      OLLAMA_NUM_THREADS: ${OLLAMA_NUM_THREADS:-}
-      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-24h}
-      OLLAMA_GGUF_PATH: ${OLLAMA_GGUF_PATH:-/models/Qwen3-0.6B-Q5_K_M.gguf}
-    # 外挂 GGUF 模型权重（不在镜像内）
-    volumes:
-      - ${OLLAMA_MODELS_DIR:-/opt/ndr/ollama-models}:/models:ro
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags >/dev/null && ollama list 2>/dev/null | grep -q qwen3-ndr || exit 1"]
-      interval: 15s
-      timeout: 5s
-      start_period: 90s
-      retries: 3
-
-  mcp-server:
-    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-mcp-server
-    container_name: nss-mcp-server
-    restart: unless-stopped
-    environment:
-      <<: *common-env
-      # pcap 目录（query_pcaps / analyze_pcap 工具读）
-      MCP_PCAP_DIR: ${MCP_PCAP_DIR:-/nsm/suripcap}
-      # IOC 库路径（check_ioc 工具读，文件不存在则返回空匹配）
-      MCP_IOC_PATH: ${MCP_IOC_PATH:-/opt/ndr/so/ioc.json}
-    volumes:
-      # 只读挂载 pcap 目录
-      - ${MCP_PCAP_DIR:-/nsm/suripcap}:/nsm/suripcap:ro
-      # 只读挂载 IOC 库（运维方在 /opt/ndr/so/ioc.json 维护）
-      - ${MCP_IOC_PATH:-/opt/ndr/so/ioc.json}:/opt/ndr/so/ioc.json:ro
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-
-  ndr-agent:
-    image: ghcr.io/cxiyuan/nss-ndr/nss-ndr-ndr-agent
-    container_name: nss-ndr-agent
-    restart: unless-stopped
-    environment:
-      MCP_URL: "http://mcp-server:8000/mcp"
-      # 默认指向本探针内置的 ollama 服务（CPU 优化版）
-      LLM_URL: ${LLM_URL:-http://ollama:11434/v1/chat/completions}
-      LLM_MODEL: ${LLM_MODEL:-qwen3-ndr}
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      AGENT_TOKEN: ${AGENT_TOKEN:-}
-      AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-6}
-      # ndr-manager 回调（持久化分析状态）
-      NDR_MANAGER_URL: ${NDR_MANAGER_URL:-http://ndr-manager:8080}
-      # XDR 升级通道（仅当 XDR_BASE_URL 非空时启用）
-      XDR_BASE_URL: ${XDR_BASE_URL:-}
-      XDR_TOKEN: ${XDR_TOKEN:-}
-      XDR_TIMEOUT: ${XDR_TIMEOUT:-60}
-      # LangGraph 状态持久化（time travel / 重跑）
-      LANGGRAPH_DB_PATH: ${LANGGRAPH_DB_PATH:-/opt/agent/state/langgraph.db}
-    volumes:
-      # LangGraph 状态目录（SqliteCheckpointer 写入这里）
-      - /opt/ndr/agent-state:/opt/agent/state
-    depends_on:
-      mcp-server:
-        condition: service_started
-      ollama:
-        condition: service_healthy
-
   # ---------- 文件分析（Strelka）----------
   strelka-coordinator:
     image: docker.io/library/redis:7-alpine

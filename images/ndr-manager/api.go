@@ -31,10 +31,6 @@ func registerAPI(mux *http.ServeMux) {
 	// 受保护端点
 	mux.HandleFunc("POST /api/logout", requireAuth(apiLogout))
 	mux.HandleFunc("POST /api/password", requireAuth(apiChangePassword))
-	// XDR 分析任务下发（Bearer 令牌认证，见 apiXDRTask）
-	mux.HandleFunc("POST /api/xdr/task", apiXDRTask)
-	// XDR 分析任务（Agent 模式）：本地小模型 + MCP 工具自主分析
-	mux.HandleFunc("POST /api/xdr/agent/task", apiXDRAgentTask)
 	mux.HandleFunc("GET /api/config", requireAuth(apiGetFullConfig))
 	mux.HandleFunc("GET /api/config/schema", requireAuth(apiConfigSchema))
 	mux.HandleFunc("PUT /api/config", requireAuth(apiSaveFormConfig))
@@ -72,15 +68,6 @@ func registerAPI(mux *http.ServeMux) {
 	// 文件下载（取证使用，要求用户会话鉴权，不接受 XDR 任务 token）
 	mux.HandleFunc("GET /api/pcap/{name}", requireAuth(apiPcapDownload))
 	mux.HandleFunc("GET /api/file/{md5}", requireAuth(apiFileDownload))
-
-	// 分析任务状态（Agent 写 / 用户+XDR 读）
-	mux.HandleFunc("PUT /api/agent/analysis_state/{task_id}", requireAgentAuth(apiSaveAnalysisState))
-	mux.HandleFunc("GET /api/analysis/{task_id}", requireAuth(apiGetAnalysisState))
-	mux.HandleFunc("GET /api/analysis", requireAuth(apiListAnalysisStates))
-
-	// IP 信誉缓存（跨任务记忆；Agent 读/写）
-	mux.HandleFunc("GET /api/agent/ip_reputation/{ip}", requireAgentAuth(apiGetIPReputation))
-	mux.HandleFunc("PUT /api/agent/ip_reputation/{ip}", requireAgentAuth(apiPutIPReputation))
 
 }
 

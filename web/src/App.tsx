@@ -5,7 +5,6 @@ import {
   FileClock,
   ListChecks,
   LogOut,
-  Network,
   Settings,
   ShieldCheck,
 } from "lucide-react";
@@ -17,7 +16,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
-import Analysis from "./pages/Analysis";
 import ConfigPage from "./pages/ConfigPage";
 import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
@@ -28,7 +26,6 @@ const nav = [
   { to: "/", label: "运维监控", icon: Activity, end: true },
   { to: "/config", label: "参数配置", icon: Settings },
   { to: "/rules", label: "规则", icon: ListChecks },
-  { to: "/analysis", label: "分析任务", icon: Network },
   { to: "/history", label: "历史与审计", icon: FileClock },
 ];
 
@@ -151,7 +148,6 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/config" element={<ConfigPage />} />
             <Route path="/rules/*" element={<RulesIndex />} />
-            <Route path="/analysis" element={<Analysis />} />
             <Route path="/history" element={<History />} />
           </Routes>
         </main>

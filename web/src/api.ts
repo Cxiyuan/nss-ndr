@@ -192,37 +192,6 @@ export interface AlertsTodayStats {
   es_error?: string;
 }
 
-// ---- 分析任务状态（M14: 4 步流水线 + 跨任务记忆）----
-
-export interface AnalysisListItem {
-  task_id: string;
-  instruction: string;
-  stage: string;
-  verdict: string;
-  confidence: number;
-  llm_used: boolean;
-  escalated: boolean;
-  elapsed_ms: number;
-  updated_at: string;
-}
-
-export interface AnalysisState {
-  task_id: string;
-  instruction: string;
-  target: any;
-  stage: string;
-  metrics: any;
-  heuristic_verdict: any;
-  llm_verdict: any;
-  xdr_verdict: any;
-  final_verdict: any;
-  llm_used: boolean;
-  escalated: boolean;
-  elapsed_ms: number;
-  created_at: string;
-  updated_at: string;
-}
-
 export const api = {
   login: (username: string, password: string) =>
     req<any>("POST", "/api/login", { username, password }),
@@ -264,8 +233,4 @@ export const api = {
   monitoringWorkload: () => req<WorkloadStats>("GET", "/api/monitoring/workload"),
   monitoringHealth: () => req<HealthStats>("GET", "/api/monitoring/health"),
   monitoringAlertsToday: () => req<AlertsTodayStats>("GET", "/api/monitoring/alerts-today"),
-
-  // 分析任务状态（M14）
-  listAnalysis: (limit?: number) => req<AnalysisListItem[]>("GET", `/api/analysis${limit ? `?limit=${limit}` : ""}`),
-  getAnalysisState: (taskId: string) => req<AnalysisState>("GET", `/api/analysis/${taskId}`),
 };

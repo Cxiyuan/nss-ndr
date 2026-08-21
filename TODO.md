@@ -1,194 +1,110 @@
 # NSS-NDR 项目 TODO
 
-## 边界声明（2026-08-15 重新校准）
+> **定位校准（2026-08-22）**：NDR 是**边缘自治 AI 探针**——自身采集流量 + 生产告警 + 本地分析；XDR 是云端裁决者，接收线索 + 最终处置。**M5（Sigma）/ M7（Kibana）已划归 XDR，不再属于本项目范围**。
+>
+> **弃置说明（2026-08-22）**：LLM Agent 子系统（M11 / M11b / M11c / M14 / M14.5）已拆除，迁移至独立项目维护。本项目聚焦数据管道（采集/存储/推送/取证），AI 分析能力不在本仓库范围内。
 
-NDR 是网络流量数据生产侧的探针单元。**承担范围**：
+---
 
-- 抓包（尽可能完整的 pcap）→ 元数据解构 → 告警线索生产 → 线索推送 XDR
-- 执行 XDR 下发的分析任务（含 LLM 噪声过滤）
-- 本地 Web 后台：**仅提供本探针自身的运维监控可视化**（流量波形图 / 当日工作量统计 / 组件健康 / 配置规则审计），不提供安全数据分析可视化
+## 已完成里程碑
 
-**不在 NDR 范围内（划归 XDR）**：
+### M0 · 引擎容器化
+- Suricata 8.0.5 / Zeek 8.0.8 镜像（基于 SO 3.1.0 瘦身）
+- k3s 清单 + 配置模板 + Actions 构建
 
-- 安全数据可视化（具体告警下钻 / 跨会话关联 / SOC 视图 / Hunt）
-- Sigma 规则库与关联规则编排
-- 跨探针关联、工单、研判决策
+### M1 · 数据采集与归一化
+- filebeat / elasticsearch（xpack security）镜像与清单
+- 81 个自研 ingest pipeline（zeek.* + suricata.* + strelka.* + common）
+- data stream（`logs-zeek-so` / `logs-suricata.alerts-so` / `logs-strelka-so`）+ ILM
 
-> 一句话总结：**NDR Web = 本探针运维监控（"这台机器在干什么、干了多少"）；XDR Web = 安全数据研判（"这些事件意味着什么、要不要处置"）**。
+### M2 · 规则管理与告警推送
+- 规则 CRUD / 启停 / ET Open / 自定义（后续并入 M4 ndr-manager）
+- xdr-push：ES 轮询 → Webhook 推送，游标 / 重试 / 去重 / HMAC（后续并入 M4）
+- 阈值/抑制（规则内嵌 `threshold` 关键字，reload 即生效）
+- 推送白名单默认收敛为 `suricata.alert`；修复 stats 污染
 
-下列历史里程碑已下线，相关代码与文档不再维护：
+### M3 · 运维完善
+- cleaner（全包 / 日志双阈值 + 磁盘压力兜底）
+- ES 认证加固（xpack security + 应用用户 `filebeat` / `xdr-push`）
+- 文件提取 + Strelka（M3b）
+  - Zeek 提取策略（MIME 白名单 + 9MB 上限 + 完整性校验）
+  - filecheck（watchdog + SHA1 history 去重）
+  - Strelka 六组件 + frontend 57314
+  - YARA：securityonion-yara（固定提交）+ 编译 `rules.compiled` 只读挂载
+  - cleaner 增加 Strelka processed/log 留存清理
 
-- **M5 Sigma 检测**（pySigma 转换、Sigma 规则管理、detections.alerts 索引、调度器）—— XDR 负责
-- **M7 Kibana NDR 看板**（kibana-init sidecar、41 个看板导入、SO 模板改写）—— XDR 负责
+### M4 · 统一配置管理后台（ndr-manager）
+- React SPA（Web UI：Dashboard / 参数配置 / 规则 / 历史审计）
+- Go API + SQLite 配置库（configs / config_versions / audit / rules / users 5 张表）
+- 配置渲染引擎（内置模板 + 扁平化 policy）
+- detections / xdr-push / cleaner / es-init 四服务全部并入
+- Webhook 推送 HMAC + 重试 + 死信 + 游标断点
 
-NDR 仍保留 Suricata 规则管理（内置 + ET Open + 自定义）作为**线索生产**手段；最终裁决（是否为真实威胁）由 XDR 通过下发分析任务 + NDR 端 LLM 噪声过滤完成。
+### M6 · 数据总线管道（k3s 时期方案）
+- Logstash 双 pipeline（beats/TLS 接收 → redis 缓冲 → search 消费 → ES）
+- data_stream 路由 + metadata.pipeline 指派
+- 自签 CA/证书（双向 TLS）
+- 幂等机制：filebeat 稳定事件 ID → logstash create + document_id，重复 version_conflict 静默
 
-## 里程碑进度
+### M8 / M9 · 采集层对齐 SO（k3s 时期）
+- Elastic Agent（Fleet 托管）+ 三 filestream 输入
+- Fleet Server + fleet-init Job 自动供给（策略 / 输出 / 集成 / 令牌）
+- 部署验证：fleet-server/agent 双在线 + 数据链路实测（2026-08-11）
+- 注：docker-compose 部署仍使用 standalone filebeat 直连 ES
 
-- [x] **M0 引擎容器化**：Suricata/Zeek 镜像、k3s 清单、配置模板、Actions 构建
-- [x] **M1 数据采集与归一化**：filebeat / elasticsearch(+es-init) 镜像与清单、自研 ingest pipelines
-- [x] **M2 规则管理与告警推送**
-  - [x] detections 服务（规则 CRUD / 启停 / 自定义规则 / suricata 热加载）—— 后续并入 M4 ndr-manager
-  - [x] xdr-push 服务（ES 轮询新告警 → Webhook 推送，游标/重试/去重/HMAC）—— 后续并入 M4
-  - [x] 镜像构建与 k8s 清单
-  - [x] 阈值/抑制（规则内嵌 threshold 关键字，reload 即生效）
-  - [x] ~~三层信号模型（Suricata=线索 / Zeek=上下文 / Sigma=最终告警）~~ —— Sigma 部分划归 XDR，
-        NDR 保留"线索标记"语义（`nss.detection.stage=clue` + tags `alert,clue`）
-  - [x] xdr-push 推送白名单默认收敛为 `suricata.alert`（Sigma 关联确认已下线）
-  - [x] 修复 stats 污染：eve-log stats 输出默认关闭 + agent 侧丢弃非 alert 事件
-- [x] **M3 运维完善**
-  - [x] cleaner（全包/日志双阈值 + 磁盘压力兜底）
-  - [x] Helm Chart 化（k3s 时期）
-  - [x] ES 认证加固（xpack security + 应用用户）
-  - [x] 文件提取 + Strelka（参照 SO 3.1.0）
-    - [x] Zeek 提取策略（MIME 白名单 + 9MB 上限 + 完整性校验）
-    - [x] filecheck（watchdog + SHA1 history 去重 + 搬入 unprocessed；history 定时清理）
-    - [x] Strelka 六组件 k3s/Helm 清单（coordinator/gatekeeper redis + frontend/backend/
-          filestream/manager，frontend 57314）
-    - [x] YARA 规则：securityonion-yara（固定提交）→ 宿主编译 rules.compiled 只读挂载（同 SO）
-    - [x] 数据链路：strelka.log → filebeat（metadata.pipeline=strelka.file）→ logstash → ES
-          （strelka.file pipeline + logs-strelka-so 数据流模板 + ILM）
-    - [x] cleaner 增加 processed/log 留存清理；磁盘压力兜底纳入 strelka 已扫描目录
-    - [x] manager 增加 strelka 配置段（enabled / backend_replicas / 留存）+ UI 页
-    - [ ] 部署验证：构建镜像并 pin newTag 后，docker-compose 实测端到端
-- [x] **M8 采集层对齐 SO：filebeat → Elastic Agent（k3s 时期，docker-compose 未启用）**
-  - [x] 新增 elastic-agent 镜像（官方 docker.elastic.co/elastic-agent/elastic-agent，Fleet 托管）
-  - [x] 三 filestream 输入：suricata-eve / zeek-logs / strelka-logs（含 exclude、dissect、
-        JS 管道路由与幂等事件 ID）
-  - [x] 输出 Logstash 5055（mTLS，Fleet logstash output 语义，对齐 SO）
-  - [x] k3s/Helm 清单、render/manager/CI 全部替换 filebeat
-  - [x] 部署验证：数据链路实测（zeek/suricata 经 elastic-agent → Logstash → ES 入库，2026-08-11）
-  - 注：当前 docker-compose 部署仍使用 standalone filebeat 直连 ES（链路更短）；
-    若启用 elastic-agent 链路需部署 Logstash + Redis（k3s 时期的 M6 组件）
-- [x] **M9 补齐 Fleet（对齐 SO 3.1.0）**
-  - [x] Fleet Server Deployment（elastic-agent fleet-server 模式，8220，服务端证书）
-  - [x] fleet-init Job：ES service token / Fleet host / logstash 输出（双向 TLS）/
-        策略（FleetServer-nss + nss-ndr）/ filestream×3 集成 / enrollment token →
-        写 Secret nss-fleet-enrollment
-  - [x] elastic-agent 改 Fleet 接入（FLEET_ENROLL=1 + FLEET_URL + token + FLEET_CA 路径）
-  - [x] gen-certs 增加 fleet-server 服务端证书（SAN nss-fleet-server）
-  - [x] 部署验证：fleet-server/agent 双在线 + 策略下发 + 数据链路实测（2026-08-11，45e7f3e）
-  - [x] 产品化修复（2026-08-11）：fleet-init 输出顺序对齐 SO、Secret 写集合路径、移除 data 卷挂载
-- [x] **M10 suricata/zeek 插件与脚本对齐 SO 3.1.0（2026-08-12）**
-  - [x] zeek local.zeek 全量加载清单（标准脚本集/ICS×8/spicy×4/tds/profinet/http2/intel/
-        cve-2020-0601/detect-windows-shells）
-  - [x] config.zeek（JA4 选项，覆盖 ja4 包内配置）与 cve-2020-0601 策略资产入库并下发
-  - [x] suricata 补 so-suricata-testrule / so-suricata-rulestats（容器内脚本）
-  - [x] ndr-manager 新增 GET /api/suricata/stats（规则统计等价 API）
-  - [ ] 部署验证：全量插件加载无报错 + testrule/rulestats 实测（待 CI）
-- [x] **M4 统一配置管理后台（nss-ndr-manager）**
-  - [x] React SPA（Web UI：总览/参数配置/事件检测/自定义规则/历史审计）
-  - [x] Go API + SQLite 配置库（版本历史 + 审计日志）
-  - [x] 配置渲染引擎（内置模板 + 扁平化 policy）+ docker-compose 配置下发
-  - [x] 规则管理并入（CRUD/启停/ET Open/热加载），原 detections 服务下线
-  - [x] xdr-push 并入（Webhook 推送 + HMAC + 重试 + 死信 + 游标断点）
-  - [x] ES 初始化并入（pipeline/ILM/索引模板导入 + 应用用户）
-  - [x] cleaner 并入（按 probe.yaml 阈值周期清理 + 磁盘压力兜底）
-- [x] 部署到 10.44.77.250 并验证下发链路（管理后台端口 30603）
-- [x] 2026-08-10 全新部署（删除旧命名空间/数据后重装最新版）：组件 Running、数据总线/幂等 全部验证通过
-- [x] **M6 数据总线管道（参照 SO 3.1.0）**
-  - [x] Logstash 双 pipeline（manager 5055 beats/TLS 接收 → redis 缓冲 → search 消费 → ES）
-  - [x] Redis 缓冲（list + 背压 + 批量）
-  - [x] filebeat 改 Lumberjack 输出（双向 TLS，client 证书）
-  - [x] data_stream 路由 + metadata.pipeline 指派 ES ingest pipeline
-  - [x] 自签 CA/证书（releases/gen-certs.sh → Secret nss-ndr-certs）
-  - [x] zeek 全日志类型 pipeline 补齐（73 类）
-  - [x] 端到端验证：filebeat→logstash→redis→logstash→ES 全链路零错误
-  - [x] 幂等机制（对齐 SO）：filebeat 生成稳定事件 ID（metadata._id），logstash create + document_id，重复事件 version_conflict 静默
-  - [x] 修复 suricata pipeline 根字段提取（filebeat ndjson 无 message），event.dataset 正确
-- [x] **M11 本地分析 Agent（LLM 噪声过滤）**
-  - [x] ndr-agent（Python FastAPI）：OpenAI 兼容协议（Ollama），MCP streamable HTTP 客户端，工具调用循环
-  - [x] mcp-server（Python）：暴露 6 个工具——query_metadata / correlate_session /
-        aggregate_stats / get_clue / query_files / list_datasets，全部直连本地 ES，数据不出设备
-  - [x] ndr-manager 新增 `POST /api/xdr/task`（结构化检索）+ `POST /api/xdr/agent/task`（Agent 研判）
-  - [x] 结构化降级：未配置 LLM 时直接调工具汇总
-  - [x] docker-compose 集成（ndr-manager / mcp-server / ndr-agent / ollama 四件套）
-  - [x] 配置项：`xdr.agent_enabled`（启用开关）+ `xdr.agent_url`（Agent 地址，默认 `http://nss-ndr-agent:8081/analyze`）
-- [x] **M11b 内置 ollama CPU 优化镜像**（nss-ndr-ollama）
-  - [x] 烘入 Qwen3-0.6B-Q5_K_M.gguf（~424 MB，CPU 友好量化）
-  - [x] Modelfile：`qwen3-ndr` 模型，CPU 参数（num_ctx=4096, temperature=0.1）
-  - [x] entrypoint：自动 `nproc` → NUM_THREADS、强制 CUDA_VISIBLE_DEVICES=""、KEEP_ALIVE=24h、预热可选
-  - [x] 健康检查 `/api/tags`
-  - [x] docker-compose：ndr-agent 默认指向 `http://ollama:11434`，`LLM_MODEL=qwen3-ndr`
-  - [x] .gitignore：忽略 `images/ollama/models/*.gguf`
-- [x] **M11c 本地执行分析能力加固**（基于审核）
-  - [x] 鉴权分离：`xdr.task_token`（结构化）/ `xdr.agent_task_token`（研判）/ `xdr.agent_token`（→Agent）独立
-  - [x] Agent `/analyze` 端点 Bearer 鉴权（常量时间比较，默认拒绝）
-  - [x] `xdr.task` / `xdr.agent_task` 入口写审计日志（`audit()`）
-  - [x] Agent MCP 连接超时（`MCP_TIMEOUT=30s`）
-  - [x] Agent 并发信号量（`AGENT_MAX_CONCURRENCY=3`，防 Ollama 过载）
-  - [x] 结构化降级覆盖 6 个工具（query_files / aggregate_stats / correlate_session / query_metadata）
-  - [x] `query_metadata` 工具接受 `size` 参数（上限 1000）
-  - [x] LLM 端点支持 API Key（`LLM_API_KEY`）
-  - [x] `executeXDRTask` 数据集级错误透出（`result.errors`），任务失败响应带 `task_id`
-- [x] **M12 本地 Web 运维监控可视化**
-  - [x] 后端 4 个端点（`monitoring.go`）：`/api/monitoring/traffic`（流量波形）、
-        `/api/monitoring/workload`（当日工作量）、`/api/monitoring/health`（组件/ES/磁盘/cleaner）、
-        `/api/monitoring/alerts-today`（今日线索分时柱状图）
-  - [x] XDR 推送 in-memory 计数器（成功/失败/DLQ），在 Push() 内部埋点
-  - [x] 前端 Dashboard.tsx 重写：顶部 4 张数字卡 + 流量波形图（纯 SVG 折线）+ 告警线索分时柱状图 +
-        组件健康表 + 磁盘用量进度条 + Cleaner 状态 + dataset Top10 分布
-  - [x] 纯 SVG 图表，不引第三方库；每 30s 自动刷新 + 手动刷新按钮
-  - [x] 边界声明：Dashboard 页底部明确"具体告警事件内容、跨会话关联、SOC 视图等安全数据分析可视化由 XDR 平台承担"
-- [x] **M13 MCP 工具补全 + 取证下载端点**
-  - [x] `aggregate_suricata`（logs-suricata.alerts-so 按 rule / src_ip / dst_ip 等维度聚合）
-  - [x] `get_indicators`（跨 3 索引统一查询同一 target 的所有痕迹：suricata + zeek + strelka）
-  - [x] `check_ioc`（本地 IOC 库比对，IP / domain / hash；每次调用重新读取 IOC 文件，热更新）
-  - [x] IOC 库模板 `images/ndr-manager/templates/ioc.example.json`（deploy.sh install 时若不存在则复制示例）
-  - [x] `download.go` 新增 `GET /api/pcap/{name}`（pcap 下载，受用户会话鉴权 + 路径校验 + 2 GB 上限 + 流式）
-  - [x] `GET /api/file/{md5}`（按 MD5 查找 Zeek 提取 / Strelka 已扫描样本，受用户会话鉴权）
-  - [x] 两条下载端点均审计日志（`audit("file.download", ..., size=...)`）
-- [x] **M14 NDR 本地分析 4 步流水线 + XDR 升级通道**
-  - [x] `agent.py` 重写为 LangGraph `StateGraph`：8 节点（含跨任务记忆）+ 4 条条件边
-  - [x] SqliteCheckpointer 持久化到 `/opt/ndr/agent-state/langgraph.db`（time travel / 重跑）
-  - [x] MemorySaver 降级：SqliteCheckpointer 失败时退到内存（仅进程内 time travel）
-  - [x] Pydantic 严格 Verdict schema：`confidence < 1.0` 硬约束，7 字段受约束输出
-  - [x] LLM 多温度采样 `[0.0, 0.3, 0.7]` + 投票：>= 2 票通过；不一致降级为 `insufficient_evidence`
-  - [x] 启发式规则：IOC 命中 → real_threat / 0 告警 → noise / 同一规则 ≥10 次 → real_threat / 多源 IP 同规则 → campaign
-  - [x] XDR 升级通道 `escalate_to_xdr` 节点：仅接口，XDR 不可达/超时 → 返回 None 降级
-  - [x] 升级判定 `should_escalate`：显式 `instruction` 为复杂任务 + LLM `escalation_reason` + 启发式/LLM 冲突 + LLM confidence < 0.5
-  - [x] 时间旅行端点：`GET /api/state/{task_id}`（查询 state）+ `POST /api/state/{task_id}/replay`（重跑，可改写 state）
-  - [x] 状态同步：Agent 完成后 POST 摘要到 ndr-manager `PUT /api/agent/analysis_state/{task_id}`（供 UI 展示）
-  - [x] ndr-manager 端：保留 `analysis_state` 表（最终状态展示），Agent 回调写
-  - [x] 受限 `instruction` 枚举：`is_threat` / `incident_cause` / `blast_radius` / `ioc_confirm` / `deep_dive`（复杂任务升级 XDR）
-  - [x] 受限 output schema：7 字段 verdict JSON，**不允许自由文本输出**
-  - [x] Dockerfile 加 `langgraph>=0.2,<1` + `langchain-core>=0.3,<1`
-  - [x] docker-compose：ndr-agent 挂载 `/opt/ndr/agent-state:/opt/agent/state`（LangGraph SqliteCheckpointer 持久化）
-  - [x] deploy.sh install：自动创建 `/opt/ndr/agent-state/` 目录
-- [x] **M14.5 跨任务记忆：IP 信誉缓存**
-  - [x] ndr-manager `ip_reputation` 表（ip / last_verdict / last_confidence / last_analyzed_at / analysis_count / expires_at）
-  - [x] ndr-manager 端点：`GET/PUT /api/agent/ip_reputation/{ip}`（requireAgentAuth）
-  - [x] agent.py 新增 `reputation_check_node`（LangGraph 入口节点）：先查 ndr-manager 缓存
-  - [x] agent.py 新增 `short_circuit_node`：缓存命中且高置信时直接返回历史 verdict，跳过 4 步流水线
-  - [x] agent.py 新增 `reputation_write_node`（LangGraph 出口节点）：完整分析后/短路后都写入缓存（更新 timestamp + count）
-  - [x] 短路条件：`cached=True` + `last_verdict ∈ {real_threat, noise}` + `confidence >= 0.7` + 未过期
-  - [x] 缓存过期：24h 后重新分析（不强制续期）
-  - [x] 前端 `Analysis` 页面：任务列表 + 推理路径可视化（pre_aggregate / heuristic / llm / escalate / final 五步）
-  - [x] 前端导航：新增"分析任务"入口（`/analysis`）
-  - [x] 响应中暴露 `cached` 字段（短路命中标记）
+### M10 · 引擎插件对齐 SO 3.1.0（2026-08-12）
+- Zeek `local.zeek` 全量加载清单（标准脚本集 / ICS×8 / spicy×4 / tds / profinet / http2 / intel / cve-2020-0601）
+- `config.zeek`（JA4 选项）+ cve-2020-0601 策略资产
+- Suricata `so-suricata-testrule` / `so-suricata-rulestats` 运维脚本
+- `GET /api/suricata/stats` 规则统计 API
 
-## 部署验证（2026-08-09 已完成，10.44.77.250）
+### M12 · Web 运维监控可视化
+- 后端 4 个端点（`monitoring.go`）：
+  - `/api/monitoring/traffic`（zeek.conn date_histogram，最近 60 分钟 eps + bps 波形）
+  - `/api/monitoring/workload`（当日事件总量 + 按 dataset 分布 + 告警线索 + Strelka 文件数 + XDR 推送计数）
+  - `/api/monitoring/health`（组件 + ES + 磁盘 + cleaner）
+  - `/api/monitoring/alerts-today`（今日线索按小时柱状图）
+- XDR 推送 in-memory 计数器（成功 / 失败 / DLQ），在 `Push()` 内部埋点
+- 前端 Dashboard 重写：4 张数字卡 + SVG 折线 + SVG 柱状图 + 组件健康表 + 磁盘进度条 + Cleaner + dataset Top10
+- 纯 SVG 图表，不引第三方库；每 30s 自动刷新 + 手动刷新
+- 边界声明：Dashboard 底部明确"安全数据分析可视化由 XDR 平台承担"
 
-- [x] docker-compose 全栈部署：suricata/zeek/es/filebeat/ndr-manager/mcp-server/ndr-agent/strelka-* 全部 Running
-- [x] 镜像口参数化：`configs/probe.yaml`（interface=enp5s0）→ `deploy.sh render` → `/opt/ndr/so/conf/`
-- [x] 数据管道：eve.json + zeek JSON 落盘 → filebeat → ES（`logs-suricata.alerts-so` / `logs-zeek-so`，自定义 pipeline/ILM/模板）
-- [x] 管理后台 NodePort 30603 可访问（设备管理 + 规则 + 历史审计）
-- [x] 告警闭环：注入测试告警 → xdr-push 查询命中 → Webhook 重试推送 → 失败写死信（18888 为测试地址）
-- [x] suricata unix socket 热加载通道（ndr-manager reload-rules）
-- [x] nss-ndr-manager 配置下发实测：保存 probe/xdr 配置 → 渲染配置 + 滚动重启组件 → 审计记录
-- [ ] Strelka 端到端实测（待镜像构建）：zeek 提取 → filecheck → filestream → 扫描 →
-      strelka.log → ES logs-strelka-so（数据链路验证即可，可视化在 XDR）
-- [x] 部署机未改 k3s/rancher 配置；`vm.max_map_count` 本机已 1048576（满足 ES 要求），未做系统级修改
-- [ ] 清理阈值实测：cleaner 已跑（Completed），需观察 pcap 增长后按 retention/storage_limit 清理（M3 验收）
-- [ ] 接入真实 XDR Webhook 地址（替换 `probe.local.yaml` 中 18888 测试 URL 后重新渲染配置）
-- [ ] LLM 噪声过滤端到端：XDR 真实任务下发 → ndr-agent 调用 mcp-server 工具 → LLM 给出结论
+### M13 · 取证下载
+- `GET /api/pcap/{name}`（pcap 下载，受用户会话鉴权 + 路径校验 + 2 GB 上限 + 流式）
+- `GET /api/file/{md5}`（按 MD5 查找 Zeek 提取 / Strelka 已扫描样本）
+- 两条下载端点均审计日志（`audit("file.download", ..., size=...)`）
 
-## 待确认项
+### 部署验证（生产实例 10.44.77.250）
+- docker-compose 全栈部署：suricata / zeek / es / filebeat / ndr-manager / strelka-* 全部 Running
+- 镜像口参数化：`configs/probe.yaml`（interface=enp5s0）→ `deploy.sh render` → `/opt/ndr/so/conf/`
+- 数据管道：eve.json + zeek JSON → filebeat → ES（logs-suricata.alerts-so / logs-zeek-so）
+- 管理后台端口 30603 可访问
+- 告警闭环：注入测试告警 → xdr-push → Webhook 重试 → 失败写死信
+- suricata unix socket 热加载通道
+- nss-ndr-manager 配置下发实测：保存 → 渲染 → 滚动重启 → 审计
+- 部署机未改 k3s/rancher；`vm.max_map_count` 本机已 1048576
 
-- [x] GHCR 包可见性：仓库级命名空间 `ghcr.io/cxiyuan/nss-ndr/*`，随 public 仓库自动公开（方法B）
-- [ ] XDR 侧确认 Webhook 报文规范（docs/架构设计 §5.8）
-- [ ] ES 版本/许可：Elasticsearch 9.3.3（默认）还是 OpenSearch
-- [ ] Zeek 轮转历史是否补采进 ES（默认只留档）
-- [ ] manager 配置初始化：部署后需在 UI 填写镜像口/Webhook 再首次下发（当前已用 API 写入）
-- [ ] LLM 模型对接：默认指向 host.docker.internal:11434（Ollama），需确认 XDR 下发任务时携带的 schema
-- [ ] YARA 规则源扩展：构建期固定 securityonion-yara 提交，后续可加 UI 同步/自定义规则
+---
+
+## 待验证 / 待办
+
+### 部署验证缺口
+- [ ] Strelka 端到端实测：zeek 提取 → filecheck → filestream → 扫描 → strelka.log → ES logs-strelka-so
+- [ ] cleaner 阈值实测：观察 pcap 增长后按 retention/storage_limit 清理
+- [ ] 接入真实 XDR Webhook 地址（替换测试地址）后重渲染配置
+
+### 待确认项
+- [ ] XDR 侧确认 Webhook 报文规范（告警字段 / 推送频率）
+- [ ] ES 版本 / 许可：Elasticsearch 9.3.3（默认）还是 OpenSearch
+- [ ] YARA 规则源扩展：构建期固定 securityonion-yara 提交，后续可加 UI 同步 / 自定义规则
+
+---
+
+## 已下线（划归 XDR / 独立项目，不在本项目维护）
+
+### 划归 XDR（XDR 平台负责）
+- **M5 Sigma 检测**（pySigma 转换、Sigma 规则管理、detections.alerts 索引、调度器）
+- **M7 Kibana NDR 看板**（kibana-init sidecar、41 个看板导入、SO 模板改写）
+
+### 迁移至独立项目（AI Agent 子系统）
+- **M11 / M11b / M11c / M14 / M14.5**：ndr-agent（LangGraph StateGraph + qwen3-0.6B）+ mcp-server（12 个 MCP 分析工具）+ 内置 ollama 镜像 —— 已拆除，迁移至独立仓库

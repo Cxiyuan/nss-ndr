@@ -26,9 +26,6 @@ func main() {
 	}
 	defer closeDB()
 
-	initAnalysisStateTable() // M14: 4 步流水线状态持久化
-	initIPReputationTable()   // M14: 跨任务记忆（IP 信誉缓存）
-
 	if err := ensureDefaults(); err != nil {
 		log.Fatalf("默认配置初始化失败: %v", err)
 	}

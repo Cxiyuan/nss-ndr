@@ -3,8 +3,7 @@
 #
 # 用途：在探针镜像网段内的任意主机上运行，生成扫描 / Web 攻击 / DNS 异常 / SMB / TLS
 #       等验证流量，用于端到端验证检测链路：
-#         检测线索（Suricata）-> 网络元数据确认（Zeek）-> 线索推送 XDR -> XDR 下发分析任务
-#         -> ndr-agent（LLM）调 mcp-server 工具集给出结论
+#         检测线索（Suricata）-> 网络元数据确认（Zeek）-> 线索推送 XDR -> XDR 研判
 #
 # 注意：NDR 不内置可视化（划归 XDR 平台）；本脚本只产生攻击流量，不针对任何可视化组件做探测。
 # 依赖：系统自带工具（curl / nc / dig / python3 / smbutil），无需额外安装
@@ -168,8 +167,8 @@ smb_sim() {
 tls_sim() {
   log "== TLS 握手模拟（目标 $TARGET）=="
   command -v curl >/dev/null || { warn "缺少 curl，跳过 TLS"; return; }
-  # 443 为常见 HTTPS；8081 为本探针 ndr-agent 端口（XDR 下发的研判任务会落到这里，便于产生 TLS 元数据）
-  for port in 443 8081; do
+  # 443 为常见 HTTPS
+  for port in 443; do
     curl -sk -o /dev/null -m 5 -w "  https://$TARGET:$port -> %{http_code} (TLS %{ssl_verify_result})\n" \
       "https://$TARGET:$port/" 2>/dev/null || echo "  https://$TARGET:$port 无响应" || true
   done
@@ -187,6 +186,6 @@ echo ""
 echo "  验证方式（在部署机）:"
 echo "    1) 检查检测线索（ES 直查）: docker exec nss-elasticsearch curl -s -u xdr-push:\$XDR_PASSWORD http://localhost:9200/logs-suricata.alerts-so/_count | head -c 200"
 echo "    2) 检查网络元数据: curl -s http://localhost:30603/api/etopen/tree | head"
-echo "    3) XDR 分析任务: POST /api/xdr/task（Bearer 令牌）由 NDR 在本地元数据上执行关联分析"
-echo "    4) XDR 研判任务: POST /api/xdr/agent/task → ndr-agent（LLM）→ mcp-server → ES，给出结论+证据链"
+echo "    3) 检查线索推送: XDR Webhook 接收情况（HMAC 验签）"
+echo "    4) 取证下载: pcap 全包或文件样本（按 MD5）"
 echo ""
