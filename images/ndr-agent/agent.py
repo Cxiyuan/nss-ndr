@@ -1,27 +1,36 @@
 #!/usr/bin/env python3
-"""NSS-NDR 本地分析 Agent。
+"""NSS-NDR 本地分析 Agent：LangGraph 状态机 + XDR 升级通道。
 
-职责：接收 XDR 分析任务（经 ndr-manager /api/xdr/agent/task 转发）：
-1. LLM 模式（默认）：本地小模型（Ollama，OpenAI 兼容）按工具调用循环推理，
-   自主选择并调用 MCP 工具（query_metadata / correlate_session / aggregate_stats /
-   get_clue / query_files / list_datasets）完成分析，返回结论 + 工具调用链证据。
-2. 结构化降级：未配置模型时，若任务含 target/datasets，直接调用工具并汇总。
+定位：NDR 后端威胁分析引擎（无用户交互界面）。
 
-安全：
-- /analyze 端点要求 Bearer token（与 ndr-manager 配置的 xdr.agent_token 相同）
-- 通过 AGENT_MAX_CONCURRENCY 信号量限制并发，避免 Ollama 过载
+状态机（LangGraph StateGraph）：
+    [pre_aggregate] → [heuristic] ─┬─ high conf → [finalize]
+                                  └─ low conf  → [llm_classify] ─┬─ 不升级 → [finalize]
+                                                              └─ 升级   → [escalate_xdr] → [finalize]
+
+节点全部 async；SqliteCheckpointer 自动持久化（time travel / 重跑）。
+XDR 升级通道：仅接口，XDR 不可达/超时 → 返回 None 降级。
 """
 import asyncio
 import json
 import os
-import secrets
+import sys
 import time
-from typing import Any
+from typing import Any, Dict, List, Literal, Optional, TypedDict
 
+import httpx
 import requests
+import secrets
 from fastapi import FastAPI, HTTPException, Request
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
+
+# Pydantic 严格 Verdict schema
+from pydantic import BaseModel, Field, ValidationError, validator
+
+# LangGraph
+from langgraph.graph import END, START, StateGraph
+from langgraph.checkpoint.sqlite import SqliteCheckpointer
 
 # ===== 配置 =====
 AGENT_HOST = os.getenv("AGENT_HOST", "0.0.0.0")
@@ -29,215 +38,653 @@ AGENT_PORT = int(os.getenv("AGENT_PORT", "8081"))
 MCP_URL = os.getenv("MCP_URL", "http://nss-mcp-server:8000/mcp")
 LLM_URL = os.getenv("LLM_URL", "http://nss-ollama:11434/v1/chat/completions")
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen3-ndr")
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")  # 远端 OpenAI 兼容端点用
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "120"))
-MCP_TIMEOUT = float(os.getenv("MCP_TIMEOUT", "30"))  # MCP 连接超时（秒）
-MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "6"))
-MAX_CONCURRENCY = int(os.getenv("AGENT_MAX_CONCURRENCY", "3"))  # 同时最多 3 个推理任务
-AGENT_TOKEN = os.getenv("AGENT_TOKEN", "")  # 鉴权 token（与 ndr-manager 的 xdr.agent_token 一致）
+MCP_TIMEOUT = float(os.getenv("MCP_TIMEOUT", "30"))
+MAX_CONCURRENCY = int(os.getenv("AGENT_MAX_CONCURRENCY", "3"))
+AGENT_TOKEN = os.getenv("AGENT_TOKEN", "")
+
+# ndr-manager 回调（最终状态同步到 ndr-manager 的展示表）
+NDR_MANAGER_URL = os.getenv("NDR_MANAGER_URL", "http://ndr-manager:8080")
+
+# XDR 升级通道
+XDR_BASE_URL = os.getenv("XDR_BASE_URL", "")
+XDR_TOKEN = os.getenv("XDR_TOKEN", "")
+XDR_TIMEOUT = int(os.getenv("XDR_TIMEOUT", "60"))
+XDR_INSECURE_TLS = os.getenv("XDR_INSECURE_TLS", "false").lower() == "true"
+
+# LangGraph 状态持久化
+LANGGRAPH_DB_PATH = os.getenv("LANGGRAPH_DB_PATH", "/opt/agent/state/langgraph.db")
+
+# 阈值
+HIGH_HEURISTIC_THRESHOLD = 0.85
+MEDIUM_LLM_THRESHOLD = 0.7
+LLM_SAMPLE_TEMPS = [0.0, 0.3, 0.7]
+LLM_PARSE_RETRIES = 3
+
+# 升级判定 - 显式复杂任务
+COMPLEX_INSTRUCTIONS = {"incident_cause", "blast_radius", "ioc_confirm", "deep_dive"}
 
 app = FastAPI(title="NSS-NDR Agent")
-
-# 并发信号量：限制同时在跑的 LLM 推理任务数
 _llm_semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
 
-SYSTEM_PROMPT = """你是部署在 NDR 流量探针上的安全分析助手。
-你可以使用提供的工具查询探针本地采集的网络元数据（连接、DNS、HTTP、TLS、SMB、文件分析、检测线索等）。
-请根据用户的分析任务，自主选择合适的工具分步取证，最后用中文给出分析结论：
-- 结论要有依据：引用关键证据（源/目的、域名、端口、特征等）
-- 若证据不足，明确说明还需要哪些数据
-- 数据全部来自探针本地，不要编造结果
-- 工具调用尽量精简，避免重复查询相同数据"""
+
+# ===== 严格 Verdict Schema（Pydantic）=====
+
+class Verdict(BaseModel):
+    verdict: Literal["real_threat", "suspicious", "noise", "insufficient_evidence"]
+    confidence: float = Field(..., ge=0.0, lt=1.0)
+    severity: Literal["critical", "high", "medium", "low", "info"]
+    summary: str = Field(..., min_length=1, max_length=500)
+    recommended_action: Literal["isolate_host", "block_ip", "monitor", "no_action"]
+    key_indicators: List[Dict[str, Any]] = Field(default_factory=list)
+    escalation_reason: Optional[str] = None
+
+    @validator("confidence")
+    def _cap_confidence(cls, v):
+        if v >= 1.0:
+            raise ValueError("confidence must be < 1.0 (small model limitation)")
+        return v
+
+    @validator("key_indicators")
+    def _limit_indicators(cls, v):
+        return v[:10]
 
 
+# ===== LangGraph 状态 =====
+# 节点返回 partial dict（update state），LangGraph 自动 merge
+class AnalysisState(TypedDict, total=False):
+    # 任务输入
+    task_id: str
+    instruction: str
+    target: Dict[str, Any]
+    # 跨任务记忆（reputation_check 节点产出）
+    reputation: Optional[Dict[str, Any]]      # {cached, ip, last_verdict, last_confidence, ...}
+    # STEP 1 输出
+    metrics: Optional[Dict[str, Any]]
+    # STEP 2 输出
+    heuristic: Optional[Dict[str, Any]]
+    # STEP 3 输出
+    llm_verdict: Optional[Dict[str, Any]]     # dict（Pydantic Verdict.dict()）
+    # STEP 4 输出
+    xdr_verdict: Optional[Dict[str, Any]]
+    # 最终
+    final: Optional[Dict[str, Any]]           # dict（Pydantic Verdict.dict()）
+    # 元
+    llm_used: bool
+    escalated: bool
+    elapsed_ms: int
+    cached: bool                             # 是否走了 short_circuit（信誉命中）
+
+
+# ===== 鉴权 =====
 def _check_auth(request: Request) -> None:
-    """校验 Bearer Token（与 ndr-manager 配置的 xdr.agent_token 一致）"""
     if not AGENT_TOKEN:
-        # 未配置 AGENT_TOKEN → 拒绝（默认安全）；管理员需显式启用
-        raise HTTPException(status_code=503, detail="Agent 未配置 AGENT_TOKEN，请在 docker-compose env 中设置")
+        raise HTTPException(status_code=503, detail="Agent 未配置 AGENT_TOKEN")
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="缺少 Bearer Token")
     token = auth[7:].strip()
-    # 常量时间比较，避免时序攻击
     if not secrets.compare_digest(token, AGENT_TOKEN):
         raise HTTPException(status_code=401, detail="Agent Token 无效")
 
 
-# ===== MCP 工具辅助 =====
+# ===== System Prompt（小模型约束模板）=====
+SYSTEM_PROMPT = """你是 NDR 后端威胁分析引擎。任务：基于结构化指标输出 JSON 判定。
 
-def _load_tools(session: ClientSession) -> list[dict]:
-    tools = []
-    resp = session.list_tools()
-    for t in resp.tools:
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": t.name,
-                "description": t.description or "",
-                "parameters": t.inputSchema or {"type": "object", "properties": {}},
-            },
-        })
-    return tools
+【硬约束】
+1. 仅基于输入的 metrics，禁止编造数字
+2. 输出必须符合 Verdict schema（严格 JSON）
+3. confidence < 1.0（小模型限制）
+4. ambiguous 时 verdict = "insufficient_evidence" + escalation_reason
+5. 失败时输出 {"error": "..."}，不要猜测
+
+【Verdict schema】
+{
+  "verdict": "real_threat | suspicious | noise | insufficient_evidence",
+  "confidence": 0.0-0.99,
+  "severity": "critical | high | medium | low | info",
+  "summary": "1-2 句中文结论",
+  "recommended_action": "isolate_host | block_ip | monitor | no_action",
+  "key_indicators": [{"type": "...", "value": "..."}],
+  "escalation_reason": null 或 "string"
+}
+
+【示例 1 — IOC 命中】
+输入: {"heuristic": {"confidence": 0.95, "reason": "IOC matched"}, "metrics": {"ioc_match": {"matched": true, "hit_count": 1}, "suricata_top_rules": [{"key": "ET MALWARE Cobalt Strike", "count": 5}]}}
+输出: {"verdict": "real_threat", "confidence": 0.95, "severity": "high", "summary": "命中已知 C2 IOC，且 Suricata 检测到 Cobalt Strike Beacon 行为", "recommended_action": "isolate_host", "key_indicators": [{"type": "ioc_match", "value": "8.8.8.8"}, {"type": "rule_match", "value": "ET MALWARE Cobalt Strike", "count": 5}], "escalation_reason": null}
+
+【示例 2 — 无告警】
+输入: {"heuristic": {"confidence": 0.9, "reason": "no alerts"}, "metrics": {"ioc_match": {"matched": false}, "suricata_top_rules": []}}
+输出: {"verdict": "noise", "confidence": 0.95, "severity": "info", "summary": "无 Suricata 告警、无 IOC 命中，纯噪声", "recommended_action": "no_action", "key_indicators": [], "escalation_reason": null}
+
+【示例 3 — 模糊】
+输入: {"heuristic": {"confidence": 0.4, "reason": "ambiguous"}, "metrics": {"ioc_match": {"matched": false}, "suricata_top_rules": [{"key": "ET ATTACK Reconnaissance", "count": 2}]}}
+输出: {"verdict": "suspicious", "confidence": 0.6, "severity": "medium", "summary": "低频 Reconnaissance 触发，无明确 IOC，模式模糊", "recommended_action": "monitor", "key_indicators": [{"type": "rule_match", "value": "ET ATTACK Reconnaissance", "count": 2}], "escalation_reason": "low_freq_alerts_ambiguous_threat"}
+"""
 
 
-def _call_tool(session: ClientSession, name: str, args: dict) -> Any:
+# ===== LangGraph 节点 =====
+
+async def _call_tool_safe(session: ClientSession, name: str, args: dict) -> dict:
     try:
-        result = session.call_tool(name, arguments=args)
+        result = await asyncio.to_thread(session.call_tool, name, arguments=args)
         texts = []
         for c in result.content:
             txt = getattr(c, "text", None)
             if txt:
                 texts.append(txt)
         if not texts:
-            texts.append(str(result))
-        return "\n".join(texts)
+            return {"error": "empty result"}
+        try:
+            return json.loads(texts[0])
+        except json.JSONDecodeError:
+            return {"raw": texts[0]}
     except Exception as e:
-        return f"工具调用失败: {e}"
+        return {"error": f"tool {name} failed: {e}"}
 
 
-# ===== LLM 调用 =====
+# ---- 节点 1: pre_aggregate ----
+async def pre_aggregate_node(state: AnalysisState) -> dict:
+    target = state["target"]
+    async with streamablehttp_client(MCP_URL, timeout=MCP_TIMEOUT) as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            results = await asyncio.gather(
+                _call_tool_safe(session, "aggregate_suricata", {"target": target, "field": "rule.name", "top_n": 5}),
+                _call_tool_safe(session, "aggregate_suricata", {"target": target, "field": "source.ip", "top_n": 5}),
+                _call_tool_safe(session, "aggregate_stats", {"target": target, "field": "destination.port", "top_n": 5}),
+                _call_tool_safe(session, "aggregate_stats", {"target": target, "field": "dns.question.name", "top_n": 5}),
+                _call_tool_safe(session, "check_ioc", {"target": target}),
+                _call_tool_safe(session, "get_indicators", {"target": target, "max_events": 30}),
+            )
+    (suricata_rules, suricata_ips, conn_ports, dns_names, ioc_match, indicators) = results
 
-def _llm_complete(messages: list[dict], tools: list[dict]) -> dict:
+    return {
+        "metrics": {
+            "suricata_top_rules": suricata_rules.get("top", []),
+            "suricata_top_ips": suricata_ips.get("top", []),
+            "conn_top_ports": conn_ports.get("top", []),
+            "dns_top_names": dns_names.get("top", []),
+            "ioc_match": ioc_match,
+            "indicators_summary": {
+                "total_events": indicators.get("total_events", 0),
+                "per_source_counts": indicators.get("per_source_counts", {}),
+            },
+        }
+    }
+
+
+# ---- 节点 2: heuristic ----
+def apply_heuristics(metrics: dict) -> dict:
+    if metrics.get("ioc_match", {}).get("matched"):
+        return {"confidence": 0.95, "reason": "IOC matched", "verdict_hint": "real_threat", "severity_hint": "high"}
+    top_rules = metrics.get("suricata_top_rules", [])
+    top_ips = metrics.get("suricata_top_ips", [])
+    if not top_rules or top_rules[0].get("count", 0) == 0:
+        return {"confidence": 0.9, "reason": "no alerts", "verdict_hint": "noise", "severity_hint": "info"}
+    if top_rules[0].get("count", 0) >= 10:
+        return {"confidence": 0.85, "reason": f"rule {top_rules[0].get('key', '?')} fired ≥10 times", "verdict_hint": "real_threat", "severity_hint": "high"}
+    if top_ips and len(top_ips) >= 3 and top_rules[0].get("count", 0) >= 5:
+        return {"confidence": 0.8, "reason": "multiple sources triggering same rule (campaign)", "verdict_hint": "real_threat", "severity_hint": "medium"}
+    return {"confidence": 0.4, "reason": "ambiguous metrics", "verdict_hint": None, "severity_hint": None}
+
+
+def heuristic_to_verdict(heuristic: dict, _metrics: dict) -> Verdict:
+    if heuristic["verdict_hint"] == "real_threat":
+        return Verdict(verdict="real_threat", confidence=heuristic["confidence"],
+                       severity=heuristic["severity_hint"] or "high",
+                       summary=f"启发式判定: {heuristic['reason']}",
+                       recommended_action="monitor",
+                       key_indicators=[{"type": "heuristic_rule", "value": heuristic["reason"]}])
+    if heuristic["verdict_hint"] == "noise":
+        return Verdict(verdict="noise", confidence=heuristic["confidence"],
+                       severity="info", summary=f"启发式判定: {heuristic['reason']}",
+                       recommended_action="no_action", key_indicators=[])
+    return Verdict(verdict="insufficient_evidence", confidence=heuristic["confidence"],
+                   severity="info", summary=f"启发式无法判定: {heuristic['reason']}",
+                   recommended_action="no_action", key_indicators=[])
+
+
+async def heuristic_node(state: AnalysisState) -> dict:
+    h = apply_heuristics(state["metrics"])
+    return {"heuristic": h}
+
+
+def route_after_heuristic(state: AnalysisState) -> str:
+    """高置信度直接 final；模糊走 LLM"""
+    if state["heuristic"]["confidence"] >= HIGH_HEURISTIC_THRESHOLD:
+        return "finalize"
+    return "llm"
+
+
+# ---- 节点 3: llm_classify ----
+def _llm_call_sync(instruction: str, metrics: dict, heuristic: dict, temperature: float) -> dict:
+    user_payload = {"instruction": instruction, "heuristic": heuristic, "metrics": metrics}
+    payload = {
+        "model": LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": temperature,
+    }
     headers = {"Content-Type": "application/json"}
     if LLM_API_KEY:
         headers["Authorization"] = f"Bearer {LLM_API_KEY}"
-    payload = {"model": LLM_MODEL, "messages": messages, "tools": tools, "temperature": 0}
     resp = requests.post(LLM_URL, json=payload, timeout=LLM_TIMEOUT, headers=headers)
     resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]
+    content = resp.json()["choices"][0]["message"]["content"]
+    return json.loads(content)
 
 
-def _run_llm_agent(session: ClientSession, instruction: str, target: dict | None) -> dict:
-    tools = _load_tools(session)
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    user_content = f"分析任务：{instruction}"
-    if target:
-        user_content += f"\n目标：{json.dumps(target, ensure_ascii=False)}"
-    messages.append({"role": "user", "content": user_content})
-
-    evidence = []
-    for step in range(MAX_STEPS):
+async def llm_classify_single(instruction: str, metrics: dict, heuristic: dict, temperature: float) -> Optional[Verdict]:
+    for attempt in range(LLM_PARSE_RETRIES):
         try:
-            msg = _llm_complete(messages, tools)
-        except Exception as e:
-            return {"ok": False, "conclusion": f"本地模型调用失败（可配置 LLM_MODEL 或使用结构化任务）: {e}",
-                    "llm_used": False, "steps": step, "evidence": evidence}
-        if not msg.get("tool_calls"):
-            return {"ok": True, "conclusion": msg.get("content") or "(模型未给出结论)",
-                    "llm_used": True, "llm_model": LLM_MODEL, "steps": step + 1, "evidence": evidence}
-        messages.append(msg)
-        for tc in msg["tool_calls"]:
-            fn = tc["function"]
-            name, args = fn["name"], json.loads(fn.get("arguments") or "{}")
-            result = _call_tool(session, name, args)
-            evidence.append({"tool": name, "args": args, "result": _truncate(result)})
-            messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
-    return {"ok": True, "conclusion": "达到最大推理步数，未得到最终结论", "llm_used": True,
-            "llm_model": LLM_MODEL, "steps": MAX_STEPS, "evidence": evidence}
+            raw = await asyncio.to_thread(_llm_call_sync, instruction, metrics, heuristic, temperature)
+            return Verdict.parse_obj(raw)
+        except (ValidationError, json.JSONDecodeError, Exception):
+            if attempt < LLM_PARSE_RETRIES - 1:
+                continue
+            return None
+    return None
 
 
-# ===== 结构化降级（覆盖 6 个工具的常见用法）=====
+async def llm_classify_multi(instruction: str, metrics: dict, heuristic: dict) -> Verdict:
+    samples: List[Verdict] = []
+    for temp in LLM_SAMPLE_TEMPS:
+        verdict = await llm_classify_single(instruction, metrics, heuristic, temp)
+        if verdict is not None:
+            samples.append(verdict)
 
-def _run_structured(session: ClientSession, task: dict) -> dict:
-    """无 LLM 时：根据任务内容调用最合适的 MCP 工具。
+    if not samples:
+        return heuristic_to_verdict(heuristic, metrics)
 
-    路由策略：
-    - 含 mime/md5 → query_files
-    - 含 field/top_n → aggregate_stats
-    - 仅 community_id → correlate_session
-    - 默认 → query_metadata
-    """
-    target = task.get("target") or {}
-    datasets = task.get("datasets")
-    window = task.get("window_seconds", 3600)
-    conditions = task.get("conditions")
-    fields = task.get("fields")  # 聚合字段
+    verdict_counts: Dict[str, int] = {}
+    for v in samples:
+        verdict_counts[v.verdict] = verdict_counts.get(v.verdict, 0) + 1
+    majority = max(verdict_counts, key=verdict_counts.get)
 
-    if not any(target.values()):
-        return {"ok": False, "conclusion": "结构化任务缺少 target（community_id/src_ip/dst_ip/uid）",
-                "llm_used": False, "evidence": []}
+    if verdict_counts[majority] >= 2:
+        for v in samples:
+            if v.verdict == majority:
+                return v
 
-    evidence = []
-    used_tools = []
-
-    # 1) 文件查询（如指定 mime_type 或 md5）
-    if task.get("mime_type") or task.get("md5"):
-        r = _call_tool(session, "query_files",
-                       {"mime_type": task.get("mime_type"), "md5": task.get("md5"),
-                        "window_seconds": window, "size": 100})
-        evidence.append({"tool": "query_files", "args": {k: task.get(k) for k in ["mime_type", "md5"]}, "result": _truncate(r)})
-        used_tools.append("query_files")
-
-    # 2) 聚合统计（如指定 fields）
-    if fields:
-        for f in (fields if isinstance(fields, list) else [fields]):
-            r = _call_tool(session, "aggregate_stats",
-                           {"target": target, "window_seconds": window, "field": f, "top_n": 10})
-            evidence.append({"tool": "aggregate_stats", "args": {"field": f}, "result": _truncate(r)})
-            used_tools.append(f"aggregate_stats[{f}]")
-
-    # 3) 关联会话（community_id 给定时）
-    cid = target.get("community_id")
-    if cid and not datasets:
-        r = _call_tool(session, "correlate_session",
-                       {"community_id": cid, "window_seconds": window})
-        evidence.append({"tool": "correlate_session", "args": {"community_id": cid}, "result": _truncate(r)})
-        used_tools.append("correlate_session")
-    else:
-        # 4) 通用元数据查询
-        r = _call_tool(session, "query_metadata",
-                       {"target": target, "datasets": datasets, "window_seconds": window, "conditions": conditions})
-        evidence.append({"tool": "query_metadata", "args": {"target": target, "datasets": datasets}, "result": _truncate(r)})
-        used_tools.append("query_metadata")
-
-    if not used_tools:
-        return {"ok": False, "conclusion": "无法路由到任何工具，请检查 target/datasets/fields", "llm_used": False, "evidence": []}
-
-    return {"ok": True,
-            "conclusion": f"已按目标 {target} 检索关联元数据（{', '.join(used_tools)}），详见 evidence",
-            "llm_used": False, "evidence": evidence}
+    return Verdict(verdict="insufficient_evidence", confidence=0.4, severity="info",
+                   summary=f"本地小模型 {len(samples)} 次采样不一致（{verdict_counts}），需人工复核",
+                   recommended_action="monitor",
+                   key_indicators=[{"type": "llm_inconsistency", "value": str(verdict_counts)}],
+                   escalation_reason="llm_samples_inconsistent")
 
 
-def _truncate(s: str, n: int = 4000) -> str:
-    return s if len(s) <= n else s[:n] + f"...(截断，共 {len(s)} 字符)"
+async def llm_node(state: AnalysisState) -> dict:
+    if not LLM_MODEL:
+        return {"llm_verdict": heuristic_to_verdict(state["heuristic"], state["metrics"]).dict(),
+                "llm_used": False}
+    verdict = await llm_classify_multi(state["instruction"], state["metrics"], state["heuristic"])
+    return {"llm_verdict": verdict.dict(), "llm_used": True}
 
 
-# ===== 端点 =====
+def should_escalate(llm_verdict: dict, heuristic: dict, instruction: str) -> bool:
+    if not XDR_BASE_URL:
+        return False
+    if instruction in COMPLEX_INSTRUCTIONS:
+        return True
+    if llm_verdict.get("escalation_reason"):
+        return True
+    if heuristic["confidence"] >= 0.7 and llm_verdict.get("confidence", 0) < 0.7:
+        return True
+    if llm_verdict.get("confidence", 0) < 0.5 and llm_verdict.get("verdict") == "insufficient_evidence":
+        return True
+    return False
+
+
+def route_after_llm(state: AnalysisState) -> str:
+    if state.get("llm_verdict") and should_escalate(state["llm_verdict"], state["heuristic"], state["instruction"]):
+        return "escalate"
+    return "finalize"
+
+
+# ---- 节点 4: escalate_xdr ----
+async def escalate_to_xdr(task_id: str, instruction: str, target: dict, context: dict) -> Optional[dict]:
+    if not XDR_BASE_URL or not XDR_TOKEN:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=XDR_TIMEOUT, verify=not XDR_INSECURE_TLS) as client:
+            payload = {
+                "task_id": f"ndr-esc-{task_id}",
+                "tier": 2,
+                "instruction": instruction,
+                "target": target,
+                "ndr_context": context,
+                "schema_version": "1.0",
+            }
+            headers = {"Authorization": f"Bearer {XDR_TOKEN}", "Content-Type": "application/json"}
+            url = f"{XDR_BASE_URL.rstrip('/')}/api/xdr/analyze_v2"
+            response = await client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            verdict_data = data.get("verdict") or data
+            return verdict_data if isinstance(verdict_data, dict) else None
+    except Exception as e:
+        print(f"[agent] XDR 升级失败: {e}", file=sys.stderr)
+        return None
+
+
+async def escalate_node(state: AnalysisState) -> dict:
+    xdr = await escalate_to_xdr(
+        state["task_id"], state["instruction"], state["target"],
+        context={
+            "metrics": state["metrics"],
+            "heuristic": state["heuristic"],
+            "ndr_llm_verdict": state["llm_verdict"],
+        },
+    )
+    return {"xdr_verdict": xdr, "escalated": xdr is not None}
+
+
+# ---- 节点 5: finalize ----
+def reconcile(heuristic: dict, llm_verdict: Optional[dict], xdr_verdict: Optional[dict]) -> dict:
+    if xdr_verdict is not None:
+        return xdr_verdict
+    if llm_verdict is not None:
+        return llm_verdict
+    return heuristic_to_verdict(heuristic, {}).dict()
+
+
+async def finalize_node(state: AnalysisState) -> dict:
+    final = reconcile(state["heuristic"], state.get("llm_verdict"), state.get("xdr_verdict"))
+    return {"final": final}
+
+
+# ===== 跨任务记忆：IP 信誉节点 =====
+
+async def reputation_check_node(state: AnalysisState) -> dict:
+    """跨任务记忆：先查 IP 信誉缓存（ndr-manager 维护）"""
+    target = state.get("target") or {}
+    src_ip = target.get("src_ip", "")
+    if not src_ip:
+        return {"reputation": {"cached": False}}
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            headers = {"Authorization": f"Bearer {AGENT_TOKEN}"}
+            url = f"{NDR_MANAGER_URL.rstrip('/')}/api/agent/ip_reputation/{src_ip}"
+            response = await client.get(url, headers=headers)
+            if response.status_code != 200:
+                return {"reputation": {"cached": False}}
+            data = response.json()
+            if not data.get("analyzed"):
+                return {"reputation": {"cached": False}}
+            return {
+                "reputation": {
+                    "cached": True,
+                    "ip": data.get("ip"),
+                    "last_verdict": data.get("last_verdict"),
+                    "last_confidence": data.get("last_confidence"),
+                    "last_analyzed_at": data.get("last_analyzed_at"),
+                    "analysis_count": data.get("analysis_count", 1),
+                    "expires_at": data.get("expires_at"),
+                }
+            }
+    except Exception as e:
+        print(f"[agent] 信誉查询失败: {e}", file=sys.stderr)
+        return {"reputation": {"cached": False}}
+
+
+def should_short_circuit(state: AnalysisState) -> bool:
+    """是否用缓存 verdict 短路？需满足：高置信 + 高置信 verdict + 未过期"""
+    rep = state.get("reputation") or {}
+    if not rep.get("cached"):
+        return False
+    expires_at = rep.get("expires_at", "")
+    if expires_at:
+        try:
+            from datetime import datetime as _dt
+            exp = _dt.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if _dt.now(exp.tzinfo) > exp:
+                return False  # 已过期
+        except Exception:
+            return False
+    if rep.get("last_verdict") not in {"real_threat", "noise"}:
+        return False
+    if rep.get("last_confidence", 0) < 0.7:
+        return False
+    return True
+
+
+def route_after_reputation(state: AnalysisState) -> str:
+    """信誉命中 → 短路；否则走完整流水线"""
+    if should_short_circuit(state):
+        return "short_circuit"
+    return "pre_aggregate"
+
+
+async def short_circuit_node(state: AnalysisState) -> dict:
+    """信誉命中：直接用缓存 verdict，跳过 heuristic/llm/escalate"""
+    rep = state["reputation"]
+    verdict = rep["last_verdict"]
+    is_threat = verdict == "real_threat"
+    return {
+        "final": {
+            "verdict": verdict,
+            "confidence": rep["last_confidence"],
+            "severity": "high" if is_threat else "info",
+            "summary": f"信誉命中：IP {rep['ip']} 过去 {rep['analysis_count']} 次分析为 {verdict}（最近于 {rep['last_analyzed_at']}）",
+            "recommended_action": "isolate_host" if is_threat else "no_action",
+            "key_indicators": [{
+                "type": "reputation_cache",
+                "value": f"IP {rep['ip']} 过去 {rep['analysis_count']} 次分析为 {verdict}",
+            }],
+            "escalation_reason": None,
+        },
+        "llm_used": False,
+        "escalated": False,
+        "cached": True,
+    }
+
+
+async def reputation_write_node(state: AnalysisState) -> dict:
+    """跨任务记忆：完整分析后写入 IP 信誉缓存（短路路径也写以更新 timestamp/count）"""
+    target = state.get("target") or {}
+    src_ip = target.get("src_ip", "")
+    if not src_ip:
+        return {}
+    final = state.get("final") or {}
+    verdict = final.get("verdict", "")
+    confidence = final.get("confidence", 0.0)
+    # 仅缓存明确判定（real_threat / noise）
+    if verdict not in {"real_threat", "noise"}:
+        return {}
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            headers = {"Authorization": f"Bearer {AGENT_TOKEN}", "Content-Type": "application/json"}
+            url = f"{NDR_MANAGER_URL.rstrip('/')}/api/agent/ip_reputation/{src_ip}"
+            payload = {"last_verdict": verdict, "last_confidence": confidence}
+            response = await client.put(url, json=payload, headers=headers)
+            if response.status_code >= 400:
+                print(f"[agent] 信誉写入失败: {response.text}", file=sys.stderr)
+    except Exception as e:
+        print(f"[agent] 信誉写入异常: {e}", file=sys.stderr)
+    return {}
+
+
+# ===== 构建 LangGraph 状态机 =====
+def build_graph():
+    builder = StateGraph(AnalysisState)
+    builder.add_node("reputation_check", reputation_check_node)
+    builder.add_node("short_circuit", short_circuit_node)
+    builder.add_node("pre_aggregate", pre_aggregate_node)
+    builder.add_node("heuristic", heuristic_node)
+    builder.add_node("llm", llm_node)
+    builder.add_node("escalate", escalate_node)
+    builder.add_node("finalize", finalize_node)
+    builder.add_node("reputation_write", reputation_write_node)
+
+    # 入口：先查跨任务记忆
+    builder.add_edge(START, "reputation_check")
+    # 信誉命中 → 短路；未命中 → 完整 4 步
+    builder.add_conditional_edges(
+        "reputation_check", route_after_reputation,
+        {"short_circuit": "short_circuit", "pre_aggregate": "pre_aggregate"},
+    )
+    # 短路路径：直接 final → 写信誉缓存
+    builder.add_edge("short_circuit", "reputation_write")
+    # 完整路径：pre_aggregate → heuristic → (llm | finalize) → (escalate | finalize) → finalize → 写信誉
+    builder.add_edge("pre_aggregate", "heuristic")
+    builder.add_conditional_edges(
+        "heuristic", route_after_heuristic,
+        {"llm": "llm", "finalize": "finalize"},
+    )
+    builder.add_conditional_edges(
+        "llm", route_after_llm,
+        {"escalate": "escalate", "finalize": "finalize"},
+    )
+    builder.add_edge("escalate", "finalize")
+    builder.add_edge("finalize", "reputation_write")
+    builder.add_edge("reputation_write", END)
+    return builder
+
+
+# 持久化：SqliteCheckpointer（time travel）+ 失败降级到 MemorySaver（仅内存）
+def _build_checkpointer():
+    os.makedirs(os.path.dirname(LANGGRAPH_DB_PATH), exist_ok=True)
+    # URL 格式：sqlite:////absolute/path（4 个 / 表示绝对路径）
+    db_url = f"sqlite:///{LANGGRAPH_DB_PATH}"
+    try:
+        return SqliteCheckpointer.from_conn_string(db_url)
+    except Exception as e:
+        print(f"[agent] SqliteCheckpointer 初始化失败（{e}），降级到 MemorySaver（time travel 仅进程内）", file=sys.stderr)
+        from langgraph.checkpoint.memory import MemorySaver
+        return MemorySaver()
+
+
+_checkpointer = _build_checkpointer()
+_graph = build_graph().compile(checkpointer=_checkpointer)
+
+
+# ===== 状态同步到 ndr-manager（仅最终状态展示） =====
+async def save_state_to_ndr_manager(task_id: str, state: dict) -> None:
+    """最终状态同步给 ndr-manager（用于 UI 展示与审计）"""
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            headers = {"Authorization": f"Bearer {AGENT_TOKEN}", "Content-Type": "application/json"}
+            url = f"{NDR_MANAGER_URL.rstrip('/')}/api/agent/analysis_state/{task_id}"
+            response = await client.put(url, json=state, headers=headers)
+            if response.status_code >= 400:
+                print(f"[agent] 保存状态失败 {response.status_code}: {response.text}", file=sys.stderr)
+    except Exception as e:
+        print(f"[agent] 保存状态异常: {e}", file=sys.stderr)
+
+
+# ===== FastAPI 端点 =====
+@app.get("/healthz")
+async def healthz():
+    return {
+        "status": "ok",
+        "model": LLM_MODEL or "(structured-only)",
+        "xdr_escalation_enabled": bool(XDR_BASE_URL),
+        "langgraph_db": LANGGRAPH_DB_PATH,
+        "max_concurrency": MAX_CONCURRENCY,
+    }
+
 
 @app.post("/analyze")
 async def analyze(req: Request):
-    # 鉴权
+    """主端点：执行 4 步 LangGraph 状态机"""
     _check_auth(req)
-
     task = await req.json()
     task_id = task.get("task_id") or "unknown"
-    instruction = task.get("instruction") or ""
-    target = task.get("target")
+    instruction = task.get("instruction") or "is_threat"
+    target = task.get("target") or {}
+
+    config = {"configurable": {"thread_id": task_id}}
     started = time.monotonic()
 
     async with _llm_semaphore:
         try:
-            async with streamablehttp_client(MCP_URL, timeout=MCP_TIMEOUT) as (read, write, _):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    if LLM_MODEL:
-                        result = _run_llm_agent(session, instruction, target)
-                    else:
-                        result = _run_structured(session, task)
+            result = await _graph.ainvoke({
+                "task_id": task_id,
+                "instruction": instruction,
+                "target": target,
+                "llm_used": False,
+                "escalated": False,
+                "elapsed_ms": 0,
+            }, config=config)
         except Exception as e:
-            result = {"ok": False, "conclusion": f"MCP 连接失败: {e}", "llm_used": False, "evidence": []}
+            result = {
+                "task_id": task_id, "instruction": instruction, "target": target,
+                "metrics": None, "heuristic": {"confidence": 0.0, "reason": "pipeline_failed"},
+                "llm_verdict": None, "xdr_verdict": None,
+                "final": Verdict(verdict="insufficient_evidence", confidence=0.0,
+                                severity="info", summary=f"本地推理失败: {e}",
+                                recommended_action="no_action").dict(),
+                "llm_used": False, "escalated": False, "elapsed_ms": 0,
+            }
 
     elapsed_ms = int((time.monotonic() - started) * 1000)
-    result["task_id"] = task_id
-    result["elapsed_ms"] = elapsed_ms
-    return result
+    final = result["final"]
+
+    # 同步最终状态到 ndr-manager（供 UI 展示；完整状态在 LangGraph SqliteCheckpointer）
+    await save_state_to_ndr_manager(task_id, {
+        "task_id": task_id,
+        "instruction": instruction,
+        "target": target,
+        "stage": "finalized",
+        "metrics": result.get("metrics"),
+        "heuristic_verdict": result.get("heuristic"),
+        "llm_verdict": result.get("llm_verdict"),
+        "xdr_verdict": result.get("xdr_verdict"),
+        "final_verdict": final,
+        "llm_used": result.get("llm_used", False),
+        "escalated": result.get("escalated", False),
+        "elapsed_ms": elapsed_ms,
+    })
+
+    return {
+        "task_id": task_id,
+        "verdict": final["verdict"],
+        "confidence": final["confidence"],
+        "severity": final["severity"],
+        "summary": final["summary"],
+        "recommended_action": final["recommended_action"],
+        "key_indicators": final.get("key_indicators", []),
+        "escalation_reason": final.get("escalation_reason"),
+        "model": LLM_MODEL if result.get("llm_used") else None,
+        "llm_used": result.get("llm_used", False),
+        "escalated": result.get("escalated", False),
+        "cached": result.get("cached", False),  # M14: short_circuit 命中
+        "elapsed_ms": elapsed_ms,
+    }
 
 
-@app.get("/healthz")
-async def healthz():
-    """健康检查（无需鉴权）"""
-    return {"status": "ok", "llm_model": LLM_MODEL or "(structured-only)", "max_concurrency": MAX_CONCURRENCY}
+@app.get("/state/{task_id}")
+async def get_state(task_id: str):
+    """时间旅行：返回 task 完整推理路径（LangGraph state checkpoint）"""
+    config = {"configurable": {"thread_id": task_id}}
+    state = await _graph.aget_state(config)
+    if not state or not state.values:
+        raise HTTPException(status_code=404, detail="task 不存在")
+    return {
+        "task_id": task_id,
+        "values": state.values,
+        "next_steps": state.next,  # 下一个要执行的节点
+    }
+
+
+@app.post("/state/{task_id}/replay")
+async def replay_state(task_id: str, req: Request):
+    """时间旅行：从指定 checkpoint 重跑（可选改写 state 后重跑）"""
+    _check_auth(req)
+    body = await req.json() if (await req.body()) else {}
+    config = {"configurable": {"thread_id": task_id}}
+    # 可选：改写 state（用于 A/B test 不同 prompt）
+    if "values" in body:
+        await _graph.aupdate_state(config, body["values"])
+    # 重跑
+    result = await _graph.ainvoke(None, config=config)
+    return {"task_id": task_id, "values": result}
 
 
 if __name__ == "__main__":

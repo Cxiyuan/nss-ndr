@@ -69,6 +69,19 @@ func registerAPI(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/monitoring/health", requireAuth(apiMonitoringHealth))
 	mux.HandleFunc("GET /api/monitoring/alerts-today", requireAuth(apiMonitoringAlertsToday))
 
+	// 文件下载（取证使用，要求用户会话鉴权，不接受 XDR 任务 token）
+	mux.HandleFunc("GET /api/pcap/{name}", requireAuth(apiPcapDownload))
+	mux.HandleFunc("GET /api/file/{md5}", requireAuth(apiFileDownload))
+
+	// 分析任务状态（Agent 写 / 用户+XDR 读）
+	mux.HandleFunc("PUT /api/agent/analysis_state/{task_id}", requireAgentAuth(apiSaveAnalysisState))
+	mux.HandleFunc("GET /api/analysis/{task_id}", requireAuth(apiGetAnalysisState))
+	mux.HandleFunc("GET /api/analysis", requireAuth(apiListAnalysisStates))
+
+	// IP 信誉缓存（跨任务记忆；Agent 读/写）
+	mux.HandleFunc("GET /api/agent/ip_reputation/{ip}", requireAgentAuth(apiGetIPReputation))
+	mux.HandleFunc("PUT /api/agent/ip_reputation/{ip}", requireAgentAuth(apiPutIPReputation))
+
 }
 
 func apiHealth(w http.ResponseWriter, _ *http.Request) {

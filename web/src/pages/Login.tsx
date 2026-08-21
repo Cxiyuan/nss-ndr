@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { api, setToken } from "../api";
+import { ShieldCheck } from "lucide-react";
+
+import { api, setToken } from "@/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function Login() {
   const [username, setUsername] = useState("admin");
@@ -26,34 +32,47 @@ export default function Login() {
   };
 
   return (
-    <div className="login-wrap">
-      <form className="login-card" onSubmit={submit}>
-        <h1>NSS-NDR 探针管理</h1>
-        <p className="hint">请输入管理员账号登录</p>
-        <label>
-          账号
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-          />
-        </label>
-        <label>
-          密码
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-        </label>
-        {err && <div className="alert error">{err}</div>}
-        {msg && <div className="alert ok">{msg}</div>}
-        <button className="btn primary" disabled={busy}>
-          {busy ? "登录中…" : "登录"}
-        </button>
-        <p className="hint">初始账号 admin / admin，登录后请及时修改密码</p>
-      </form>
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="space-y-1 text-center">
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+            <ShieldCheck className="h-6 w-6 text-primary" />
+          </div>
+          <CardTitle className="text-2xl">NSS-NDR 探针管理</CardTitle>
+          <CardDescription>请输入管理员账号登录</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={submit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="username">账号</Label>
+              <Input
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">密码</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            {err && <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</div>}
+            {msg && <div className="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{msg}</div>}
+            <Button type="submit" className="w-full" disabled={busy}>
+              {busy ? "登录中…" : "登录"}
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              初始账号 admin / admin，登录后请及时修改密码
+            </p>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

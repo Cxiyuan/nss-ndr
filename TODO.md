@@ -130,6 +130,42 @@ NDR 仍保留 Suricata 规则管理（内置 + ET Open + 自定义）作为**线
         组件健康表 + 磁盘用量进度条 + Cleaner 状态 + dataset Top10 分布
   - [x] 纯 SVG 图表，不引第三方库；每 30s 自动刷新 + 手动刷新按钮
   - [x] 边界声明：Dashboard 页底部明确"具体告警事件内容、跨会话关联、SOC 视图等安全数据分析可视化由 XDR 平台承担"
+- [x] **M13 MCP 工具补全 + 取证下载端点**
+  - [x] `aggregate_suricata`（logs-suricata.alerts-so 按 rule / src_ip / dst_ip 等维度聚合）
+  - [x] `get_indicators`（跨 3 索引统一查询同一 target 的所有痕迹：suricata + zeek + strelka）
+  - [x] `check_ioc`（本地 IOC 库比对，IP / domain / hash；每次调用重新读取 IOC 文件，热更新）
+  - [x] IOC 库模板 `images/ndr-manager/templates/ioc.example.json`（deploy.sh install 时若不存在则复制示例）
+  - [x] `download.go` 新增 `GET /api/pcap/{name}`（pcap 下载，受用户会话鉴权 + 路径校验 + 2 GB 上限 + 流式）
+  - [x] `GET /api/file/{md5}`（按 MD5 查找 Zeek 提取 / Strelka 已扫描样本，受用户会话鉴权）
+  - [x] 两条下载端点均审计日志（`audit("file.download", ..., size=...)`）
+- [x] **M14 NDR 本地分析 4 步流水线 + XDR 升级通道**
+  - [x] `agent.py` 重写为 LangGraph `StateGraph`：8 节点（含跨任务记忆）+ 4 条条件边
+  - [x] SqliteCheckpointer 持久化到 `/opt/ndr/agent-state/langgraph.db`（time travel / 重跑）
+  - [x] MemorySaver 降级：SqliteCheckpointer 失败时退到内存（仅进程内 time travel）
+  - [x] Pydantic 严格 Verdict schema：`confidence < 1.0` 硬约束，7 字段受约束输出
+  - [x] LLM 多温度采样 `[0.0, 0.3, 0.7]` + 投票：>= 2 票通过；不一致降级为 `insufficient_evidence`
+  - [x] 启发式规则：IOC 命中 → real_threat / 0 告警 → noise / 同一规则 ≥10 次 → real_threat / 多源 IP 同规则 → campaign
+  - [x] XDR 升级通道 `escalate_to_xdr` 节点：仅接口，XDR 不可达/超时 → 返回 None 降级
+  - [x] 升级判定 `should_escalate`：显式 `instruction` 为复杂任务 + LLM `escalation_reason` + 启发式/LLM 冲突 + LLM confidence < 0.5
+  - [x] 时间旅行端点：`GET /api/state/{task_id}`（查询 state）+ `POST /api/state/{task_id}/replay`（重跑，可改写 state）
+  - [x] 状态同步：Agent 完成后 POST 摘要到 ndr-manager `PUT /api/agent/analysis_state/{task_id}`（供 UI 展示）
+  - [x] ndr-manager 端：保留 `analysis_state` 表（最终状态展示），Agent 回调写
+  - [x] 受限 `instruction` 枚举：`is_threat` / `incident_cause` / `blast_radius` / `ioc_confirm` / `deep_dive`（复杂任务升级 XDR）
+  - [x] 受限 output schema：7 字段 verdict JSON，**不允许自由文本输出**
+  - [x] Dockerfile 加 `langgraph>=0.2,<1` + `langchain-core>=0.3,<1`
+  - [x] docker-compose：ndr-agent 挂载 `/opt/ndr/agent-state:/opt/agent/state`（LangGraph SqliteCheckpointer 持久化）
+  - [x] deploy.sh install：自动创建 `/opt/ndr/agent-state/` 目录
+- [x] **M14.5 跨任务记忆：IP 信誉缓存**
+  - [x] ndr-manager `ip_reputation` 表（ip / last_verdict / last_confidence / last_analyzed_at / analysis_count / expires_at）
+  - [x] ndr-manager 端点：`GET/PUT /api/agent/ip_reputation/{ip}`（requireAgentAuth）
+  - [x] agent.py 新增 `reputation_check_node`（LangGraph 入口节点）：先查 ndr-manager 缓存
+  - [x] agent.py 新增 `short_circuit_node`：缓存命中且高置信时直接返回历史 verdict，跳过 4 步流水线
+  - [x] agent.py 新增 `reputation_write_node`（LangGraph 出口节点）：完整分析后/短路后都写入缓存（更新 timestamp + count）
+  - [x] 短路条件：`cached=True` + `last_verdict ∈ {real_threat, noise}` + `confidence >= 0.7` + 未过期
+  - [x] 缓存过期：24h 后重新分析（不强制续期）
+  - [x] 前端 `Analysis` 页面：任务列表 + 推理路径可视化（pre_aggregate / heuristic / llm / escalate / final 五步）
+  - [x] 前端导航：新增"分析任务"入口（`/analysis`）
+  - [x] 响应中暴露 `cached` 字段（短路命中标记）
 
 ## 部署验证（2026-08-09 已完成，10.44.77.250）
 

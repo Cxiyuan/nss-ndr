@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, ConfigField, ConfigGroup } from "../api";
+import { Save, ArrowDownToLine } from "lucide-react";
+
+import { api, type ConfigField, type ConfigGroup } from "@/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+
+type Mode = "form" | "yaml";
 
 const sections = [
   { key: "probe", title: "探针基础" },
@@ -10,19 +25,19 @@ const sections = [
   { key: "strelka", title: "文件分析" },
   { key: "detections", title: "检测" },
   { key: "resources", title: "资源限制" },
-];
+] as const;
 
 export default function ConfigPage() {
   const [groups, setGroups] = useState<ConfigGroup[]>([]);
   const [fields, setFields] = useState<ConfigField[]>([]);
   const [values, setValues] = useState<Record<string, any>>({});
   const [activeGroup, setActiveGroup] = useState("");
-  const [advanced, setAdvanced] = useState(false);
+  const [mode, setMode] = useState<Mode>("form");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // 高级 YAML 模式状态
+  // YAML 模式
   const [advSection, setAdvSection] = useState("probe");
   const [advValue, setAdvValue] = useState("");
   const [advComment, setAdvComment] = useState("");
@@ -49,11 +64,10 @@ export default function ConfigPage() {
 
   const groupFields = useMemo(
     () => fields.filter((f) => f.group === activeGroup).sort((a, b) => a.order - b.order),
-    [fields, activeGroup]
+    [fields, activeGroup],
   );
 
-  const setField = (key: string, val: any) =>
-    setValues((v) => ({ ...v, [key]: val }));
+  const setField = (key: string, val: any) => setValues((v) => ({ ...v, [key]: val }));
 
   const saveGroup = async (apply = false) => {
     setBusy(true);
@@ -69,7 +83,7 @@ export default function ConfigPage() {
         await api.apply("表单配置下发");
         setMsg("已保存并下发，组件滚动重启中（约 1-2 分钟）");
       } else {
-        setMsg("已保存（未下发），点击“保存并下发”生效");
+        setMsg("已保存（未下发），点击「保存并下发」生效");
       }
     } catch (e: any) {
       setErr(e.message);
@@ -106,98 +120,117 @@ export default function ConfigPage() {
     }
   };
 
-  if (advanced) {
+  if (mode === "yaml") {
     return (
-      <div>
-        <div className="row between">
-          <h2>高级配置（YAML）</h2>
-          <div className="row">
-            <button className="btn" onClick={() => setAdvanced(false)}>
-              返回参数表单
-            </button>
-          </div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-semibold tracking-tight">高级配置（YAML）</h2>
+          <Button variant="outline" size="sm" onClick={() => setMode("form")}>
+            返回参数表单
+          </Button>
         </div>
-        <p className="hint">
+        <p className="text-sm text-muted-foreground">
           高级模式直接编辑配置节 YAML，适用于熟悉配置结构的运维；参数化配置项请尽量使用表单。
         </p>
-        <select
-          value={advSection}
-          onChange={(e) => {
-            setAdvSection(e.target.value);
-            loadSection(e.target.value);
-          }}
-        >
-          {sections.map((s) => (
-            <option key={s.key} value={s.key}>
-              {s.title}
-            </option>
-          ))}
-        </select>
-        <textarea
-          className="yaml-editor"
-          value={advValue}
-          onChange={(e) => setAdvValue(e.target.value)}
-          spellCheck={false}
-          placeholder="YAML 配置…"
-        />
-        <div className="row">
-          <input
-            className="comment"
-            placeholder="变更说明（写入审计日志）"
-            value={advComment}
-            onChange={(e) => setAdvComment(e.target.value)}
+        <div className="space-y-3">
+          <Label htmlFor="yaml-section">配置节</Label>
+          <Select value={advSection} onValueChange={(v) => { setAdvSection(v); loadSection(v); }}>
+            <SelectTrigger id="yaml-section" className="w-full md:w-64">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sections.map((s) => (
+                <SelectItem key={s.key} value={s.key}>
+                  {s.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Textarea
+            value={advValue}
+            onChange={(e) => setAdvValue(e.target.value)}
+            spellCheck={false}
+            placeholder="YAML 配置…"
+            className="font-mono min-h-[360px] text-xs"
           />
-          <button className="btn" disabled={busy} onClick={() => saveAdvanced(false)}>
-            保存
-          </button>
-          <button className="btn primary" disabled={busy} onClick={() => saveAdvanced(true)}>
-            保存并下发
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              className="max-w-md"
+              placeholder="变更说明（写入审计日志）"
+              value={advComment}
+              onChange={(e) => setAdvComment(e.target.value)}
+            />
+            <Button variant="outline" disabled={busy} onClick={() => saveAdvanced(false)}>
+              <Save className="mr-2 h-4 w-4" />保存
+            </Button>
+            <Button disabled={busy} onClick={() => saveAdvanced(true)}>
+              <ArrowDownToLine className="mr-2 h-4 w-4" />保存并下发
+            </Button>
+          </div>
         </div>
-        {msg && <div className="alert ok">{msg}</div>}
-        {err && <div className="alert error">{err}</div>}
+        {msg && <div className="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{msg}</div>}
+        {err && <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</div>}
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="row between">
-        <h2>参数配置</h2>
-        <div className="row">
-          <button className="btn" onClick={() => setAdvanced(true)}>
-            高级 YAML 模式
-          </button>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-semibold tracking-tight">参数配置</h2>
+        <Button variant="outline" size="sm" onClick={() => setMode("yaml")}>
+          高级 YAML 模式
+        </Button>
       </div>
-      <div className="tabs">
+
+      {err && <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</div>}
+
+      <Tabs value={activeGroup} onValueChange={setActiveGroup}>
+        <TabsList className="flex-wrap">
+          {groups.map((g) => (
+            <TabsTrigger key={g.key} value={g.key}>
+              {g.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
         {groups.map((g) => (
-          <button
-            key={g.key}
-            className={"tab" + (activeGroup === g.key ? " active" : "")}
-            onClick={() => setActiveGroup(g.key)}
-          >
-            {g.label}
-          </button>
+          <TabsContent key={g.key} value={g.key}>
+            <Card>
+              <CardHeader>
+                <CardTitle>{g.label}</CardTitle>
+                <CardDescription>编辑此分组的参数。点击「保存并下发」会同步到所有组件。</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {fields
+                  .filter((f) => f.group === g.key)
+                  .sort((a, b) => a.order - b.order)
+                  .map((f) => (
+                    <FieldEditor key={f.key} field={f} value={values[f.key]} onChange={(v) => setField(f.key, v)} />
+                  ))}
+                {fields.filter((f) => f.group === g.key).length === 0 && (
+                  <p className="text-sm text-muted-foreground">该分组暂无配置项</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         ))}
+      </Tabs>
+
+      <Separator />
+
+      <div className="flex items-center gap-2">
+        <Button variant="outline" disabled={busy} onClick={() => saveGroup(false)}>
+          <Save className="mr-2 h-4 w-4" />保存
+        </Button>
+        <Button disabled={busy} onClick={() => saveGroup(true)}>
+          <ArrowDownToLine className="mr-2 h-4 w-4" />保存并下发
+        </Button>
       </div>
-      <div className="form-grid">
-        {groupFields.map((f) => (
-          <FieldEditor key={f.key} field={f} value={values[f.key]} onChange={(v) => setField(f.key, v)} />
-        ))}
-      </div>
-      {groupFields.length === 0 && <p className="hint">该分组暂无配置项</p>}
-      <div className="row" style={{ marginTop: 16 }}>
-        <button className="btn" disabled={busy} onClick={() => saveGroup(false)}>
-          保存
-        </button>
-        <button className="btn primary" disabled={busy} onClick={() => saveGroup(true)}>
-          保存并下发
-        </button>
-      </div>
-      {msg && <div className="alert ok">{msg}</div>}
-      {err && <div className="alert error">{err}</div>}
-      <p className="hint">
+
+      {msg && <div className="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{msg}</div>}
+      {err && <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</div>}
+
+      <p className="text-xs text-muted-foreground">
         保存仅写入配置库；下发会更新 ConfigMap 并按需调整资源限制/ES 堆内存，滚动重启组件（约 1-2 分钟）。
       </p>
     </div>
@@ -214,16 +247,16 @@ function FieldEditor({
   onChange: (v: any) => void;
 }) {
   const label = (
-    <label className="field-label">
+    <Label className="text-sm font-medium">
       {field.label}
-      {field.unit && <span className="unit">{field.unit}</span>}
-    </label>
+      {field.unit && <span className="ml-1 text-xs text-muted-foreground">{field.unit}</span>}
+    </Label>
   );
   let control: JSX.Element;
   switch (field.type) {
     case "number":
       control = (
-        <input
+        <Input
           type="number"
           min={field.min}
           max={field.max}
@@ -235,23 +268,31 @@ function FieldEditor({
       break;
     case "bool":
       control = (
-        <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />
+        <div className="flex items-center gap-2">
+          <Switch checked={!!value} onCheckedChange={onChange} />
+          <span className="text-sm text-muted-foreground">{value ? "已启用" : "已禁用"}</span>
+        </div>
       );
       break;
     case "select":
       control = (
-        <select value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
-          {field.options?.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+        <Select value={value ?? ""} onValueChange={onChange}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options?.map((o) => (
+              <SelectItem key={o} value={o}>
+                {o}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       );
       break;
     case "list":
       control = (
-        <textarea
+        <Textarea
           rows={4}
           value={Array.isArray(value) ? value.join("\n") : value ?? ""}
           onChange={(e) =>
@@ -259,7 +300,7 @@ function FieldEditor({
               e.target.value
                 .split("\n")
                 .map((s) => s.trim())
-                .filter(Boolean)
+                .filter(Boolean),
             )
           }
         />
@@ -267,23 +308,29 @@ function FieldEditor({
       break;
     case "secret":
       control = (
-        <input
+        <Input
           type="password"
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value)}
+          autoComplete="new-password"
         />
       );
       break;
     default:
-      control = (
-        <input value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
-      );
+      control = <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
   }
   return (
-    <div className="field">
-      {label}
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        {label}
+        {field.type === "secret" && (
+          <Badge variant="outline" className="text-xs">
+            secret
+          </Badge>
+        )}
+      </div>
       {control}
-      {field.help && <p className="hint">{field.help}</p>}
+      {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
     </div>
   );
 }

@@ -181,3 +181,17 @@ func apiChangePassword(w http.ResponseWriter, r *http.Request) {
 	audit("auth.change_password", user, "修改密码")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
+
+// requireAgentAuth Agent → ndr-manager 回调鉴权（用 xdr.agent_token）
+// 与 requireAuth 区分：用户会话是浏览器 cookie / Bearer，Agent 回调只用 Bearer
+func requireAgentAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		c, err := loadFull()
+		if err != nil || c.Xdr.AgentToken == "" || token != c.Xdr.AgentToken {
+			writeErr(w, http.StatusUnauthorized, "Agent token 无效")
+			return
+		}
+		next(w, r)
+	}
+}

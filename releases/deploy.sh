@@ -104,6 +104,16 @@ render("images/zeek/files/zeekctl.cfg", "zeekctl.cfg")
 render("images/zeek/files/networks.cfg", "networks.cfg")
 render("images/zeek/files/config.zeek", "config.zeek")
 render("images/filebeat/filebeat.yml", "filebeat.yml")
+# IOC 库（运维可编辑；check_ioc 工具每次调用重新加载，无需重启 mcp-server）
+# 路径：$NDR_HOME/so/ioc.json（与 docker-compose 挂载点 /opt/ndr/so/ioc.json 对齐）
+if [[ -f "$ROOT/images/ndr-manager/templates/ioc.example.json" ]]; then
+    IOC_FILE="$NDR_HOME/so/ioc.json"
+    mkdir -p "$(dirname "$IOC_FILE")"
+    if [[ ! -f "$IOC_FILE" ]]; then
+        cp "$ROOT/images/ndr-manager/templates/ioc.example.json" "$IOC_FILE"
+        log "已生成 IOC 库: $IOC_FILE（运维可编辑后立即生效）"
+    fi
+fi
 copy_tree("images/zeek/files/policy", "policy")
 for k, rel in {
     "backend.yaml": "images/strelka-backend/files/backend.yaml",
@@ -296,7 +306,7 @@ cmd_install() {
   # ---------- 离线镜像加载（含基础镜像，部署全程不依赖网络拉取）----------
   load_images_into_docker "${images_dir:-$ROOT/releases/images}"
 
-  mkdir -p "$NDR_HOME/es-data" "$NDR_HOME/nsm" "$NDR_HOME/so" "$NDR_HOME/yara" "$NDR_HOME/filebeat-data"
+  mkdir -p "$NDR_HOME/es-data" "$NDR_HOME/nsm" "$NDR_HOME/so" "$NDR_HOME/yara" "$NDR_HOME/filebeat-data" "$NDR_HOME/agent-state"
 
   # ---------- Ollama GGUF 外挂：若项目根或 images/ollama/models/ 有 GGUF，自动拷到挂载目录 ----------
   OLLAMA_DIR="${OLLAMA_MODELS_DIR:-/opt/ndr/ollama-models}"

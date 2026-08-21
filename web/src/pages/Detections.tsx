@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type ETOpenGroup, type Rule } from "../api";
+import { ChevronRight, Save, RefreshCw, Search } from "lucide-react";
+
+import { api, type ETOpenGroup, type Rule } from "@/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 
 const PAGE_SIZE = 50;
 
@@ -19,8 +26,7 @@ export default function Detections() {
   }, [loadTree]);
 
   const totals = useMemo(() => {
-    let total = 0;
-    let enabled = 0;
+    let total = 0, enabled = 0;
     for (const g of groups)
       for (const c of g.categories) {
         total += c.total;
@@ -49,7 +55,7 @@ export default function Detections() {
         setErr(e.message);
       }
     },
-    []
+    [],
   );
 
   const toggleGroup = (key: string) => {
@@ -61,7 +67,7 @@ export default function Detections() {
     });
   };
 
-  const toggleCat = (cat: string, total: number) => {
+  const toggleCat = (cat: string) => {
     setExpandedCats((prev) => {
       const next = new Set(prev);
       if (next.has(cat)) {
@@ -135,66 +141,67 @@ export default function Detections() {
     const expanded = expandedCats.has(c.key);
     const data = catRules[c.key];
     return (
-      <div key={c.key} className="tree-node">
-        <div className="tree-row tree-row-cat" onClick={() => toggleCat(c.key, c.total)}>
-          <span className={"tree-arrow" + (expanded ? " open" : "")}>▸</span>
+      <div key={c.key} className="space-y-2">
+        <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 hover:bg-accent/40">
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleCat(c.key)}>
+            <ChevronRight className={"h-4 w-4 transition-transform " + (expanded ? "rotate-90" : "")} />
+          </Button>
           <label
-            className="tree-check"
+            className="inline-flex items-center"
             onClick={(e) => {
               e.stopPropagation();
               toggleCategoryEnabled(c.key, !c.enabled);
             }}
           >
-            <input type="checkbox" checked={c.enabled} disabled={busy} onChange={() => {}} />
+            <Checkbox checked={c.enabled} disabled={busy} />
           </label>
-          <span className="tree-name">{c.name_cn}</span>
-          <span className="tree-count">
+          <span className="font-medium">{c.name_cn}</span>
+          <Badge variant="outline" className="ml-auto">
             {c.enabled_count}/{c.total}
-          </span>
+          </Badge>
         </div>
-        <div className="tree-desc">{c.desc_cn}</div>
+        <p className="ml-10 text-xs text-muted-foreground">{c.desc_cn}</p>
         {expanded && (
-          <div className="tree-children">
-            <div className="tree-search-row" onClick={(e) => e.stopPropagation()}>
-              <input
-                className="comment"
-                placeholder="搜索规则描述（回车）"
-                defaultValue={data?.q || ""}
-                onKeyDown={(e: any) => {
-                  if (e.key === "Enter") {
-                    const q = e.target.value;
-                    setCatRules((prev) => ({ ...prev, [c.key]: { total: 0, rules: [], offset: 0, q } }));
-                    loadCatRules(c.key, q, 0);
-                  }
-                }}
-              />
-              <button className="link" onClick={() => loadCatRules(c.key, data?.q || "", 0)}>
+          <div className="ml-10 space-y-2 border-l pl-4">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-8"
+                  placeholder="搜索规则描述（回车）"
+                  defaultValue={data?.q || ""}
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter") {
+                      const q = e.target.value;
+                      setCatRules((prev) => ({ ...prev, [c.key]: { total: 0, rules: [], offset: 0, q } }));
+                      loadCatRules(c.key, q, 0);
+                    }
+                  }}
+                />
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => loadCatRules(c.key, data?.q || "", 0)}>
                 刷新
-              </button>
+              </Button>
             </div>
             {(data?.rules || []).map((r) => (
-              <div key={r.id} className="tree-row tree-row-rule">
-                <label
-                  className="tree-check"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleRule(r, !r.enabled);
-                  }}
-                >
-                  <input type="checkbox" checked={!!r.enabled} disabled={busy} onChange={() => {}} />
+              <div key={r.id} className="flex items-start gap-2 rounded-md border bg-background px-3 py-2">
+                <label className="inline-flex items-center pt-0.5" onClick={(e) => { e.stopPropagation(); toggleRule(r, !r.enabled); }}>
+                  <Checkbox checked={!!r.enabled} disabled={busy} />
                 </label>
-                <span className="tree-name tree-name-rule">{r.name_cn || r.name}</span>
+                <span className="text-sm" title={r.name}>{r.name_cn || r.name}</span>
               </div>
             ))}
             {data && data.total > (data.rules?.length || 0) && (
-              <button
-                className="link tree-more"
+              <Button
+                variant="link"
+                size="sm"
                 onClick={() => loadCatRules(c.key, data.q, (data.rules?.length || 0) + (data.offset || 0), true)}
+                className="text-muted-foreground"
               >
                 加载更多（{data.total - (data.rules?.length || 0)} 条）
-              </button>
+              </Button>
             )}
-            {data && data.total === 0 && <div className="hint tree-empty">无匹配规则</div>}
+            {data && data.total === 0 && <p className="text-xs text-muted-foreground">无匹配规则</p>}
           </div>
         )}
       </div>
@@ -202,47 +209,55 @@ export default function Detections() {
   };
 
   return (
-    <div className="detect-page">
-      <div className="row between" style={{ marginTop: 0 }}>
-        <h2 style={{ margin: 0 }}>事件检测</h2>
-        <button className="btn primary" disabled={busy} onClick={apply}>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-2xl font-semibold tracking-tight">事件检测</h2>
+        <Button disabled={busy} onClick={apply}>
+          <Save className="mr-2 h-4 w-4" />
           保存并应用
-        </button>
+        </Button>
       </div>
-      <p className="hint">
+
+      <p className="text-sm text-muted-foreground">
         内置检测规则库，已启用 {totals.enabled} / {totals.total} 条。规则按分类勾选加载，仅可启停，不可编辑。
       </p>
-      {msg && <div className="alert ok">{msg}</div>}
-      {err && <div className="alert error">{err}</div>}
-      <div className="detect-tree-full">
+
+      {msg && <div className="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{msg}</div>}
+      {err && <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</div>}
+
+      <div className="space-y-2">
         {groups.map((g) => {
           const collapsed = collapsedGroups.has(g.key);
           const gEnabled = g.categories.length > 0 && g.categories.every((c) => c.enabled);
           return (
-            <div key={g.key} className="tree-node">
-              <div className="tree-row tree-row-group" onClick={() => toggleGroup(g.key)}>
-                <span className={"tree-arrow" + (!collapsed ? " open" : "")}>▸</span>
+            <Card key={g.key}>
+              <CardHeader className="flex flex-row items-center gap-2 space-y-0 py-3">
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleGroup(g.key)}>
+                  <ChevronRight className={"h-4 w-4 transition-transform " + (!collapsed ? "rotate-90" : "")} />
+                </Button>
                 <label
-                  className="tree-check"
+                  className="inline-flex items-center"
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleGroupEnabled(g, !gEnabled);
                   }}
                 >
-                  <input type="checkbox" checked={gEnabled} disabled={busy} onChange={() => {}} />
+                  <Checkbox checked={gEnabled} disabled={busy} />
                 </label>
-                <span className="tree-name tree-group-name">{g.name}</span>
-                <span className="tree-count">
+                <CardTitle className="text-base">{g.name}</CardTitle>
+                <Badge variant="outline" className="ml-auto">
                   {g.categories.reduce((s, c) => s + c.enabled_count, 0)}/{g.categories.reduce((s, c) => s + c.total, 0)}
-                </span>
-              </div>
+                </Badge>
+              </CardHeader>
               {!collapsed && (
-                <div className="tree-children">
-                  <div className="tree-desc">{g.desc}</div>
-                  {g.categories.map((c) => catNode(g, c))}
-                </div>
+                <CardContent className="space-y-3 pt-0">
+                  <p className="text-sm text-muted-foreground">{g.desc}</p>
+                  <div className="space-y-2 pl-4">
+                    {g.categories.map((c) => catNode(g, c))}
+                  </div>
+                </CardContent>
               )}
-            </div>
+            </Card>
           );
         })}
       </div>

@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { api } from "../api";
+
+import { api } from "@/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function History() {
   const [versions, setVersions] = useState<any[]>([]);
@@ -11,53 +14,66 @@ export default function History() {
   }, []);
 
   return (
-    <div>
-      <h2>配置历史</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>分组</th>
-            <th>动作</th>
-            <th>说明</th>
-            <th>时间(UTC)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {versions.map((v) => (
-            <tr key={v.id}>
-              <td>{v.id}</td>
-              <td>{v.key}</td>
-              <td>{v.action}</td>
-              <td>{v.comment}</td>
-              <td>{v.created_at}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <h2>审计日志</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>动作</th>
-            <th>目标</th>
-            <th>详情</th>
-            <th>时间(UTC)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {audits.map((a) => (
-            <tr key={a.id}>
-              <td>{a.id}</td>
-              <td>{a.action}</td>
-              <td>{a.target}</td>
-              <td>{a.detail}</td>
-              <td>{a.created_at}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>配置历史</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-16">ID</TableHead>
+                <TableHead>分组</TableHead>
+                <TableHead className="w-24">动作</TableHead>
+                <TableHead>说明</TableHead>
+                <TableHead className="w-48">时间(UTC)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {versions.map((v) => (
+                <TableRow key={v.id}>
+                  <TableCell>{v.id}</TableCell>
+                  <TableCell>{v.key}</TableCell>
+                  <TableCell>{v.action}</TableCell>
+                  <TableCell>{v.comment}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{v.created_at}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>审计日志</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-16">ID</TableHead>
+                <TableHead className="w-40">动作</TableHead>
+                <TableHead>目标</TableHead>
+                <TableHead>详情</TableHead>
+                <TableHead className="w-48">时间(UTC)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {audits.map((a) => (
+                <TableRow key={a.id}>
+                  <TableCell>{a.id}</TableCell>
+                  <TableCell className="font-mono text-xs">{a.action}</TableCell>
+                  <TableCell className="font-mono text-xs">{a.target}</TableCell>
+                  <TableCell>{a.detail}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{a.created_at}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

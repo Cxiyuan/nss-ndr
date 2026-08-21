@@ -95,6 +95,9 @@ test/                     # 端到端测试流量生成脚本
 - [x] M12：本地 Web 运维监控可视化 —— Dashboard 页提供流量处理波形图、今日告警
   线索分时柱状图、当日事件分布、组件健康、磁盘用量、Cleaner 状态、XDR 推送统计；
   后端 4 个端点 `/api/monitoring/{traffic,workload,health,alerts-today}`，每 30s 自动刷新
+- [x] M13：MCP 工具补全 —— 在已有 9 个工具基础上补 3 个：`aggregate_suricata`（按规则/IP 聚合）、
+  `get_indicators`（跨 3 索引统一查询）、`check_ioc`（本地 IOC 库比对）；
+  2 个 ndr-manager 下载端点：`/api/pcap/{name}`、`/api/file/{md5}`（用户会话鉴权 + 路径校验）
 
 ## 快速开始（M0）
 

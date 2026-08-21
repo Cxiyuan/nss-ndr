@@ -129,6 +129,15 @@ services:
     restart: unless-stopped
     environment:
       <<: *common-env
+      # pcap 目录（query_pcaps / analyze_pcap 工具读）
+      MCP_PCAP_DIR: ${MCP_PCAP_DIR:-/nsm/suripcap}
+      # IOC 库路径（check_ioc 工具读，文件不存在则返回空匹配）
+      MCP_IOC_PATH: ${MCP_IOC_PATH:-/opt/ndr/so/ioc.json}
+    volumes:
+      # 只读挂载 pcap 目录
+      - ${MCP_PCAP_DIR:-/nsm/suripcap}:/nsm/suripcap:ro
+      # 只读挂载 IOC 库（运维方在 /opt/ndr/so/ioc.json 维护）
+      - ${MCP_IOC_PATH:-/opt/ndr/so/ioc.json}:/opt/ndr/so/ioc.json:ro
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -145,6 +154,17 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       AGENT_TOKEN: ${AGENT_TOKEN:-}
       AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-6}
+      # ndr-manager 回调（持久化分析状态）
+      NDR_MANAGER_URL: ${NDR_MANAGER_URL:-http://ndr-manager:8080}
+      # XDR 升级通道（仅当 XDR_BASE_URL 非空时启用）
+      XDR_BASE_URL: ${XDR_BASE_URL:-}
+      XDR_TOKEN: ${XDR_TOKEN:-}
+      XDR_TIMEOUT: ${XDR_TIMEOUT:-60}
+      # LangGraph 状态持久化（time travel / 重跑）
+      LANGGRAPH_DB_PATH: ${LANGGRAPH_DB_PATH:-/opt/agent/state/langgraph.db}
+    volumes:
+      # LangGraph 状态目录（SqliteCheckpointer 写入这里）
+      - /opt/ndr/agent-state:/opt/agent/state
     depends_on:
       mcp-server:
         condition: service_started
