@@ -1,0 +1,52 @@
+# 智能体运行时配置（与 providers.yaml 分离：providers 只管模型接口）
+stream: analysis:events
+consumer_group: analysis-group
+consumer_name: agent-worker
+
+# Worker 批处理窗口（设计文档 §3：1000 条或 5 秒，先到先触发）
+batch_size: 1000
+batch_seconds: 5.0
+idle_poll_seconds: 1.0
+max_pending_claim: 200
+
+# 缓存 / TTL（设计文档 §4.3、§13.4）
+result_ttl: 3600
+entity_ttl: 86400
+chain_ttl: 172800
+evt_ttl: 86400
+lock_ttl: 30
+lock_retries: 3
+
+# 模型（默认本地边缘，升级走云端）
+default_provider: edge
+cloud_provider: cloud
+max_tool_calls: 5
+max_output_tokens: 512
+model_timeout: 60.0
+
+# 输出索引
+verdict_index: nss-ndr-agent-verdict
+asset_index: nss-ndr-agent-assets
+alert_index: nss-ndr-agent-events
+
+# 资产知识库种子
+asset_seed_file: data/assets.example.csv
+
+# 通知（v1 留空 = 仅日志）
+webhook_url: null
+
+# 基线/异常检测引擎（设计文档 §14）
+baseline:
+  enabled: true
+  learn_min_samples: 50          # 阶段一 shadow（只记录不告警）
+  loose_min_samples: 300         # 阶段二 初始基线（阈值放宽 ×2）
+  alert_budget: 5                # 每实体每日最多告警数
+  loose_multiplier: 2.0
+  alert_threshold: 3.0           # 收敛期稳健 z 阈值
+  cloud_threshold: 6.0           # 升级云端复核阈值
+  ewma_alpha: 0.3
+  truncation_k: 3.0              # 抗污染：超出 P99 + 3×MAD 降权学习
+  max_samples: 20000
+
+# 调试：只读消费，不写结论/告警（对接生产 Stream 验证用）
+dry_run: false

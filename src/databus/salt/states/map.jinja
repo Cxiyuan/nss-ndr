@@ -1,0 +1,23 @@
+# ============================================================================
+# map.jinja：pillar 取值 + 动态 token 读取
+# 动态 token 由 bootstrap 阶段写入 /etc/nss-ndr/.env，渲染时读取。
+# ============================================================================
+
+{%- set databus = salt['pillar.get']('databus', {}) %}
+
+{# 注意：jinja2 宏体不能访问模板顶层 {% set %} 变量，
+   因此 env_get 在宏体内自行读取文件（宏内可直接调用 salt 模块）。 #}
+{%- macro env_get(key) -%}
+{%-   set _env_file = salt['pillar.get']('databus:env_file', '/etc/nss-ndr/.env') -%}
+{%-   if salt['file.file_exists'](_env_file) -%}
+{%-     set _content = salt['file.read'](_env_file) -%}
+{%-     for _line in (_content or '').split('\n') -%}
+{%-       if _line.startswith(key ~ '=') -%}
+{{ _line.split('=', 1)[1] }}
+{%-       endif -%}
+{%-     endfor -%}
+{%-   endif -%}
+{%- endmacro -%}
+
+{# 命名空间固定前缀（与 compose 保持一致） #}
+{%- set ns = 'nss-ndr' -%}

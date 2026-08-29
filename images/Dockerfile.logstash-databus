@@ -1,0 +1,15 @@
+# 数据总线 · Logstash 自定义镜像
+# 内置双写 pipeline + 固定配置（pipeline/config 进镜像）
+# 运行环境参数（REDIS_PASSWORD 等）通过环境变量注入
+FROM docker.elastic.co/logstash/logstash:9.5.2
+
+# pipeline：事件总线双写逻辑
+COPY logstash/pipeline/zeek-pipeline.conf /usr/share/logstash/pipeline/zeek-pipeline.conf
+# config：固定配置（jvm.options 保留外挂，随环境调整）
+COPY logstash/config/logstash.yml /usr/share/logstash/config/logstash.yml
+COPY logstash/config/pipelines.yml /usr/share/logstash/config/pipelines.yml
+COPY logstash/config/log4j2.properties /usr/share/logstash/config/log4j2.properties
+
+LABEL org.opencontainers.image.title="nss-ndr/logstash-databus" \
+      org.opencontainers.image.description="Logstash 9.5.2 with databus dual-write pipeline pre-installed" \
+      org.opencontainers.image.version="9.5.2"

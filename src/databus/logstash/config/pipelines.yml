@@ -1,0 +1,2 @@
+- pipeline.id: zeek
+  path.config: "/usr/share/logstash/pipeline/zeek-pipeline.conf"

@@ -1,0 +1,37 @@
+# 深瞳安全分析智能体镜像
+# 镜像名：nss-ndr/agent:<版本>（构建脚本：scripts/build-agent.sh）
+# 构建上下文：src/agent/（本文件位于 images/）
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    AGENT_LOG_LEVEL=INFO \
+    AGENT_HOME=/opt/nss-ndr-agent
+
+WORKDIR /opt/nss-ndr-agent
+
+# 先复制依赖清单与代码（代码层变动才重建依赖层）
+COPY pyproject.toml README.md ./
+COPY app ./app
+COPY config ./config
+COPY prompts ./prompts
+COPY skills ./skills
+COPY data ./data
+
+RUN pip install --no-cache-dir . \
+    && rm -rf /root/.cache/pip
+
+# 非特权运行（Salt 部署时数据卷/配置由 Salt 授权）
+RUN useradd -r -u 10001 agent && chown -R agent:agent /opt/nss-ndr-agent
+USER agent
+
+# 健康检查：worker 进程存活（容器级健康状态；Salt 层另有依赖探测）
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["python", "-c", "import sys; sys.exit(0 if b'python' in open('/proc/1/cmdline','rb').read() else 1)"]
+
+ENTRYPOINT ["python", "-m", "app"]
+CMD ["worker"]
+
+LABEL org.opencontainers.image.title="nss-ndr/agent" \
+      org.opencontainers.image.description="深瞳安全分析智能体：LangGraph 后台常驻分析引擎" \
+      org.opencontainers.image.version="0.1.0"

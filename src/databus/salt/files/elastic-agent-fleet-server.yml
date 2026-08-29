@@ -1,0 +1,17 @@
+# Elastic Agent Fleet Server 配置
+# 硬编码 ES host，避免 enroll 时错误使用 localhost:9200
+outputs:
+  default:
+    type: elasticsearch
+    hosts:
+      - http://elasticsearch:9200
+    preset: balanced
+
+inputs:
+  - type: system/metrics
+    id: unique-system-metrics-input
+    data_stream.namespace: default
+    use_output: default
+    streams:
+      - metricsets: [cpu]
+        data_stream.dataset: system.cpu

@@ -1,0 +1,79 @@
+# ============================================================================
+# 数据总线 Salt pillar 示例
+# ----------------------------------------------------------------------------
+# masterless minion: 复制到 /srv/pillar/databus.sls
+# 调整密码、网卡、端口后使用。动态 token（KIBANA_SERVICE_TOKEN 等）由
+# bootstrap 阶段生成写入 /etc/nss-ndr/.env，不在 pillar 中维护。
+# ============================================================================
+
+databus:
+  env_file: /etc/nss-ndr/.env
+  base_dir: /opt/nss-ndr
+  images_dir: /root/nss-ndr/images
+  tz: Asia/Shanghai
+  zeek_interface: ens192
+
+  network:
+    name: nss-net
+    subnet: 192.168.250.0/24
+
+  creds:
+    elastic_username: elastic
+    elastic_password: ChangeMe_Elastic_2026!
+    redis_password: ChangeMe_Redis_2026!
+    kibana_encryption_key: NSS-NDR-Default-Kibana-Encryption-Key-2026!
+
+  images:
+    - name: nss-ndr/zeek:8.2.2
+      tar: nss-ndr_zeek_8.2.2.tar
+    - name: docker.elastic.co/elasticsearch/elasticsearch:9.5.2
+      tar: docker.elastic.co_elasticsearch_elasticsearch_9.5.2.tar
+    - name: docker.elastic.co/kibana/kibana:9.5.2
+      tar: docker.elastic.co_kibana_kibana_9.5.2.tar
+    - name: nss-ndr/elastic-agent-zeek:9.5.2
+      tar: nss-ndr_elastic-agent-zeek_9.5.2.tar
+    - name: nss-ndr/logstash-databus:9.5.2
+      tar: nss-ndr_logstash-databus_9.5.2.tar
+    - name: nss-ndr/redis-databus:8.10.1
+      tar: nss-ndr_redis-databus_8.10.1.tar
+
+  fixed_ips:
+    elasticsearch: 192.168.250.40
+    kibana: 192.168.250.50
+    fleet_server: 192.168.250.55
+    elastic_agent: 192.168.250.20
+    logstash: 192.168.250.30
+    redis: 192.168.250.60
+
+  host_ports:
+    es: 9200
+    kibana: 5601
+    fleet_server: 8220
+    redis: 6379
+  # 宿主机端口绑定地址（仅本机监听，外部不可达）
+  host_bind: 127.0.0.1
+
+  # AI 分析智能体（nss-ndr/agent）
+  agent:
+    image: nss-ndr/agent:0.1.1
+    ip: 192.168.250.80
+    dry_run: "1"
+    log_level: INFO
+    llm:
+      edge_base_url: ""
+      edge_api_key: ""
+      edge_model: ""
+      cloud_base_url: ""
+      cloud_api_key: ""
+      cloud_model: ""
+
+  configs:
+    - src: salt://databus/files/kibana.yml
+      dst: /etc/nss-ndr/kibana.yml
+      mode: "644"
+    - src: salt://databus/files/elastic-agent-fleet-server.yml
+      dst: /etc/nss-ndr/elastic-agent-fleet-server.yml
+      mode: "644"
+    - src: salt://databus/files/jvm.options
+      dst: /etc/nss-ndr/jvm.options
+      mode: "644"

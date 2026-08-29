@@ -1,0 +1,4 @@
+server.name: kibana
+server.host: 0.0.0.0
+i18n.locale: zh-CN
+xpack.encryptedSavedObjects.encryptionKey: "NSS-NDR-Default-Kibana-Encryption-Key-2026!"

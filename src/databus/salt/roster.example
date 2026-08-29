@@ -1,0 +1,15 @@
+# ============================================================================
+# salt-ssh roster 示例（备选方案：零代理）
+# 复制到控制机 /etc/salt/roster 或 ~/.ssh/roster
+# 用法：salt-ssh databus state.apply databus.deploy
+# ============================================================================
+
+databus:
+  host: 172.16.199.235
+  user: root
+  passwd: qaz@7410
+  port: 22
+  sudo: False
+  # 目标机需已安装 Python docker 库：pip3 install docker
+  thin_dir: /tmp/salt-thin
+  timeout: 300

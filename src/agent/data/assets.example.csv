@@ -1,0 +1,5 @@
+ip,segment,business,owner,ports,known_vulns,importance,sensitivity,confidence
+10.0.0.10,10.0.0.0/24,OA系统,张三,"80,443,3306","CVE-2023-xxxx",high,high,0.9
+10.0.0.20,10.0.0.0/24,文件服务器,李四,"445,139","无",high,high,0.8
+10.0.0.30,10.0.0.0/24,开发测试机,王五,"22,8080","弱口令风险",medium,medium,0.7
+192.168.10.1,192.168.10.0/24,核心交换机,赵六,"23,443","无",high,high,0.95

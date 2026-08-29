@@ -1,0 +1,26 @@
+# =============================================================
+# 自定义 elastic-agent 镜像：内置 Zeek Integration 5.0.1
+# - 基础镜像：docker.elastic.co/elastic-agent/elastic-agent:9.5.2
+# - 集成包：zeek-5.0.1（含 manifest.yml / 43 个数据流 / ECS 字段定义）
+# - 包缓存路径：/usr/share/elastic-agent/elastic-integrations/packages/zeek-5.0.1/
+# - 使用时通过 standalone 配置文件启用 type: logfile + stream.zeek.* 即可
+# =============================================================
+FROM docker.elastic.co/elastic-agent/elastic-agent:9.5.2
+
+ARG ZEEK_INT_VERSION=5.0.1
+ARG ZEEK_INT_DIR=zeek-${ZEEK_INT_VERSION}
+
+# 1. 把 Zeek Integration 包放入 elastic-agent 默认 packages 扫描路径
+COPY zeek-integration/${ZEEK_INT_DIR}/ \
+     /usr/share/elastic-agent/elastic-integrations/packages/${ZEEK_INT_DIR}/
+
+# 2. metadata 标记
+LABEL org.opencontainers.image.title="nss-ndr-elastic-agent-zeek" \
+      org.opencontainers.image.description="Elastic Agent 9.5.2 with Zeek Integration 5.0.1 pre-installed" \
+      org.opencontainers.image.version="9.5.2-zeek5.0.1" \
+      org.opencontainers.image.source="https://epr.elastic.co/package/zeek/${ZEEK_INT_VERSION}" \
+      org.opencontainers.image.licenses="Elastic License 2.0"
+
+# 3. 健康检查（复用官方）
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD elastic-agent status || exit 1

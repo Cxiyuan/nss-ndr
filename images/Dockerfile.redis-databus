@@ -1,0 +1,9 @@
+# 数据总线 · Redis 自定义镜像
+# 内置 redis.conf（maxmemory 由容器 command 参数覆盖）
+FROM redis:8.10.1
+
+COPY redis/redis.conf /usr/local/etc/redis/redis.conf
+
+LABEL org.opencontainers.image.title="nss-ndr/redis-databus" \
+      org.opencontainers.image.description="Redis 8.10.1 with databus config pre-installed" \
+      org.opencontainers.image.version="8.10.1"

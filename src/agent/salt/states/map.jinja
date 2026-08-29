@@ -1,0 +1,17 @@
+# ============================================================================
+# map.jinja：pillar 取值 + 复用数据总线 .env 动态值读取
+# ============================================================================
+
+{%- set agent = salt['pillar.get']('agent', {}) %}
+
+{%- macro env_get(key) -%}
+{%-   set _env_file = salt['pillar.get']('databus:env_file', '/etc/nss-ndr/.env') -%}
+{%-   if salt['file.file_exists'](_env_file) -%}
+{%-     set _content = salt['file.read'](_env_file) -%}
+{%-     for _line in (_content or '').split('\n') -%}
+{%-       if _line.startswith(key ~ '=') -%}
+{{ _line.split('=', 1)[1] }}
+{%-       endif -%}
+{%-     endfor -%}
+{%-   endif -%}
+{%- endmacro -%}

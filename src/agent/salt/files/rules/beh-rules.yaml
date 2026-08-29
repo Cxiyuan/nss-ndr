@@ -1,0 +1,251 @@
+# 行为模型清单（设计文档 §5.1，BEH-001~012）
+# 声明式规则：输入事件经 match 过滤后，按 aggregate_key 分组统计，
+# conditions 全部通过即命中。阈值均为初始基线，部署后按 shadow 模式校准。
+- id: BEH-001
+  name: 内网横向移动-SMB爆破
+  attck: T1021.002
+  input: zeek.connection
+  scope: custom
+  aggregate_key: [src_ip]
+  window: 300
+  initial_risk: medium
+  model: conditional
+  estimated_tool_calls: 2
+  requires_chain_analysis: false
+  match:
+    - field: dst_port
+      op: eq
+      value: "445"
+  conditions:
+    - stat: distinct
+      field: dst_ip
+      op: ge
+      value: 3
+
+- id: BEH-002
+  name: C2心跳-DNS隧道
+  attck: T1572
+  input: zeek.dns
+  scope: custom
+  aggregate_key: [src_ip]
+  window: 300
+  initial_risk: high
+  model: conditional
+  estimated_tool_calls: 2
+  requires_chain_analysis: false
+  match: []
+  conditions:
+    - stat: distinct
+      field: query_name
+      op: ge
+      value: 20
+
+- id: BEH-003
+  name: Web登录暴力破解
+  attck: T1110.003
+  input: zeek.http
+  scope: custom
+  aggregate_key: [dst_ip, uri]
+  window: 300
+  initial_risk: medium
+  model: conditional
+  estimated_tool_calls: 1
+  requires_chain_analysis: false
+  match:
+    - field: method
+      op: eq
+      value: POST
+  conditions:
+    - stat: ratio
+      field: status_code
+      in: ["401", "200"]
+      op: ge
+      value: 0.6
+    - stat: count
+      op: ge
+      value: 10
+
+- id: BEH-004
+  name: 数据外传-HTTP POST大包
+  attck: T1048.002
+  input: zeek.http
+  scope: session
+  window: 300
+  initial_risk: high
+  model: conditional
+  estimated_tool_calls: 2
+  requires_chain_analysis: false
+  match:
+    - field: method
+      op: eq
+      value: POST
+  conditions:
+    - stat: max
+      field: request_body_len
+      op: gt
+      value: 1048576
+
+- id: BEH-005
+  name: 端口扫描
+  attck: T1046
+  input: zeek.connection
+  scope: custom
+  aggregate_key: [src_ip, dst_ip]
+  window: 300
+  initial_risk: low
+  model: never
+  direct_verdict:
+    verdict: skip
+    evidence: 大量不同端口 SYN 扫描，规则直接判定
+  estimated_tool_calls: 0
+  requires_chain_analysis: false
+  match: []
+  conditions:
+    - stat: distinct
+      field: dst_port
+      op: ge
+      value: 50
+
+- id: BEH-006
+  name: SSH暴力破解
+  attck: T1110.001
+  input: zeek.connection
+  scope: session
+  window: 300
+  initial_risk: medium
+  model: conditional
+  estimated_tool_calls: 1
+  requires_chain_analysis: false
+  match:
+    - field: dst_port
+      op: eq
+      value: "22"
+  conditions:
+    - stat: count
+      op: ge
+      value: 20
+    - stat: failed_ratio
+      field: conn_state
+      in: [SF, REJ, RST]
+      op: ge
+      value: 0.7
+
+- id: BEH-007
+  name: DNS Tunneling异常查询
+  attck: T1071.004
+  input: zeek.dns
+  scope: custom
+  aggregate_key: [src_ip]
+  window: 3600
+  initial_risk: high
+  model: conditional
+  estimated_tool_calls: 2
+  requires_chain_analysis: false
+  match: []
+  conditions:
+    - stat: count
+      op: ge
+      value: 100
+    - stat: high_entropy_ratio
+      field: query_name
+      op: ge
+      value: 0.3
+
+- id: BEH-008
+  name: Web漏洞利用尝试
+  attck: T1190
+  input: zeek.http
+  scope: session
+  window: 300
+  initial_risk: high
+  model: conditional
+  estimated_tool_calls: 2
+  requires_chain_analysis: false
+  match:
+    - field: uri
+      op: regex
+      value: (?i)(\.\./|union\s+select|' or |<script|/etc/passwd)
+  conditions:
+    - stat: count
+      op: ge
+      value: 1
+
+- id: BEH-009
+  name: 异常出向回连
+  attck: T1071
+  input: zeek.connection
+  scope: custom
+  aggregate_key: [src_ip]
+  window: 3600
+  initial_risk: medium
+  model: conditional
+  estimated_tool_calls: 2
+  requires_chain_analysis: true
+  match: []
+  conditions:
+    - stat: distinct
+      field: dst_ip
+      op: ge
+      value: 10
+
+- id: BEH-010
+  name: 凭据窃取-关键文件访问
+  attck: T1003
+  input: zeek.http
+  scope: session
+  window: 3600
+  initial_risk: high
+  model: conditional
+  estimated_tool_calls: 2
+  requires_chain_analysis: false
+  match:
+    - field: uri
+      op: regex
+      value: (?i)(/admin|/config|\.pst$|\.ntds|shadow|sam$)
+  conditions:
+    - stat: count
+      op: ge
+      value: 5
+
+- id: BEH-011
+  name: 权限提升-异常进程行为
+  attck: T1068
+  input: zeek.connection
+  scope: custom
+  aggregate_key: [src_ip]
+  window: 3600
+  initial_risk: high
+  model: conditional
+  estimated_tool_calls: 2
+  requires_chain_analysis: false
+  match: []
+  conditions:
+    - stat: distinct
+      field: dst_port
+      op: ge
+      value: 30
+    - stat: distinct
+      field: dst_ip
+      op: ge
+      value: 5
+
+- id: BEH-012
+  name: 横向移动-RDP爆破
+  attck: T1021.001
+  input: zeek.connection
+  scope: custom
+  aggregate_key: [src_ip]
+  window: 300
+  initial_risk: medium
+  model: conditional
+  estimated_tool_calls: 1
+  requires_chain_analysis: false
+  match:
+    - field: dst_port
+      op: eq
+      value: "3389"
+  conditions:
+    - stat: distinct
+      field: dst_ip
+      op: ge
+      value: 3

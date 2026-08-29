@@ -1,0 +1,116 @@
+# ============================================================================
+# 深瞳安全分析智能体 - LLM Server 镜像（llama.cpp / llama-server）
+# ----------------------------------------------------------------------------
+# 镜像名：nss-ndr/llm-server:<版本>（构建脚本：scripts/build-llm-server.sh）
+# 构建上下文：images/（本文件位于 images/）
+#
+# 运行形态：纯 CPU（x86_64）推理服务，OpenAI 兼容 API（/v1/chat/completions）
+# CPU 指令集：采用 llama.cpp CPU 后端多变体机制（GGML_CPU_ALL_VARIANTS），
+#            编译 x64 基线 + SSE42→AVX2→AVX512（Skylake-X/Cascade/Ice/Cooper/
+#            Zen4/Sapphire Rapids）全套后端变体 .so；llama-server 主程序保持
+#            基线指令集，启动时按 CPUID 选出得分最高的变体加载：
+#            AVX512 机器自动用满 AVX512（含 VNNI/VBMI/BF16/AMX），
+#            仅 AVX2 机器自动回退 haswell 变体，无需重新构建。
+#
+# 上游固定 tag b10681（可复现；如需升级只改 ARG LLAMA_CPP_TAG 后重建）。
+# ============================================================================
+
+# ---------------- 构建阶段：编译 llama-server + CPU 后端变体 ----------------
+FROM alpine:3.21 AS builder
+
+ARG LLAMA_CPP_TAG=b10681
+
+RUN apk add --no-cache \
+        build-base \
+        cmake \
+        ninja \
+        git \
+        linux-headers
+
+WORKDIR /src
+# 网络瞬时抖动时重试（离线环境构建请改用本地镜像仓库或预置源码）
+RUN for i in 1 2 3; do \
+        git clone --depth 1 --single-branch --branch "${LLAMA_CPP_TAG}" \
+            https://github.com/ggml-org/llama.cpp.git && break; \
+        echo "git clone failed (attempt $i), retrying..."; sleep 5; \
+    done \
+    && test -d llama.cpp/.git \
+    && git -C llama.cpp rev-parse HEAD > /src/llama.cpp.commit
+
+WORKDIR /src/llama.cpp/build
+RUN cmake .. -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=ON \
+      -DGGML_NATIVE=OFF \
+      # CPU 后端多变体：主程序基线指令集 + 各 ISA 变体 .so，运行时按 CPUID 加载
+      -DGGML_BACKEND_DL=ON \
+      -DGGML_CPU_ALL_VARIANTS=ON \
+      # 仅 CPU：关闭所有加速器后端
+      -DGGML_CUDA=OFF \
+      -DGGML_METAL=OFF \
+      -DGGML_BLAS=OFF \
+      -DGGML_LLAMAFILE=OFF \
+      # 只产出 llama-server：b10681 起 server 挂载在 tools/ 下，
+      # 需 LLAMA_BUILD_TOOLS=ON 才会加入构建；构建时仅指定 llama-server 目标，
+      # 其余 tools（llama-bench/quantize 等）不会被编译
+      -DLLAMA_BUILD_TOOLS=ON \
+      -DLLAMA_BUILD_SERVER=ON \
+      -DLLAMA_BUILD_EXAMPLES=OFF \
+      -DLLAMA_BUILD_TESTS=OFF \
+      -DLLAMA_BUILD_APP=OFF \
+      -DLLAMA_BUILD_UI=OFF \
+      -DLLAMA_USE_PREBUILT_UI=OFF \
+      # 内网 HTTP 部署不需要 HTTPS/子进程能力，减小体积
+      -DLLAMA_OPENSSL=OFF \
+      -DLLAMA_SUBPROCESS=OFF \
+    && cmake --build . --target llama-server \
+    && strip bin/llama-server \
+    && mkdir -p /out \
+    && cp -a bin/. /out/   # 保留 .so 符号链接（加载器只认 *.so 文件名）
+
+# ---------------- 运行阶段 ----------------
+FROM alpine:3.21
+
+# llama-server 动态链接 libllama/libggml 与 CPU 变体 .so；运行期需 C++ 运行时 + OpenMP
+RUN apk add --no-cache libstdc++ libgcc libgomp
+
+ENV LLM_HOST=0.0.0.0 \
+    LLM_PORT=8080 \
+    LLM_MODEL=/models/model.gguf \
+    LLM_ALIAS=xLAM-2-1b-fc-r \
+    LLM_CONTEXT_SIZE=32768 \
+    LLM_PARALLEL=1 \
+    LLM_BATCH_SIZE=2048 \
+    LLM_UBATCH_SIZE=512 \
+    LLM_CACHE_TYPE_K=q8_0 \
+    LLM_CACHE_TYPE_V=q8_0 \
+    LLM_THREADS= \
+    LLM_API_KEY= \
+    LLM_EXTRA_ARGS=
+
+# 非特权运行（与 agent 镜像 uid 10001 一致）
+RUN adduser -D -u 10001 -H -s /sbin/nologin llm \
+    && mkdir -p /models \
+    && chown llm:llm /models
+
+COPY --from=builder /out/ /usr/local/bin/
+COPY --from=builder /src/llama.cpp.commit /usr/local/share/llama.cpp.commit
+COPY llm-server/entrypoint.sh /usr/local/bin/llm-entrypoint
+RUN chmod +x /usr/local/bin/llm-entrypoint \
+    && ln -sf /usr/local/bin/llama-server /usr/local/bin/llm-server
+
+USER llm
+WORKDIR /home/llm
+
+EXPOSE 8080
+
+# llama-server 模型加载完成后 /health 返回 200；首次加载 1B 模型设较长启动期
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD wget -q -O /dev/null "http://127.0.0.1:${LLM_PORT:-8080}/health" || exit 1
+
+ENTRYPOINT ["/usr/local/bin/llm-entrypoint"]
+
+LABEL org.opencontainers.image.title="nss-ndr/llm-server" \
+      org.opencontainers.image.description="深瞳安全分析智能体本地边缘 LLM：llama.cpp llama-server（纯 CPU / AVX512）" \
+      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.source="https://github.com/ggml-org/llama.cpp"

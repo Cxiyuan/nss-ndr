@@ -1,0 +1,37 @@
+# LLM Provider 注册表（设计文档 §15.4）
+# 本地边缘与云端高阶均为 OpenAI 兼容 API，差异只在配置。
+# base_url / api_key 支持 ${ENV_VAR} 引用（部署时由 .env / pillar 注入）。
+providers:
+  edge:
+    base_url: ${EDGE_LLM_BASE_URL}
+    api_key: ${EDGE_LLM_API_KEY}
+    model: ${EDGE_LLM_MODEL}
+    max_context: 32768
+    capabilities:
+      tool_calling: true
+      json_schema: true
+      streaming: false
+    weight: 1.0
+    quota:
+      hourly_tokens: 0          # 0 = 不限
+      daily_tokens: 0
+    circuit_breaker:
+      max_consecutive_failures: 5
+      cooldown_seconds: 60
+
+  cloud:
+    base_url: ${CLOUD_LLM_BASE_URL}
+    api_key: ${CLOUD_LLM_API_KEY}
+    model: ${CLOUD_LLM_MODEL}
+    max_context: 131072
+    capabilities:
+      tool_calling: true
+      json_schema: true
+      streaming: true
+    weight: 0.0                 # 仅升级时使用
+    quota:
+      hourly_tokens: 0
+      daily_tokens: 0
+    circuit_breaker:
+      max_consecutive_failures: 5
+      cooldown_seconds: 60

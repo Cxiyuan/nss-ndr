@@ -1,0 +1,16 @@
+# 数据总线 · Zeek 自定义镜像
+# 1) 镜像默认 site/local.zeek 第一行注入 JSON redef（base init 前生效）
+# 2) 内置 databus 的 local.zeek（协议加载 + default_logdir）和检测脚本
+# 运行环境参数（ZEEK_INTERFACE）通过环境变量注入
+FROM nss-ndr/zeek:8.2.2
+
+# 内置 databus 配置：local.zeek（含 default_logdir + JSON + 协议加载）覆盖镜像默认
+# 基础镜像 nss-ndr/zeek:8.2.2 已注入 JSON 输出 redef 到镜像默认 site/local.zeek，
+# 此处用 databus 的 local.zeek（含 default_logdir）覆盖到 /opt/zeek/share/zeek/site/
+COPY zeek/local.zeek /opt/zeek/share/zeek/site/local.zeek
+# 检测脚本
+COPY zeek/scripts/detect.zeek /opt/zeek/share/zeek/site/scripts/detect.zeek
+
+LABEL org.opencontainers.image.title="nss-ndr/zeek-databus" \
+      org.opencontainers.image.description="Zeek 8.2.2 with JSON output + databus config pre-installed" \
+      org.opencontainers.image.version="8.2.2"

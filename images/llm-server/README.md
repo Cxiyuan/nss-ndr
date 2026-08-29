@@ -1,0 +1,119 @@
+# LLM Server 容器镜像（llama.cpp / llama-server）
+
+深瞳安全分析智能体的本地边缘 LLM 服务镜像。采用 [llama.cpp](https://github.com/ggml-org/llama.cpp)
+的 `llama-server`，在**纯 CPU**（x86_64）环境以 OpenAI 兼容 API
+（`/v1/chat/completions`）对外提供推理，供智能体 `providers.yaml` 的 edge Provider 对接
+（设计文档 §2 / §8 / §15）。
+
+## 设计要点
+
+- **纯 CPU + AVX512**：关闭 CUDA/Metal/BLAS 等加速后端；采用 llama.cpp CPU 后端
+  **多变体机制**（`GGML_CPU_ALL_VARIANTS`，与上游官方 CPU 镜像同款方案）——
+  编译 x64 基线 + SSE42→AVX2→AVX512（Skylake-X/Cascade/Ice/Cooper/Zen4/Sapphire
+  Rapids）全套后端 `.so`，`llama-server` 主程序保持基线指令集，启动时按 CPUID 选出
+  最高分变体加载：AVX512 机器用满 AVX512（含 VNNI/VBMI/BF16/AMX），仅 AVX2 机器
+  自动回退 haswell 变体，无需重编、不会 SIGILL。
+- **轻量镜像**：Alpine（musl）+ 动态链接（运行期仅 libstdc++/libgcc/libgomp），
+  镜像约 200MB 量级，不依赖宿主 glibc。
+- **可复现**：llama.cpp 固定 tag `b10681`（`Dockerfile` 内 `ARG LLAMA_CPP_TAG`）。
+- **默认模型**：`Salesforce/xLAM-2-1b-fc-r-gguf` 的 `Q4_K_M`（约 0.99GB，32K 上下文），
+  与设计文档边缘模型选型一致；更换模型只需换 GGUF 文件 + 重启容器。
+
+## 文件清单
+
+| 文件 | 说明 |
+|---|---|
+| `images/Dockerfile.llm-server` | 多阶段构建：编译静态 llama-server + Alpine 运行时 |
+| `images/llm-server/entrypoint.sh` | ENV → llama-server 参数映射入口 |
+| `images/llm-server/scripts/fetch-model.sh` | 下载 GGUF 到 `offline/models/` |
+| `images/scripts/build-llm-server.sh` | 构建 + 校验 + 导出离线 tar |
+| `images/offline/nss-ndr_llm-server_<版本>.tar` | 离线镜像产物（Salt load） |
+
+## 构建
+
+```bash
+# 1. 下载模型（约 0.99GB）
+images/llm-server/scripts/fetch-model.sh
+
+# 2. 构建镜像 + 导出 offline tar（默认版本 0.1.0）
+images/scripts/build-llm-server.sh [版本]
+
+# 产物：images/offline/nss-ndr_llm-server_0.1.0.tar
+# 镜像：nss-ndr/llm-server:0.1.0
+```
+
+AVX512-BF16（Cooper Lake / Zen4 / Sapphire Rapids）与 AMX（Sapphire Rapids）内核
+已包含在多变体构建中，仅在对应硬件上被加载，无需额外参数。
+
+## 运行
+
+```bash
+# 模型目录挂载到 /models，容器内默认读取 /models/model.gguf
+mkdir -p /opt/nss-ndr/models
+ln -s /opt/nss-ndr/models/xLAM-2-1B-fc-r-Q4_K_M.gguf /opt/nss-ndr/models/model.gguf
+
+docker run -d --name nss-ndr-llm-server \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -v /opt/nss-ndr/models:/models:ro \
+  -e LLM_ALIAS=xLAM-2-1b-fc-r \
+  -e LLM_CONTEXT_SIZE=32768 \
+  -e LLM_THREADS=6 \
+  nss-ndr/llm-server:0.1.0
+
+# 冒烟：等待 /health 返回 200 后
+curl http://127.0.0.1:8080/v1/models
+curl http://127.0.0.1:8080/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"xLAM-2-1b-fc-r","messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
+```
+
+## 运行配置（环境变量）
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `LLM_MODEL` | `/models/model.gguf` | GGUF 模型路径 |
+| `LLM_HOST` / `LLM_PORT` | `0.0.0.0` / `8080` | 监听地址 / 端口 |
+| `LLM_ALIAS` | `xLAM-2-1b-fc-r` | API 返回的 model 名（与 agent `EDGE_LLM_MODEL` 保持一致） |
+| `LLM_CONTEXT_SIZE` | `32768` | 上下文窗口（设计文档 §4 预算：32K） |
+| `LLM_PARALLEL` | `1` | 并发 slot（6C/12G 预算建议保持 1） |
+| `LLM_BATCH_SIZE` / `LLM_UBATCH_SIZE` | `2048` / `512` | 批处理大小 |
+| `LLM_CACHE_TYPE_K/V` | `q8_0` | KV 缓存量化：32K 上下文下省约一半缓存内存；追求精度可改 `f16` |
+| `LLM_THREADS` | 空（自动） | 推理线程数，建议 ≤ 分配核数，如 `6` |
+| `LLM_API_KEY` | 空 | 开启 API Key 鉴权（与 agent `EDGE_LLM_API_KEY` 对应） |
+| `LLM_EXTRA_ARGS` | 空 | 追加任意 llama-server 参数（如 `--mlock --numa distribute`） |
+
+## 与智能体对接
+
+在 `/etc/nss-ndr/.env`（Salt 环境）填入并重建 agent 容器：
+
+```bash
+EDGE_LLM_BASE_URL=http://llm-server:8080/v1
+EDGE_LLM_API_KEY=            # 与 LLM_API_KEY 一致；未开启鉴权可留空
+EDGE_LLM_MODEL=xLAM-2-1b-fc-r
+AGENT_DRY_RUN=0
+```
+
+llama-server 不校验请求里的 `model` 字段，agent 侧模型名只需与 `LLM_ALIAS` 对应便于日志审计。
+
+## 内存预算参考（6C/12G 专属环境，设计文档 §8）
+
+- 模型权重（Q4_K_M 1B）：约 1.0GB
+- KV 缓存（32K 上下文，q8_0）：约 0.5GB
+- 计算缓冲 / 运行开销：约 1~2GB
+- 合计约 3GB 量级，12G 预算内可再加 `LLM_CONTEXT_SIZE` 或并发 slot
+
+## 模型备选（设计文档 §8.5，仅换 GGUF + 重启）
+
+- `xLAM-2-3b-fc-r`（Q4_K_M 约 1.93GB，工具调用更强）
+- `Granite-4.1-3B`（Apache 2.0，131K 上下文，商用合规）
+
+```bash
+images/llm-server/scripts/fetch-model.sh xLAM-2-3B-fc-r-Q4_K_M.gguf
+```
+
+## 说明与限制
+
+- 纯 CPU 1B 模型推理速度有限，设计文档定位其为“预筛 + 初判 + 结构化输出”的快速执行器，
+  复杂任务由 agent 网关升级云端（`needs_cloud`），不依赖本服务做深度分析。
+- 离线 tar 与模型分开放置：镜像不含模型权重（约 1GB 不进镜像），由部署侧挂载 `/models`。
