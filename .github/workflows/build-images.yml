@@ -1,0 +1,141 @@
+name: Build Docker Images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'images/**'
+      - '.github/workflows/build-images.yml'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 给 agent / llm-server 附加版本标签（如 0.2.0）
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 智能体：上下文 src/agent/
+          - image: agent
+            context: src/agent
+            dockerfile: images/Dockerfile.agent
+            platforms: linux/amd64
+            build_args: ''
+            versioned: 'true'
+            smoke: 'true'
+
+          # 数据总线：Elastic Agent + Zeek Integration
+          - image: elastic-agent-zeek
+            context: images
+            dockerfile: images/Dockerfile.elastic-agent-zeek
+            platforms: linux/amd64
+            build_args: ''
+            fixed_tags: type=raw,value=9.5.2
+
+          # 数据总线：Logstash 双写镜像（上下文 src/databus/）
+          - image: logstash-databus
+            context: src/databus
+            dockerfile: images/Dockerfile.logstash-databus
+            platforms: linux/amd64
+            build_args: ''
+            fixed_tags: type=raw,value=9.5.2
+
+          # 数据总线：Redis 镜像（上下文 src/databus/）
+          - image: redis-databus
+            context: src/databus
+            dockerfile: images/Dockerfile.redis-databus
+            platforms: linux/amd64
+            build_args: ''
+            fixed_tags: type=raw,value=8.10.1
+
+          # 数据总线：Zeek 自定义镜像（CI 直接用官方基础镜像，无需手工中间镜像）
+          - image: zeek
+            context: src/databus
+            dockerfile: images/Dockerfile.zeek-custom
+            platforms: linux/amd64
+            build_args: |
+              BASE_IMAGE=zeek/zeek:8.2.2
+            fixed_tags: type=raw,value=8.2.2
+
+          # 边缘 LLM：llama.cpp 编译较慢，建议手动触发或按 tag 推送
+          - image: llm-server
+            context: images
+            dockerfile: images/Dockerfile.llm-server
+            platforms: linux/amd64
+            build_args: ''
+            versioned: 'true'
+            smoke: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # GHCR 路径必须全小写
+      - name: Compute image namespace
+        id: ns
+        run: echo "namespace=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nss-ndr" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.ns.outputs.namespace }}/${{ matrix.image }}
+          tags: |
+            type=sha
+            type=raw,value=latest
+            ${{ matrix.fixed_tags }}
+            ${{ matrix.versioned == 'true' && inputs.version != '' && format('type=raw,value={0}', inputs.version) || '' }}
+            type=semver,pattern={{version}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          build-args: ${{ matrix.build_args }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test
+        if: matrix.smoke == 'true'
+        env:
+          IMAGE: ${{ steps.ns.outputs.namespace }}/${{ matrix.image }}:latest
+        run: |
+          if [[ "${{ matrix.image }}" == "llm-server" ]]; then
+            docker run --rm --entrypoint /usr/local/bin/llama-server "$IMAGE" --version
+          else
+            docker run --rm "$IMAGE" version
+          fi

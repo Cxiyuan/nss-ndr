@@ -1,8 +1,12 @@
 # 数据总线 · Zeek 自定义镜像
+# 基础镜像默认 nss-ndr/zeek:8.2.2（本地手工注入 JSON redef 的版本）；
+# CI 构建时传 BASE_IMAGE=zeek/zeek:8.2.2 直接从官方镜像构建——
+# databus 的 local.zeek 自带 JSON redef，最终镜像内容一致。
 # 1) 镜像默认 site/local.zeek 第一行注入 JSON redef（base init 前生效）
 # 2) 内置 databus 的 local.zeek（协议加载 + default_logdir）和检测脚本
 # 运行环境参数（ZEEK_INTERFACE）通过环境变量注入
-FROM nss-ndr/zeek:8.2.2
+ARG BASE_IMAGE=nss-ndr/zeek:8.2.2
+FROM ${BASE_IMAGE}
 
 # 内置 databus 配置：local.zeek（含 default_logdir + JSON + 协议加载）覆盖镜像默认
 # 基础镜像 nss-ndr/zeek:8.2.2 已注入 JSON 输出 redef 到镜像默认 site/local.zeek，
