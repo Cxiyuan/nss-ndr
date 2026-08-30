@@ -74,6 +74,11 @@ FROM alpine:3.21
 # llama-server 动态链接 libllama/libggml 与 CPU 变体 .so；运行期需 C++ 运行时 + OpenMP
 RUN apk add --no-cache libstdc++ libgcc libgomp
 
+# 所有 .so（含 CPU 变体）与 llama-server 平铺在 /usr/local/bin/，
+# 该目录不在 musl 默认加载路径中，必须显式加入 LD_LIBRARY_PATH，
+# 否则入口/冒烟测试都会报 libllama-server-impl.so 找不到
+ENV LD_LIBRARY_PATH=/usr/local/bin
+
 ENV LLM_HOST=0.0.0.0 \
     LLM_PORT=8080 \
     LLM_MODEL=/models/model.gguf \
