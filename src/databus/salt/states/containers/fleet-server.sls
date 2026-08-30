@@ -1,7 +1,8 @@
 # ============================================================================
 # Fleet Server（elastic-agent 以 fleet-server 模式运行，8220）
 # 启动脚本 fleet-server-start.sh 由 Salt 下发并挂载进容器：
-#   首次启动无 fleet.enc -> enroll 到 Kibana/ES；之后以 fleet-server 模式运行
+#   由 elastic-agent container 按环境变量自动 enroll 并运行 fleet-server
+#   （FLEET_SERVER_POLICY_ID 必须与 fleet-setup.sh 创建的 policy id 一致）
 # ============================================================================
 
 include:
@@ -44,14 +45,18 @@ nss-ndr-fleet-server:
     - entrypoint: /opt/nss-ndr/scripts/fleet-server-start.sh
     - environment:
         - TZ={{ databus.tz }}
+        - ELASTICSEARCH_HOST=http://elasticsearch:9200
         - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
         - ELASTICSEARCH_USERNAME={{ databus.creds.elastic_username }}
         - ELASTICSEARCH_PASSWORD={{ databus.creds.elastic_password }}
         - KIBANA_HOST=http://kibana:5601
         - FLEET_URL=https://fleet-server:8220
+        - FLEET_ENROLL=1
+        - FLEET_INSECURE=1
         - FLEET_ENROLLMENT_TOKEN={{ env_get('FLEET_ENROLLMENT_TOKEN') }}
         - FLEET_SERVER_ENABLE=true
-        - FLEET_SERVER_POLICY_NAME=nss-ndr-fleet-server-policy
+        - FLEET_SERVER_POLICY_ID=fleet-server-policy
+        - FLEET_SERVER_PORT=8220
     - log_driver: json-file
     - log_opt:
         - max-size=20m

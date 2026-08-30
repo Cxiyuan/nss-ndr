@@ -12,6 +12,9 @@ nss-ndr-agent:
     - image: nss-ndr/agent:0.1.1
     - name: {{ agent.container_name }}
     - restart_policy: unless-stopped
+    - user: agent
+    - entrypoint: ["python", "-m", "app"]
+    - command: ["worker"]
     - binds:
         - {{ agent.config_dir }}:/opt/nss-ndr-agent/config:ro
     - networks:
@@ -48,3 +51,4 @@ nss-ndr-agent:
       - docker_image: nss-ndr/agent:0.1.1
       - file: /etc/nss-ndr/agent/agent.yaml
       - file: /etc/nss-ndr/agent/providers.yaml
+      - file: /etc/nss-ndr/agent/rules/beh-rules.yaml
