@@ -84,7 +84,7 @@ EOF
     # 预检仓库元数据：filelists 可用才走软件源安装，否则直接转 RPM 下载
     REPO_BASE="https://download.docker.com/linux/centos/${EL_MAJOR}/x86_64/stable"
     REPOMD="$(curl -fsSL -m 15 "${REPO_BASE}/repodata/repomd.xml" 2>/dev/null)" || REPOMD=""
-    FL="$(printf '%s' "${REPOMD}" | grep -o 'repodata/[a-f0-9]\{32,\}-filelists\.xml\.gz' | head -1)"
+    FL="$(printf '%s' "${REPOMD}" | grep -o 'repodata/[a-f0-9]\{32,\}-filelists\.xml\.gz' | head -1 || true)"
     if [[ -n "${FL}" ]] && curl -fsSI -m 15 "${REPO_BASE}/${FL}" >/dev/null 2>&1; then
       : > "${LOG}"
       # 依次尝试：普通安装 → --allowerasing → --nobest
@@ -107,12 +107,13 @@ EOF
     RPM_DIR="$(mktemp -d /tmp/nss-ndr-docker-rpms.XXXXXX)"
     for try_base in \
         "https://download.docker.com/linux/centos/${EL_MAJOR}/x86_64/stable/Packages" \
-        "https://mirrors.aliyun.com/docker-ce/linux/centos/${EL_MAJOR}/x86_64/stable/Packages"; do
+        "https://mirrors.aliyun.com/docker-ce/linux/centos/${EL_MAJOR}/x86_64/stable/Packages" \
+        "https://mirrors.cloud.tencent.com/docker-ce/linux/centos/${EL_MAJOR}/x86_64/stable/Packages"; do
       BASE="${try_base}"
       LIST="$(curl -fsSL -m 20 "${BASE}/" 2>>"${LOG}")" || LIST=""
-      DOCKER_CE="$(printf '%s' "${LIST}" | grep -o 'href="docker-ce-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1)"
-      DOCKER_CLI="$(printf '%s' "${LIST}" | grep -o 'href="docker-ce-cli-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1)"
-      CONTAINERD="$(printf '%s' "${LIST}" | grep -o 'href="containerd.io-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1)"
+      DOCKER_CE="$(printf '%s' "${LIST}" | grep -o 'href="docker-ce-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1 || true)"
+      DOCKER_CLI="$(printf '%s' "${LIST}" | grep -o 'href="docker-ce-cli-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1 || true)"
+      CONTAINERD="$(printf '%s' "${LIST}" | grep -o 'href="containerd.io-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1 || true)"
       [[ -n "${DOCKER_CE}" && -n "${DOCKER_CLI}" && -n "${CONTAINERD}" ]] && break
     done
 
@@ -122,9 +123,17 @@ EOF
          && curl -fsSL -m 60 -o "${RPM_DIR}/docker-ce-cli.rpm" "${BASE}/${DOCKER_CLI}" >>"${LOG}" 2>&1 \
          && curl -fsSL -m 60 -o "${RPM_DIR}/containerd.io.rpm" "${BASE}/${CONTAINERD}" >>"${LOG}" 2>&1 \
          && [[ -s "${RPM_DIR}/docker-ce.rpm" && -s "${RPM_DIR}/docker-ce-cli.rpm" && -s "${RPM_DIR}/containerd.io.rpm" ]]; then
-        if timeout 300 "$PM" install -y --disablerepo=docker-ce-stable \
+        say "安装 RPM（首次可能需下载依赖元数据，耗时几分钟）..."
+        RPM_OPTS=(--disablerepo=docker-ce-stable)
+        # 先用已缓存的仓库元数据快速安装，失败再允许刷新元数据
+        if timeout 120 "$PM" install -y --cacheonly "${RPM_OPTS[@]}" \
               "${RPM_DIR}/docker-ce.rpm" "${RPM_DIR}/docker-ce-cli.rpm" "${RPM_DIR}/containerd.io.rpm" >>"${LOG}" 2>&1; then
           ok=1
+        elif timeout 600 "$PM" install -y "${RPM_OPTS[@]}" \
+              "${RPM_DIR}/docker-ce.rpm" "${RPM_DIR}/docker-ce-cli.rpm" "${RPM_DIR}/containerd.io.rpm" >>"${LOG}" 2>&1; then
+          ok=1
+        fi
+        if [[ ${ok} -eq 1 ]]; then
           # 仓库元数据损坏会拖慢后续 dnf 操作，安装成功后禁用该源
           sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/docker-ce.repo 2>/dev/null || true
         fi
@@ -170,7 +179,7 @@ install_compose() {
     command -v dnf >/dev/null 2>&1 || PM="yum"
     BASE="https://mirrors.aliyun.com/docker-ce/linux/centos/${EL_MAJOR}/x86_64/stable/Packages"
     LIST="$(curl -fsSL -m 20 "${BASE}/" 2>/dev/null)" || LIST=""
-    COMPOSE_PLUGIN="$(printf '%s' "${LIST}" | grep -o 'href="docker-compose-plugin-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1)"
+    COMPOSE_PLUGIN="$(printf '%s' "${LIST}" | grep -o 'href="docker-compose-plugin-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1 || true)"
     if [[ -n "${COMPOSE_PLUGIN}" ]] && timeout 180 "$PM" install -y --disablerepo=docker-ce-stable \
         "${BASE}/${COMPOSE_PLUGIN}" >/dev/null 2>&1; then
       say "docker-compose-plugin 安装完成"
@@ -188,9 +197,13 @@ say "docker compose 就绪：$(docker compose version 2>/dev/null || docker-comp
 install_salt() {
   say "未检测到 salt，开始安装 salt-minion（SaltStack 官方源，EL${EL_MAJOR}）..."
   rpm --import "https://repo.saltproject.io/salt/py3/redhat/${EL_MAJOR}/x86_64/latest/SALTSTACK-GPG-KEY.pub" || true
-  curl -fsSL "https://repo.saltproject.io/salt/py3/redhat/${EL_MAJOR}/x86_64/latest/salt.repo" \
-    -o /etc/yum.repos.d/salt.repo
-  dnf install -y salt-minion 2>/dev/null || yum install -y salt-minion
+  if ! curl -fsSL -m 60 "https://repo.saltproject.io/salt/py3/redhat/${EL_MAJOR}/x86_64/latest/salt.repo" \
+      -o /etc/yum.repos.d/salt.repo; then
+    warn "salt.repo 下载失败，salt-minion 可能安装不上（后续可手动安装）"
+  fi
+  if ! (timeout 300 dnf install -y salt-minion 2>/dev/null || timeout 300 yum install -y salt-minion); then
+    warn "salt-minion 安装失败，请稍后手动安装后继续部署"
+  fi
   systemctl enable salt-minion >/dev/null 2>&1 || true
 }
 
@@ -297,7 +310,7 @@ if compgen -G "${INSTALL_DIR}/images/*.tar" >/dev/null; then
   say "导入容器镜像（共 $(ls "${INSTALL_DIR}"/images/*.tar | wc -l | tr -d ' ') 个，可能耗时较长）..."
   for t in "${INSTALL_DIR}"/images/*.tar; do
     say "docker load $(basename "${t}")"
-    docker load -i "${t}"
+    docker load -i "${t}" || { err "镜像导入失败：$(basename "${t}")"; exit 1; }
   done
 else
   warn "无镜像包可导入"
@@ -322,7 +335,7 @@ say "部署环境安装完成 ✓"
 echo "  安装目录   : ${INSTALL_DIR}"
 echo "  监控网卡   : ${MONITOR_NIC}"
 echo "  已导入镜像 :"
-docker images --format '    {{.Repository}}:{{.Tag}} ({{.Size}})' | grep -E 'nss-ndr|elasticsearch|kibana' | sort -u
+  docker images --format '    {{.Repository}}:{{.Tag}} ({{.Size}})' | grep -E 'nss-ndr|elasticsearch|kibana' | sort -u || true
 echo
 echo "  部署配置   : ${INSTALL_DIR}/config/deploy.conf"
 echo "  Salt 状态  : /srv/salt/databus/ + /srv/salt/agent/"
