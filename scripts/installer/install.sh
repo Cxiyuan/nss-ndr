@@ -241,14 +241,35 @@ fi
 say "docker compose 就绪：$(docker compose version 2>/dev/null || docker-compose --version 2>/dev/null || echo N/A)"
 
 install_salt() {
-  say "未检测到 salt，开始安装 salt-minion（SaltStack 官方源，EL${EL_MAJOR}）..."
-  rpm --import "https://repo.saltproject.io/salt/py3/redhat/${EL_MAJOR}/x86_64/latest/SALTSTACK-GPG-KEY.pub" || true
-  if ! curl -fsSL -m 60 "https://repo.saltproject.io/salt/py3/redhat/${EL_MAJOR}/x86_64/latest/salt.repo" \
-      -o /etc/yum.repos.d/salt.repo; then
-    warn "salt.repo 下载失败，salt-minion 可能安装不上（后续可手动安装）"
+  say "未检测到 salt，开始安装 salt-minion（优先国内镜像源）..."
+  local PM="dnf" LOG="/tmp/nss-ndr-salt-install.log" ok=0
+  command -v dnf >/dev/null 2>&1 || PM="yum"
+  : > "${LOG}"
+
+  # 1) 国内镜像源：中科大 USTC（镜像 SaltStack 官方 RPM 仓库）
+  say "使用国内镜像源安装 salt-minion（mirrors.ustc.edu.cn）..."
+  cat > /etc/yum.repos.d/salt.repo <<EOF
+[salt-ustc]
+name=SaltStack USTC Mirror
+baseurl=https://mirrors.ustc.edu.cn/salt/saltproject-rpm/
+enabled=1
+gpgcheck=0
+EOF
+  if timeout 600 "$PM" install -y salt-minion >>"${LOG}" 2>&1; then
+    ok=1
+  else
+    warn "国内镜像源安装失败，尝试 SaltStack 官方源..."
+    if curl -fsSL -m 60 "https://github.com/saltstack/salt-install-guide/releases/latest/download/salt.repo" \
+        -o /etc/yum.repos.d/salt.repo; then
+      if timeout 600 "$PM" install -y salt-minion >>"${LOG}" 2>&1; then
+        ok=1
+      fi
+    fi
   fi
-  if ! (timeout 300 dnf install -y salt-minion 2>/dev/null || timeout 300 yum install -y salt-minion); then
-    warn "salt-minion 安装失败，请稍后手动安装后继续部署"
+
+  if [[ ${ok} -ne 1 ]]; then
+    warn "salt-minion 安装失败（日志 ${LOG}），请稍后手动安装后继续部署"
+    tail -n 15 "${LOG}" >&2 2>/dev/null || true
   fi
   systemctl enable salt-minion >/dev/null 2>&1 || true
 }
