@@ -9,3 +9,4 @@ dist/
 build/
 .env
 images/offline/*.tar
+部署发布/
