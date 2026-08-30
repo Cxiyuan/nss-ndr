@@ -108,7 +108,7 @@ jobs:
       # GHCR 路径必须全小写
       - name: Compute image namespace
         id: ns
-        run: echo "namespace=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nss-ndr" >> "$GITHUB_OUTPUT"
+        run: echo "namespace=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nss-ndr-public" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
