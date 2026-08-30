@@ -67,6 +67,22 @@ jobs:
             build_args: ''
             fixed_tags: type=raw,value=8.10.1
 
+          # 数据总线：Elasticsearch（官方镜像原样继承，统一走 GHCR 分发）
+          - image: elasticsearch
+            context: src/databus
+            dockerfile: images/Dockerfile.elasticsearch
+            platforms: linux/amd64
+            build_args: ''
+            fixed_tags: type=raw,value=9.5.2
+
+          # 数据总线：Kibana（官方镜像原样继承，统一走 GHCR 分发）
+          - image: kibana
+            context: src/databus
+            dockerfile: images/Dockerfile.kibana
+            platforms: linux/amd64
+            build_args: ''
+            fixed_tags: type=raw,value=9.5.2
+
           # 数据总线：Zeek 自定义镜像（CI 直接用官方基础镜像，无需手工中间镜像）
           - image: zeek
             context: src/databus

@@ -1,0 +1,7 @@
+# 数据总线 · Elasticsearch（官方镜像原样继承，随 CI 一并推送到 GHCR）
+# 配置全部外挂（Salt 通过环境变量/挂载下发），镜像层无改动
+FROM docker.elastic.co/elasticsearch/elasticsearch:9.5.2
+
+LABEL org.opencontainers.image.title="nss-ndr/elasticsearch" \
+      org.opencontainers.image.description="Elasticsearch 9.5.2 (official, databus)" \
+      org.opencontainers.image.version="9.5.2"
