@@ -16,14 +16,15 @@
 - **轻量镜像**：Alpine（musl）+ 动态链接（运行期仅 libstdc++/libgcc/libgomp），
   镜像约 200MB 量级，不依赖宿主 glibc。
 - **可复现**：llama.cpp 固定 tag `b10681`（`Dockerfile` 内 `ARG LLAMA_CPP_TAG`）。
-- **默认模型**：`Salesforce/xLAM-2-1b-fc-r-gguf` 的 `Q4_K_M`（约 0.99GB，32K 上下文），
-  与设计文档边缘模型选型一致；更换模型只需换 GGUF 文件 + 重启容器。
+- **内置模型**：`Qwen3-0.6B-Q8_0.gguf`（约 624MB，Apache-2.0）已打包进镜像，
+  构建时从官方 `Qwen/Qwen3-0.6B-GGUF` 仓库下载并做 SHA-256 校验；无需外挂模型目录即可运行。
+  更换模型可挂载 `/models` 覆盖或改 `LLM_MODEL` 指向其他 GGUF。
 
 ## 文件清单
 
 | 文件 | 说明 |
 |---|---|
-| `images/Dockerfile.llm-server` | 多阶段构建：编译静态 llama-server + Alpine 运行时 |
+| `images/Dockerfile.llm-server` | 多阶段构建：编译 llama-server + Alpine 运行时 + 内置 Qwen3-0.6B-Q8_0 模型 |
 | `images/llm-server/entrypoint.sh` | ENV → llama-server 参数映射入口 |
 | `images/llm-server/scripts/fetch-model.sh` | 下载 GGUF 到 `offline/models/` |
 | `images/scripts/build-llm-server.sh` | 构建 + 校验 + 导出离线 tar |
@@ -32,15 +33,15 @@
 ## 构建
 
 ```bash
-# 1. 下载模型（约 0.99GB）
-images/llm-server/scripts/fetch-model.sh
-
-# 2. 构建镜像 + 导出 offline tar（默认版本 0.1.0）
+# 构建镜像 + 导出 offline tar（默认版本 0.1.0；模型由 Dockerfile 构建时自动下载）
 images/scripts/build-llm-server.sh [版本]
 
 # 产物：images/offline/nss-ndr_llm-server_0.1.0.tar
-# 镜像：nss-ndr/llm-server:0.1.0
+# 镜像：nss-ndr/llm-server:0.1.0（含 /models/Qwen3-0.6B-Q8_0.gguf）
 ```
+
+> 如需离线构建，可先执行 `images/llm-server/scripts/fetch-model.sh` 把模型放到
+> `images/offline/models/`，再用 `docker build` 时挂载或手动 COPY 进镜像。
 
 AVX512-BF16（Cooper Lake / Zen4 / Sapphire Rapids）与 AMX（Sapphire Rapids）内核
 已包含在多变体构建中，仅在对应硬件上被加载，无需额外参数。
@@ -48,15 +49,10 @@ AVX512-BF16（Cooper Lake / Zen4 / Sapphire Rapids）与 AMX（Sapphire Rapids�
 ## 运行
 
 ```bash
-# 模型目录挂载到 /models，容器内默认读取 /models/model.gguf
-mkdir -p /opt/nss-ndr/models
-ln -s /opt/nss-ndr/models/xLAM-2-1B-fc-r-Q4_K_M.gguf /opt/nss-ndr/models/model.gguf
-
+# 默认模型已内置镜像，直接运行即可（无需挂载模型目录）
 docker run -d --name nss-ndr-llm-server \
   --restart unless-stopped \
   -p 8080:8080 \
-  -v /opt/nss-ndr/models:/models:ro \
-  -e LLM_ALIAS=xLAM-2-1b-fc-r \
   -e LLM_CONTEXT_SIZE=32768 \
   -e LLM_THREADS=6 \
   nss-ndr/llm-server:0.1.0
@@ -65,16 +61,18 @@ docker run -d --name nss-ndr-llm-server \
 curl http://127.0.0.1:8080/v1/models
 curl http://127.0.0.1:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -d '{"model":"xLAM-2-1b-fc-r","messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
+  -d '{"model":"Qwen3-0.6B-Q8_0","messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
 ```
+
+> 若需覆盖内置模型：`-v /opt/nss-ndr/models:/models:ro -e LLM_MODEL=/models/model.gguf`
 
 ## 运行配置（环境变量）
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
-| `LLM_MODEL` | `/models/model.gguf` | GGUF 模型路径 |
+| `LLM_MODEL` | `/models/Qwen3-0.6B-Q8_0.gguf` | GGUF 模型路径（内置） |
 | `LLM_HOST` / `LLM_PORT` | `0.0.0.0` / `8080` | 监听地址 / 端口 |
-| `LLM_ALIAS` | `xLAM-2-1b-fc-r` | API 返回的 model 名（与 agent `EDGE_LLM_MODEL` 保持一致） |
+| `LLM_ALIAS` | `Qwen3-0.6B-Q8_0` | API 返回的 model 名（与 agent `EDGE_LLM_MODEL` 保持一致） |
 | `LLM_CONTEXT_SIZE` | `32768` | 上下文窗口（设计文档 §4 预算：32K） |
 | `LLM_PARALLEL` | `1` | 并发 slot（6C/12G 预算建议保持 1） |
 | `LLM_BATCH_SIZE` / `LLM_UBATCH_SIZE` | `2048` / `512` | 批处理大小 |
@@ -90,7 +88,7 @@ curl http://127.0.0.1:8080/v1/chat/completions \
 ```bash
 EDGE_LLM_BASE_URL=http://llm-server:8080/v1
 EDGE_LLM_API_KEY=            # 与 LLM_API_KEY 一致；未开启鉴权可留空
-EDGE_LLM_MODEL=xLAM-2-1b-fc-r
+EDGE_LLM_MODEL=Qwen3-0.6B-Q8_0
 AGENT_DRY_RUN=0
 ```
 
@@ -98,13 +96,14 @@ llama-server 不校验请求里的 `model` 字段，agent 侧模型名只需与 
 
 ## 内存预算参考（6C/12G 专属环境，设计文档 §8）
 
-- 模型权重（Q4_K_M 1B）：约 1.0GB
+- 模型权重（Qwen3-0.6B Q8_0）：约 0.6GB
 - KV 缓存（32K 上下文，q8_0）：约 0.5GB
 - 计算缓冲 / 运行开销：约 1~2GB
-- 合计约 3GB 量级，12G 预算内可再加 `LLM_CONTEXT_SIZE` 或并发 slot
+- 合计约 2~3GB 量级，12G 预算内可再加 `LLM_CONTEXT_SIZE` 或并发 slot
 
 ## 模型备选（设计文档 §8.5，仅换 GGUF + 重启）
 
+- `Qwen3-0.6B-Q8_0`（**已内置**，Apache-2.0，0.6B / Q8_0，工具调用好、内存占用低）
 - `xLAM-2-3b-fc-r`（Q4_K_M 约 1.93GB，工具调用更强）
 - `Granite-4.1-3B`（Apache 2.0，131K 上下文，商用合规）
 
@@ -114,6 +113,7 @@ images/llm-server/scripts/fetch-model.sh xLAM-2-3B-fc-r-Q4_K_M.gguf
 
 ## 说明与限制
 
-- 纯 CPU 1B 模型推理速度有限，设计文档定位其为“预筛 + 初判 + 结构化输出”的快速执行器，
+- 纯 CPU 0.6B 模型推理速度有限，设计文档定位其为“预筛 + 初判 + 结构化输出”的快速执行器，
   复杂任务由 agent 网关升级云端（`needs_cloud`），不依赖本服务做深度分析。
-- 离线 tar 与模型分开放置：镜像不含模型权重（约 1GB 不进镜像），由部署侧挂载 `/models`。
+- 模型已内置镜像（`/models/Qwen3-0.6B-Q8_0.gguf`，约 624MB），
+  构建时从 HF 官方仓库下载并校验 SHA-256；挂载 `/models` 仍可覆盖或补充其他 GGUF。

@@ -5,6 +5,7 @@
 # 构建上下文：images/（本文件位于 images/）
 #
 # 运行形态：纯 CPU（x86_64）推理服务，OpenAI 兼容 API（/v1/chat/completions）
+# 内置模型：Qwen3-0.6B-Q8_0.gguf（约 624MB，构建时从官方 HF 仓库下载并校验 SHA-256）
 # CPU 指令集：采用 llama.cpp CPU 后端多变体机制（GGML_CPU_ALL_VARIANTS），
 #            编译 x64 基线 + SSE42→AVX2→AVX512（Skylake-X/Cascade/Ice/Cooper/
 #            Zen4/Sapphire Rapids）全套后端变体 .so；llama-server 主程序保持
@@ -81,8 +82,8 @@ ENV LD_LIBRARY_PATH=/usr/local/bin
 
 ENV LLM_HOST=0.0.0.0 \
     LLM_PORT=8080 \
-    LLM_MODEL=/models/model.gguf \
-    LLM_ALIAS=xLAM-2-1b-fc-r \
+    LLM_MODEL=/models/Qwen3-0.6B-Q8_0.gguf \
+    LLM_ALIAS=Qwen3-0.6B-Q8_0 \
     LLM_CONTEXT_SIZE=32768 \
     LLM_PARALLEL=1 \
     LLM_BATCH_SIZE=2048 \
@@ -97,6 +98,16 @@ ENV LLM_HOST=0.0.0.0 \
 RUN adduser -D -u 10001 -H -s /sbin/nologin llm \
     && mkdir -p /models \
     && chown llm:llm /models
+
+# 内置边缘模型：Qwen3-0.6B-Q8_0.gguf
+# 来源：https://huggingface.co/Qwen/Qwen3-0.6B-GGUF（Qwen3 官方 GGUF 仓库，Apache-2.0）
+# SHA-256 固定校验；GHA 层缓存命中时不会重复下载
+RUN apk add --no-cache curl \
+    && curl -fL --retry 3 --retry-delay 5 -o /models/Qwen3-0.6B-Q8_0.gguf \
+        https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf \
+    && echo "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031  /models/Qwen3-0.6B-Q8_0.gguf" | sha256sum -c - \
+    && chown llm:llm /models/Qwen3-0.6B-Q8_0.gguf \
+    && apk del curl
 
 COPY --from=builder /out/ /usr/local/bin/
 COPY --from=builder /src/llama.cpp.commit /usr/local/share/llama.cpp.commit
@@ -116,6 +127,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
 ENTRYPOINT ["/usr/local/bin/llm-entrypoint"]
 
 LABEL org.opencontainers.image.title="nss-ndr/llm-server" \
-      org.opencontainers.image.description="深瞳安全分析智能体本地边缘 LLM：llama.cpp llama-server（纯 CPU / AVX512）" \
+      org.opencontainers.image.description="深瞳安全分析智能体本地边缘 LLM：llama.cpp llama-server（纯 CPU / AVX512，内置 Qwen3-0.6B-Q8_0）" \
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.source="https://github.com/ggml-org/llama.cpp"
