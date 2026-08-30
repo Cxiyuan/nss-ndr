@@ -7,6 +7,11 @@ on:
         description: 安装包版本号（默认：日期-提交短号）
         required: false
         type: string
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/installer/**'
+      - '.github/workflows/build-run.yml'
   workflow_run:
     workflows: ["Build Docker Images"]
     types: [completed]

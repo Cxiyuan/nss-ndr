@@ -64,19 +64,92 @@ EL_MAJOR=8
 # ---------- 2. docker / compose / salt 检测与安装 ----------
 install_docker() {
   say "未检测到 docker，开始安装 docker-ce..."
-  if command -v dnf >/dev/null 2>&1; then
-    dnf install -y yum-utils
-    yum-config-manager --add-repo "https://download.docker.com/linux/centos/${EL_MAJOR}/docker-ce.repo" >/dev/null 2>&1 || true
-    dnf install -y docker-ce docker-ce-cli containerd.io
-  elif command -v yum >/dev/null 2>&1; then
-    yum install -y yum-utils
-    yum-config-manager --add-repo "https://download.docker.com/linux/centos/${EL_MAJOR}/docker-ce.repo" >/dev/null 2>&1 || true
-    yum install -y docker-ce docker-ce-cli containerd.io
-  else
-    warn "未找到 dnf/yum，改用 get.docker.com 官方脚本安装"
-    curl -fsSL https://get.docker.com | sh
+  local ok=0 PM="" LOG="/tmp/nss-ndr-docker-install.log"
+  local REPO_BASE="" REPOMD="" FL=""
+
+  if command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
+    PM="dnf"
+    command -v dnf >/dev/null 2>&1 || PM="yum"
+
+    # 直接写入 docker-ce 源（显式 EL_MAJOR，避免 $releasever 解析异常）
+    cat > /etc/yum.repos.d/docker-ce.repo <<EOF
+[docker-ce-stable]
+name=Docker CE Stable - \$basearch
+baseurl=https://download.docker.com/linux/centos/${EL_MAJOR}/\$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=https://download.docker.com/linux/centos/gpg
+EOF
+
+    # 预检仓库元数据：filelists 可用才走软件源安装，否则直接转 RPM 下载
+    REPO_BASE="https://download.docker.com/linux/centos/${EL_MAJOR}/x86_64/stable"
+    REPOMD="$(curl -fsSL -m 15 "${REPO_BASE}/repodata/repomd.xml" 2>/dev/null)" || REPOMD=""
+    FL="$(printf '%s' "${REPOMD}" | grep -o 'repodata/[a-f0-9]\{32,\}-filelists\.xml\.gz' | head -1)"
+    if [[ -n "${FL}" ]] && curl -fsSI -m 15 "${REPO_BASE}/${FL}" >/dev/null 2>&1; then
+      : > "${LOG}"
+      # 依次尝试：普通安装 → --allowerasing → --nobest
+      if timeout 90 "$PM" install -y docker-ce docker-ce-cli containerd.io >>"${LOG}" 2>&1; then
+        ok=1
+      elif timeout 90 "$PM" install -y --allowerasing docker-ce docker-ce-cli containerd.io >>"${LOG}" 2>&1; then
+        ok=1
+      elif timeout 90 "$PM" install -y --nobest docker-ce docker-ce-cli containerd.io >>"${LOG}" 2>&1; then
+        ok=1
+      fi
+    else
+      warn "docker-ce 软件源元数据不可用（${REPO_BASE}），跳过软件源安装，直接下载 RPM 包"
+    fi
   fi
-  systemctl enable --now docker
+
+  # 方式二：直接下载官方/阿里云 RPM 安装（绕开仓库元数据损坏/网络不稳）
+  if [[ ${ok} -ne 1 ]] && [[ -n "${PM}" ]]; then
+    warn "改为直接下载 docker RPM 包安装..."
+    local BASE="" LIST="" DOCKER_CE="" DOCKER_CLI="" CONTAINERD="" RPM_DIR=""
+    RPM_DIR="$(mktemp -d /tmp/nss-ndr-docker-rpms.XXXXXX)"
+    for try_base in \
+        "https://download.docker.com/linux/centos/${EL_MAJOR}/x86_64/stable/Packages" \
+        "https://mirrors.aliyun.com/docker-ce/linux/centos/${EL_MAJOR}/x86_64/stable/Packages"; do
+      BASE="${try_base}"
+      LIST="$(curl -fsSL -m 20 "${BASE}/" 2>>"${LOG}")" || LIST=""
+      DOCKER_CE="$(printf '%s' "${LIST}" | grep -o 'href="docker-ce-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1)"
+      DOCKER_CLI="$(printf '%s' "${LIST}" | grep -o 'href="docker-ce-cli-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1)"
+      CONTAINERD="$(printf '%s' "${LIST}" | grep -o 'href="containerd.io-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1)"
+      [[ -n "${DOCKER_CE}" && -n "${DOCKER_CLI}" && -n "${CONTAINERD}" ]] && break
+    done
+
+    if [[ -n "${DOCKER_CE}" && -n "${DOCKER_CLI}" && -n "${CONTAINERD}" ]]; then
+      say "下载 RPM：${DOCKER_CE} / ${DOCKER_CLI} / ${CONTAINERD}"
+      if curl -fsSL -m 60 -o "${RPM_DIR}/docker-ce.rpm" "${BASE}/${DOCKER_CE}" >>"${LOG}" 2>&1 \
+         && curl -fsSL -m 60 -o "${RPM_DIR}/docker-ce-cli.rpm" "${BASE}/${DOCKER_CLI}" >>"${LOG}" 2>&1 \
+         && curl -fsSL -m 60 -o "${RPM_DIR}/containerd.io.rpm" "${BASE}/${CONTAINERD}" >>"${LOG}" 2>&1 \
+         && [[ -s "${RPM_DIR}/docker-ce.rpm" && -s "${RPM_DIR}/docker-ce-cli.rpm" && -s "${RPM_DIR}/containerd.io.rpm" ]]; then
+        if timeout 300 "$PM" install -y --disablerepo=docker-ce-stable \
+              "${RPM_DIR}/docker-ce.rpm" "${RPM_DIR}/docker-ce-cli.rpm" "${RPM_DIR}/containerd.io.rpm" >>"${LOG}" 2>&1; then
+          ok=1
+          # 仓库元数据损坏会拖慢后续 dnf 操作，安装成功后禁用该源
+          sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/docker-ce.repo 2>/dev/null || true
+        fi
+      fi
+    else
+      warn "未能从官方/阿里云仓库获取 docker RPM 列表"
+    fi
+  fi
+
+  # 方式三：get.docker.com 官方脚本兜底
+  if [[ ${ok} -ne 1 ]]; then
+    warn "RPM 安装未成功，最后尝试 get.docker.com 官方脚本..."
+    if curl -fsSL https://get.docker.com | sh >>"${LOG}" 2>&1; then
+      ok=1
+    fi
+  fi
+
+  if [[ ${ok} -ne 1 ]]; then
+    err "docker 安装失败（详细日志：${LOG}），请检查网络/软件源后手动安装 docker 并重新执行本安装包"
+    tail -n 25 "${LOG}" >&2 2>/dev/null || true
+    return 1
+  fi
+
+  systemctl enable --now docker >/dev/null 2>&1 || true
+  say "docker 安装完成：$(docker --version 2>/dev/null || echo OK)"
 }
 
 command -v docker >/dev/null 2>&1 || install_docker
@@ -87,9 +160,24 @@ say "docker 就绪：$(docker --version)"
 install_compose() {
   say "未检测到 docker compose，安装 v2 插件..."
   mkdir -p /usr/local/lib/docker/cli-plugins
-  curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
-    -o /usr/local/lib/docker/cli-plugins/docker-compose
-  chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+  if curl -fsSL -m 60 "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
+      -o /usr/local/lib/docker/cli-plugins/docker-compose; then
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+  else
+    warn "GitHub 下载 compose 失败，尝试 docker-ce 仓库安装 docker-compose-plugin RPM..."
+    rm -f /usr/local/lib/docker/cli-plugins/docker-compose
+    local PM="dnf" BASE="" LIST="" COMPOSE_PLUGIN=""
+    command -v dnf >/dev/null 2>&1 || PM="yum"
+    BASE="https://mirrors.aliyun.com/docker-ce/linux/centos/${EL_MAJOR}/x86_64/stable/Packages"
+    LIST="$(curl -fsSL -m 20 "${BASE}/" 2>/dev/null)" || LIST=""
+    COMPOSE_PLUGIN="$(printf '%s' "${LIST}" | grep -o 'href="docker-compose-plugin-[0-9][^"]*\.rpm"' | sed 's/href="//;s/"//' | sort -V | tail -1)"
+    if [[ -n "${COMPOSE_PLUGIN}" ]] && timeout 180 "$PM" install -y --disablerepo=docker-ce-stable \
+        "${BASE}/${COMPOSE_PLUGIN}" >/dev/null 2>&1; then
+      say "docker-compose-plugin 安装完成"
+    else
+      warn "compose 插件安装未完成，可稍后手动安装 docker compose"
+    fi
+  fi
 }
 
 if ! docker compose version >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
