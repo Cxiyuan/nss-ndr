@@ -41,9 +41,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "部署发布/离线包"
-          docker run --rm -v "$GITHUB_WORKSPACE/部署发布/离线包:/offline" rockylinux:8 bash -c '
+          docker run --rm -v "$GITHUB_WORKSPACE/部署发布/离线包:/offline" openanolis/anolisos:8 bash -c '
             set -euo pipefail
-            dnf install -y dnf-plugins-core epel-release >/dev/null 2>&1 || true
+            dnf install -y dnf-plugins-core >/dev/null 2>&1 || true
+            dnf config-manager --set-enabled PowerTools >/dev/null 2>&1 || true
             dnf config-manager --set-enabled powertools >/dev/null 2>&1 || true
             curl -fsSL https://download.docker.com/linux/centos/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo
             curl -fsSL https://github.com/saltstack/salt-install-guide/releases/latest/download/salt.repo -o /etc/yum.repos.d/salt.repo

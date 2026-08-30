@@ -68,20 +68,42 @@ install_offline() {
   if [[ -d "${PAYLOAD_DIR}/packages" ]] && compgen -G "${PAYLOAD_DIR}/packages/*.rpm" >/dev/null; then
     local PM="dnf"
     command -v dnf >/dev/null 2>&1 || PM="yum"
-    local N
-    N="$(ls "${PAYLOAD_DIR}"/packages/*.rpm | wc -l | tr -d ' ')"
-    say "检测到离线安装包（${N} 个 RPM），尝试离线安装 docker / docker compose / salt ..."
-    if timeout 900 "$PM" install -y --nogpgcheck --disablerepo='*' "${PAYLOAD_DIR}"/packages/*.rpm >/tmp/nss-ndr-offline.log 2>&1; then
+    local TOTAL N
+    TOTAL="$(ls "${PAYLOAD_DIR}"/packages/*.rpm | wc -l | tr -d ' ')"
+
+    # 过滤：跳过目标系统已安装的同名包，避免离线包中的基础包版本与系统冲突
+    # （离线包在构建机上生成，可能包含 rpm-libs/iptables-libs 等基础包的不同版本）
+    local INSTALLED FILTERED
+    INSTALLED="$(rpm -qa --queryformat '%{NAME}\n' 2>/dev/null || true)"
+    FILTERED="$(mktemp /tmp/nss-ndr-offline.filtered.XXXXXX)"
+    local rpm name
+    for rpm in "${PAYLOAD_DIR}"/packages/*.rpm; do
+      name="$(rpm -qp --queryformat '%{NAME}' "${rpm}" 2>/dev/null || true)"
+      if [[ -n "${name}" ]] && ! grep -qxF "${name}" <<<"${INSTALLED}"; then
+        echo "${rpm}" >> "${FILTERED}"
+      fi
+    done
+    mapfile -t RPMS < "${FILTERED}"
+    N="${#RPMS[@]}"
+
+    say "检测到离线安装包（${TOTAL} 个 RPM，过滤后 ${N} 个需要安装）..."
+    if [[ ${N} -eq 0 ]]; then
+      say "所需组件均已安装，跳过离线安装"
+      return 0
+    fi
+
+    if timeout 900 "$PM" install -y --nogpgcheck --disablerepo='*' "${RPMS[@]}" >/tmp/nss-ndr-offline.log 2>&1; then
       say "离线安装完成：$(docker --version 2>/dev/null | head -1 || echo docker?) / $(salt-call --version 2>/dev/null | head -1 || echo salt?)"
     else
       warn "全离线安装失败，尝试用系统源补充依赖（日志 /tmp/nss-ndr-offline.log）..."
-      if timeout 900 "$PM" install -y --nogpgcheck "${PAYLOAD_DIR}"/packages/*.rpm >>/tmp/nss-ndr-offline.log 2>&1; then
+      if timeout 900 "$PM" install -y --nogpgcheck "${RPMS[@]}" >>/tmp/nss-ndr-offline.log 2>&1; then
         say "离线包 + 系统源补充安装完成"
       else
         warn "离线包安装未完成，将尝试在线安装（日志 /tmp/nss-ndr-offline.log）"
         tail -n 15 /tmp/nss-ndr-offline.log >&2 2>/dev/null || true
       fi
     fi
+    rm -f "${FILTERED}" 2>/dev/null || true
   fi
 }
 install_offline
