@@ -16,6 +16,7 @@
 set -euo pipefail
 
 INSTALL_DIR="${1:-/opt/nss-agent}"
+PAYLOAD_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 say()  { printf '\033[1;32m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[!]\033[0m %s\n' "$*"; }
@@ -62,6 +63,29 @@ EL_MAJOR=8
 [[ "$(uname -m)" == "x86_64" ]] || { err "仅支持 x86_64 架构"; exit 1; }
 
 # ---------- 2. docker / compose / salt 检测与安装 ----------
+# 优先使用 run 载荷 packages/ 中的离线安装包（docker / compose / salt 及依赖）
+install_offline() {
+  if [[ -d "${PAYLOAD_DIR}/packages" ]] && compgen -G "${PAYLOAD_DIR}/packages/*.rpm" >/dev/null; then
+    local PM="dnf"
+    command -v dnf >/dev/null 2>&1 || PM="yum"
+    local N
+    N="$(ls "${PAYLOAD_DIR}"/packages/*.rpm | wc -l | tr -d ' ')"
+    say "检测到离线安装包（${N} 个 RPM），尝试离线安装 docker / docker compose / salt ..."
+    if timeout 900 "$PM" install -y --nogpgcheck --disablerepo='*' "${PAYLOAD_DIR}"/packages/*.rpm >/tmp/nss-ndr-offline.log 2>&1; then
+      say "离线安装完成：$(docker --version 2>/dev/null | head -1 || echo docker?) / $(salt-call --version 2>/dev/null | head -1 || echo salt?)"
+    else
+      warn "全离线安装失败，尝试用系统源补充依赖（日志 /tmp/nss-ndr-offline.log）..."
+      if timeout 900 "$PM" install -y --nogpgcheck "${PAYLOAD_DIR}"/packages/*.rpm >>/tmp/nss-ndr-offline.log 2>&1; then
+        say "离线包 + 系统源补充安装完成"
+      else
+        warn "离线包安装未完成，将尝试在线安装（日志 /tmp/nss-ndr-offline.log）"
+        tail -n 15 /tmp/nss-ndr-offline.log >&2 2>/dev/null || true
+      fi
+    fi
+  fi
+}
+install_offline
+
 install_docker() {
   say "未检测到 docker，开始安装 docker-ce..."
   local ok=0 PM="" LOG="/tmp/nss-ndr-docker-install.log"
@@ -214,7 +238,6 @@ say "salt 就绪：$(salt-call --version 2>/dev/null | head -1 || echo N/A)"
 say "安装目录：${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"/{images,logs,config}
 
-PAYLOAD_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [[ -d "${PAYLOAD_DIR}/images" ]] && compgen -G "${PAYLOAD_DIR}/images/*.tar" >/dev/null; then
   say "拷贝镜像包到 ${INSTALL_DIR}/images/ ..."
   cp -f "${PAYLOAD_DIR}"/images/*.tar "${INSTALL_DIR}/images/"

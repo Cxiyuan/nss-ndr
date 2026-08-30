@@ -12,6 +12,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 INSTALLER_DIR="$ROOT_DIR/scripts/installer"
 IMAGES_DIR="$ROOT_DIR/部署发布/容器镜像"
+OFFLINE_DIR="$ROOT_DIR/部署发布/离线包"
 OUT_DIR="${1:-$ROOT_DIR/部署发布}"
 VERSION="${2:-$(date +%Y%m%d)}"
 
@@ -42,6 +43,13 @@ fi
 mkdir -p "$WORK/payload/salt"
 cp -r "$ROOT_DIR/src/agent/salt" "$WORK/payload/salt/agent"
 cp -r "$ROOT_DIR/src/databus/salt" "$WORK/payload/salt/databus"
+
+# 离线安装包（docker / docker compose / salt 及依赖 RPM，CI 生成于 部署发布/离线包/）
+if [[ -d "$OFFLINE_DIR" ]] && compgen -G "$OFFLINE_DIR/*.rpm" >/dev/null; then
+  mkdir -p "$WORK/payload/packages"
+  cp "$OFFLINE_DIR"/*.rpm "$WORK/payload/packages/"
+  echo "==> 已集成离线安装包（$(ls "$WORK"/payload/packages/*.rpm | wc -l | tr -d ' ') 个 RPM）"
+fi
 
 # ---------- 生成头部脚本 ----------
 cat > "$WORK/header.sh" <<'EOF'
@@ -96,4 +104,7 @@ for t in "${TARS[@]}"; do
   echo "      - $(basename "$t")"
 done
 echo "    包含 Salt 状态：src/agent/salt -> salt/agent/，src/databus/salt -> salt/databus/"
+if [[ -d "$WORK/payload/packages" ]]; then
+  echo "    包含离线安装包：packages/（$(ls "$WORK"/payload/packages/*.rpm | wc -l | tr -d ' ') 个 RPM：docker/compose/salt 及依赖）"
+fi
 echo "    安装包大小：$(du -h "$OUT_FILE" | cut -f1)"
