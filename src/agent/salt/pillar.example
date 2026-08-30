@@ -14,7 +14,7 @@ agent:
       tar: nss-ndr_agent_0.1.1.tar
 
   fixed_ip: 192.168.250.80
-  network: nss-ndr-databus-net
+  network: nss-net
   container_name: nss-ndr-agent
 
   config_dir: /etc/nss-ndr/agent

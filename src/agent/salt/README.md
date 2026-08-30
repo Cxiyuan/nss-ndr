@@ -2,12 +2,12 @@
 
 > 适用范围：智能体 1 容器（`nss-ndr-agent`）+ 配置文件 + 镜像离线 tar。
 > 目标服务器：`172.16.199.235`（masterless salt-minion，与数据总线同机，**不得影响**数据总线与其他业务）。
-> 前置条件：数据总线已由 `src/databus/salt/` 部署并正常生产（ES / Redis / `nss-ndr-databus-net` / `/etc/nss-ndr/.env`）。
+> 前置条件：数据总线已由 `src/databus/salt/` 部署并正常生产（ES / Redis / `nss-net` / `/etc/nss-ndr/.env`）。
 
 ## 部署拓扑
 
 ```text
-nss-ndr-agent（192.168.250.80，加入 nss-ndr-databus-net）
+nss-ndr-agent（192.168.250.80，加入 nss-net）
   ├─ 消费 Redis Stream analysis:events（消费组 analysis-group）
   ├─ 写 Redis agent:result:* / sess:* / evt:* / lock:* / alert:* / agent:entity:*
   ├─ 写 ES nss-ndr-agent-verdict / nss-ndr-agent-assets / nss-ndr-agent-events
@@ -62,6 +62,6 @@ salt-call --local state.apply agent.deploy
 ## 风险与注意事项
 
 - 只管理 `nss-ndr-agent` 容器与 `/etc/nss-ndr/agent` 配置，不触碰数据总线 7 容器与其他业务。
-- 复用数据总线 `nss-ndr-databus-net`，固定 IP `.80`（已确认未被占用）。
+- 复用数据总线 `nss-net`，固定 IP `.80`（已确认未被占用）。
 - 镜像只 load 不拉取：tar 在 `/root/nss-agent/`，换版本改 `pillar.example` 的 images 清单。
 - 动态密钥走 `/etc/nss-ndr/.env`（`map.jinja` 的 `env_get` 宏），pillar 不放密钥。

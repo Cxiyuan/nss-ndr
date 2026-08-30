@@ -43,6 +43,7 @@ fi
 mkdir -p "$WORK/payload/salt"
 cp -r "$ROOT_DIR/src/agent/salt" "$WORK/payload/salt/agent"
 cp -r "$ROOT_DIR/src/databus/salt" "$WORK/payload/salt/databus"
+cp -f "$ROOT_DIR/src/databus/.env" "$WORK/payload/salt/databus/env.template" 2>/dev/null || true
 
 # 离线安装包（docker / docker compose / salt 及依赖 RPM，CI 生成于 部署发布/离线包/）
 if [[ -d "$OFFLINE_DIR" ]] && compgen -G "$OFFLINE_DIR/*.rpm" >/dev/null; then

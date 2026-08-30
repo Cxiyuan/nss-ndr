@@ -29,5 +29,8 @@ sudo NSS_NIC=ens192 ./nss-ndr-installer-20260830.run  # 非交互指定监控网
 5. `docker load` 导入全部镜像
 6. 安装 Salt 状态：databus 拍平到 `/srv/salt/databus/`、agent 到 `/srv/salt/agent/`，
    pillar 放到 `/srv/pillar/`（自动生成 `top.sls`），之后可直接 masterless 部署
+7. 自动初始化（默认开启，`NSS_AUTO_INIT=0` 关闭）：自动生成 `/etc/nss-ndr/.env`
+   与 pillar（随机密码 + 所选监控网卡 + 镜像目录），并依次执行
+   `databus.deploy` / `agent.deploy` 全部阶段；凭据保存到 `config/deploy.conf`（权限 600）
 
 说明：镜像包在构建时已做 gzip 压缩（文件名仍为 `.tar`），`docker load` 会自动识别解压，无需手动处理。

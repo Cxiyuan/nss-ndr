@@ -395,6 +395,152 @@ COMPOSE_VERSION=$(docker compose version 2>/dev/null || docker-compose --version
 SALT_VERSION=$(salt-call --version 2>/dev/null | head -1 || echo N/A)
 EOF
 
+# ---------- 8. 自动初始化（NSS_AUTO_INIT=0 可关闭；默认自动完成 .env/pillar/部署） ----------
+gen_pass() { tr -dc 'A-Za-z0-9' < /dev/urandom | head -c "${1:-24}"; }
+
+wait_http() {
+  local url="$1" user="$2" pass="$3" timeout="${4:-300}" i=0
+  while (( i < timeout )); do
+    if curl -fsS -u "${user}:${pass}" "${url}" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 5
+    i=$((i + 5))
+  done
+  return 1
+}
+
+run_salt_phase() {
+  local phase="$1" LOG="$2"
+  say "salt state.apply ${phase} ..."
+  if timeout 900 salt-call --local state.apply "${phase}" >>"${LOG}" 2>&1; then
+    say "  ✓ ${phase} 完成"
+  else
+    warn "  ✗ ${phase} 失败（日志尾部见下）"
+    tail -n 15 "${LOG}" >&2 2>/dev/null || true
+  fi
+}
+
+auto_init() {
+  [[ "${NSS_AUTO_INIT:-1}" == "0" ]] && return 0
+  local LOG="/tmp/nss-ndr-init.log" PM_INIT="dnf"
+  command -v dnf >/dev/null 2>&1 || PM_INIT="yum"
+  : > "${LOG}"
+
+  say "开始自动初始化（NSS_AUTO_INIT=${NSS_AUTO_INIT:-1}，置 0 可跳过）..."
+
+  # 1) Salt docker 状态依赖：python docker 库
+  if ! python3 -c 'import docker' >/dev/null 2>&1; then
+    say "安装 Salt 依赖：python docker 库 ..."
+    if ! command -v pip3 >/dev/null 2>&1; then
+      timeout 300 "${PM_INIT}" install -y python3-pip >>"${LOG}" 2>&1 || true
+    fi
+    pip3 install docker >>"${LOG}" 2>&1 || true
+  fi
+  if ! python3 -c 'import docker' >/dev/null 2>&1; then
+    warn "python docker 库不可用，Salt 容器状态可能失败（可手动 pip3 install docker）"
+  fi
+
+  # 2) 生成 /etc/nss-ndr/.env（随机密码 + 已选监控网卡）
+  ES_PASS="$(gen_pass 24)"
+  REDIS_PASS="$(gen_pass 24)"
+  KIBANA_KEY="$(gen_pass 32)"
+  say "生成 /etc/nss-ndr/.env（随机密码）..."
+  mkdir -p /etc/nss-ndr
+  if [[ -f "${PAYLOAD_DIR}/salt/databus/env.template" ]]; then
+    sed -e "s/^ELASTIC_PASSWORD=.*/ELASTIC_PASSWORD=${ES_PASS}/" \
+        -e "s/^KIBANA_SYSTEM_PASSWORD=.*/KIBANA_SYSTEM_PASSWORD=${ES_PASS}/" \
+        -e "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=${REDIS_PASS}/" \
+        -e "s/^ZEEK_INTERFACE=.*/ZEEK_INTERFACE=${MONITOR_NIC}/" \
+        "${PAYLOAD_DIR}/salt/databus/env.template" > /etc/nss-ndr/.env
+    chmod 600 /etc/nss-ndr/.env
+  else
+    warn "未找到 env 模板（salt/databus/env.template），跳过 .env 自动生成"
+    return 1
+  fi
+
+  # 3) 生成 pillar（监控网卡 / 随机密码 / 镜像目录指向安装目录）
+  say "生成 /srv/pillar/databus.sls + agent.sls ..."
+  sed -e "s/zeek_interface: ens192/zeek_interface: ${MONITOR_NIC}/" \
+      -e "s#images_dir: /root/nss-ndr/images#images_dir: ${INSTALL_DIR}/images#" \
+      -e "s/elastic_password: ChangeMe_Elastic_2026!/elastic_password: ${ES_PASS}/" \
+      -e "s/redis_password: ChangeMe_Redis_2026!/redis_password: ${REDIS_PASS}/" \
+      -e "s/kibana_encryption_key: .*/kibana_encryption_key: ${KIBANA_KEY}/" \
+      "${PAYLOAD_DIR}/salt/databus/pillar.example" > /srv/pillar/databus.sls
+  sed -e "s#images_dir: /root/nss-agent#images_dir: ${INSTALL_DIR}/images#" \
+      "${PAYLOAD_DIR}/salt/agent/pillar.example" > /srv/pillar/agent.sls
+
+  # 4) masterless minion 配置
+  mkdir -p /etc/salt/minion.d
+  cat > /etc/salt/minion.d/local.conf <<'EOF'
+file_client: local
+file_roots:
+  base:
+    - /srv/salt
+pillar_roots:
+  base:
+    - /srv/pillar
+EOF
+
+  if ! command -v salt-call >/dev/null 2>&1; then
+    warn "salt-call 不可用，跳过自动部署（请先安装 salt-minion 后手动执行 salt-call --local state.apply databus.deploy）"
+    return 1
+  fi
+
+  # 5) 数据总线部署（按 deploy.sls 阶段顺序，masterless 兼容）
+  say "数据总线部署开始（预计 5~15 分钟）..."
+  run_salt_phase databus.images "${LOG}"
+  run_salt_phase "databus.network,databus.volumes,databus.configs" "${LOG}"
+  run_salt_phase "databus.containers.elasticsearch,databus.containers.redis" "${LOG}"
+
+  say "等待 Elasticsearch 就绪 ..."
+  if wait_http "http://localhost:9200/_cluster/health" "elastic" "${ES_PASS}" 300; then
+    say "  ✓ ES 就绪"
+  else
+    warn "ES 未就绪，初始化中止（查看 ${LOG}）"
+    return 1
+  fi
+
+  run_salt_phase databus.bootstrap "${LOG}"
+  run_salt_phase databus.containers.kibana "${LOG}"
+
+  say "等待 Kibana 就绪 ..."
+  if wait_http "http://localhost:5601/api/status" "elastic" "${ES_PASS}" 300; then
+    say "  ✓ Kibana 就绪"
+  else
+    warn "Kibana 未就绪，初始化中止（查看 ${LOG}）"
+    return 1
+  fi
+
+  run_salt_phase databus.fleet-setup "${LOG}"
+  run_salt_phase "databus.containers.fleet-server,databus.containers.elastic-agent,databus.containers.logstash,databus.containers.zeek,databus.containers.agent" "${LOG}"
+  run_salt_phase databus.verify "${LOG}"
+
+  # 6) 智能体部署
+  say "智能体部署开始 ..."
+  run_salt_phase agent.images "${LOG}"
+  run_salt_phase agent.configs "${LOG}"
+  run_salt_phase agent.bootstrap "${LOG}"
+  run_salt_phase agent.setup "${LOG}"
+  run_salt_phase agent.containers.agent "${LOG}"
+  run_salt_phase agent.verify "${LOG}"
+
+  cat >> "${INSTALL_DIR}/config/deploy.conf" <<EOF
+ELASTIC_USERNAME=elastic
+ELASTIC_PASSWORD=${ES_PASS}
+REDIS_PASSWORD=${REDIS_PASS}
+KIBANA_ENCRYPTION_KEY=${KIBANA_KEY}
+EOF
+  chmod 600 "${INSTALL_DIR}/config/deploy.conf"
+
+  say "自动初始化完成 ✓"
+  echo "  Kibana 访问   : http://<服务器IP>:5601"
+  echo "  账号 / 密码   : elastic / ${ES_PASS}"
+  echo "  Redis 密码    : ${REDIS_PASS}"
+  echo "  凭据已保存    : ${INSTALL_DIR}/config/deploy.conf（权限 600）"
+  echo "  查看容器      : docker ps -a --filter name=nss-ndr-"
+}
+
 echo
 echo "============================================================"
 say "部署环境安装完成 ✓"
@@ -405,8 +551,8 @@ echo "  已导入镜像 :"
 echo
 echo "  部署配置   : ${INSTALL_DIR}/config/deploy.conf"
 echo "  Salt 状态  : /srv/salt/databus/ + /srv/salt/agent/"
-echo "  Pillar     : /srv/pillar/databus.sls + /srv/pillar/agent.sls（按需改密码/模型配置）"
-echo "  下一步     : 配置 /etc/nss-ndr/.env 与 pillar 后执行："
-echo "              salt-call --local state.apply databus.deploy"
-echo "              salt-call --local state.apply agent.deploy"
+echo "  Pillar     : /srv/pillar/databus.sls + /srv/pillar/agent.sls"
+echo "  自动初始化 : NSS_AUTO_INIT=${NSS_AUTO_INIT:-1}（置 0 关闭自动部署）"
 echo "============================================================"
+
+auto_init || warn "自动初始化未完成，请根据上方日志排查后重试（重复执行幂等）"
