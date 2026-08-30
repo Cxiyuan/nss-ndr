@@ -2,7 +2,7 @@
 # ============================================================
 # 生成 nss-ndr 部署安装包（.run 自解压格式）
 #
-# 结构：头部 Shell 脚本 + 尾部 tar 载荷（install.sh + images/*.tar）
+# 结构：头部 Shell 脚本 + 尾部 tar 载荷（install.sh + images/*.tar + salt/）
 # 用法：./build-run.sh [输出目录] [版本号]
 #   输出目录默认 部署发布/（run 包放在部署发布根目录）
 #   版本号默认当天日期
@@ -29,6 +29,9 @@ mkdir -p "$WORK/payload/images"
 cp "$INSTALLER_DIR/install.sh" "$WORK/payload/install.sh"
 chmod +x "$WORK/payload/install.sh"
 cp "${TARS[@]}" "$WORK/payload/images/"
+mkdir -p "$WORK/payload/salt"
+cp -r "$ROOT_DIR/src/agent/salt" "$WORK/payload/salt/agent"
+cp -r "$ROOT_DIR/src/databus/salt" "$WORK/payload/salt/databus"
 
 # ---------- 生成头部脚本 ----------
 cat > "$WORK/header.sh" <<'EOF'
@@ -82,4 +85,5 @@ echo "    包含镜像（$((${#TARS[@]})) 个）："
 for t in "${TARS[@]}"; do
   echo "      - $(basename "$t")"
 done
+echo "    包含 Salt 状态：src/agent/salt -> salt/agent/，src/databus/salt -> salt/databus/"
 echo "    安装包大小：$(du -h "$OUT_FILE" | cut -f1)"

@@ -27,3 +27,5 @@ sudo NSS_NIC=ens192 ./nss-ndr-installer-20260830.run  # 非交互指定监控网
 3. 列出物理网卡，交互选择"流量镜像/监控网卡"（写入 `config/deploy.conf` 的 `ZEEK_INTERFACE`）
 4. 关闭并禁止 firewalld 开机自启
 5. `docker load` 导入全部镜像
+6. 安装 Salt 状态：databus 拍平到 `/srv/salt/databus/`、agent 到 `/srv/salt/agent/`，
+   pillar 放到 `/srv/pillar/`（自动生成 `top.sls`），之后可直接 masterless 部署

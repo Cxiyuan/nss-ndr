@@ -1,0 +1,102 @@
+name: Build Run Installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 安装包版本号（默认：日期-提交短号）
+        required: false
+        type: string
+  workflow_run:
+    workflows: ["Build Docker Images"]
+    types: [completed]
+
+permissions:
+  contents: read
+  packages: read
+  actions: write
+
+concurrency:
+  group: build-run-installer
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-run:
+    name: Build .run installer
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image namespace
+        id: ns
+        run: echo "namespace=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nss-ndr" >> "$GITHUB_OUTPUT"
+
+      - name: Determine version
+        id: version
+        run: |
+          VERSION=""
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          if [[ -z "${VERSION}" ]]; then
+            VERSION="$(date +%Y%m%d)-${GITHUB_SHA::7}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "安装包版本：${VERSION}"
+
+      - name: Pull / retag / save images
+        shell: bash
+        env:
+          NS: ${{ steps.ns.outputs.namespace }}
+        run: |
+          set -euo pipefail
+          mkdir -p "部署发布/容器镜像"
+
+          save_image() {
+            local src="$1" local_ref="$2" tar="$3"
+            echo "==> pull ${src}"
+            docker pull "${src}"
+            docker tag "${src}" "${local_ref}"
+            echo "==> save ${tar}"
+            docker save -o "部署发布/容器镜像/${tar}" "${local_ref}"
+            docker rmi "${src}" "${local_ref}" >/dev/null 2>&1 || true
+          }
+
+          # 与 Salt pillar 中 images 定义保持一致的镜像名 / 文件名
+          save_image "${NS}/agent:latest"                "nss-ndr/agent:0.1.1"                            "nss-ndr_agent_0.1.1.tar"
+          save_image "${NS}/elastic-agent-zeek:9.5.2"    "nss-ndr/elastic-agent-zeek:9.5.2"               "nss-ndr_elastic-agent-zeek_9.5.2.tar"
+          save_image "${NS}/logstash-databus:9.5.2"      "nss-ndr/logstash-databus:9.5.2"                 "nss-ndr_logstash-databus_9.5.2.tar"
+          save_image "${NS}/redis-databus:8.10.1"        "nss-ndr/redis-databus:8.10.1"                   "nss-ndr_redis-databus_8.10.1.tar"
+          save_image "${NS}/elasticsearch:9.5.2"         "docker.elastic.co/elasticsearch/elasticsearch:9.5.2" "docker.elastic.co_elasticsearch_elasticsearch_9.5.2.tar"
+          save_image "${NS}/kibana:9.5.2"                "docker.elastic.co/kibana/kibana:9.5.2"          "docker.elastic.co_kibana_kibana_9.5.2.tar"
+          save_image "${NS}/zeek:8.2.2"                  "nss-ndr/zeek:8.2.2"                             "nss-ndr_zeek_8.2.2.tar"
+          save_image "${NS}/llm-server:latest"           "nss-ndr/llm-server:latest"                      "nss-ndr_llm-server_latest.tar"
+
+          ls -lh 部署发布/容器镜像
+
+      - name: Build .run package
+        run: |
+          df -h /
+          scripts/installer/build-run.sh "$GITHUB_WORKSPACE/部署发布" "${{ steps.version.outputs.version }}"
+          df -h /
+
+      - name: Upload run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nss-ndr-installer-${{ steps.version.outputs.version }}
+          path: 部署发布/*.run
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true

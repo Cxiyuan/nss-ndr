@@ -9,6 +9,7 @@
 #   3) 检测服务器网卡，列出清单供选择"流量镜像/监控网卡"
 #   4) 关闭并禁止 firewalld 自启
 #   5) 导入全部容器镜像（docker load）
+#   6) 安装 Salt 状态到 /srv/salt（agent + databus）与 pillar
 #
 # 用法：sudo ./nss-ndr-installer-<版本>.run [安装目录]
 # ============================================================
@@ -108,7 +109,7 @@ install_salt() {
 command -v salt-call >/dev/null 2>&1 || install_salt
 say "salt 就绪：$(salt-call --version 2>/dev/null | head -1 || echo N/A)"
 
-# ---------- 3. 安装目录 ----------
+# ---------- 3. 安装目录与载荷 ----------
 say "安装目录：${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"/{images,logs,config}
 
@@ -120,7 +121,44 @@ else
   warn "载荷中未发现镜像包（安装包可能被裁剪），跳过拷贝"
 fi
 
-# ---------- 4. 网卡检测与选择（流量镜像 / 监控网卡） ----------
+# ---------- 4. 安装 Salt 状态（masterless fileserver 布局） ----------
+if [[ -d "${PAYLOAD_DIR}/salt/agent" ]] && [[ -d "${PAYLOAD_DIR}/salt/databus" ]]; then
+  say "安装 Salt 状态到 /srv/salt ..."
+
+  # databus：states 顶层拍平到 /srv/salt/databus/，子目录与 files/scripts 跟随
+  mkdir -p /srv/salt/databus /srv/salt/agent /srv/pillar
+  (
+    cd "${PAYLOAD_DIR}/salt/databus/states"
+    cp -f ./*.sls ./*.jinja /srv/salt/databus/ 2>/dev/null || true
+    cp -rf containers teardown /srv/salt/databus/ 2>/dev/null || true
+  )
+  cp -rf "${PAYLOAD_DIR}"/salt/databus/files "${PAYLOAD_DIR}"/salt/databus/scripts /srv/salt/databus/
+  cp -f "${PAYLOAD_DIR}/salt/databus/pillar.example" /srv/pillar/databus.sls
+
+  # agent：states/* + files/ + scripts/ 平铺到 /srv/salt/agent/
+  (
+    cd "${PAYLOAD_DIR}/salt/agent"
+    cp -rf states/* files scripts /srv/salt/agent/ 2>/dev/null || true
+  )
+  cp -f "${PAYLOAD_DIR}/salt/agent/pillar.example" /srv/pillar/agent.sls
+
+  # pillar top.sls（不存在时生成；已存在则提示手动补充）
+  if [[ ! -f /srv/pillar/top.sls ]]; then
+    cat > /srv/pillar/top.sls <<'EOF'
+base:
+  '*':
+    - databus
+    - agent
+EOF
+    say "已生成 /srv/pillar/top.sls（base: * -> databus, agent）"
+  else
+    warn "/srv/pillar/top.sls 已存在，请确认包含 databus / agent 两个 pillar"
+  fi
+else
+  warn "载荷中未发现 Salt 状态，跳过 /srv/salt 安装"
+fi
+
+# ---------- 5. 网卡检测与选择（流量镜像 / 监控网卡） ----------
 echo
 say "检测服务器网卡（已过滤 lo/docker/veth/br 等虚拟接口）"
 mapfile -t NICS < <(ls /sys/class/net | grep -Ev '^(lo|lo0|docker0|veth.*|br-.*|virbr.*|tun.*|tap.*|bond.*)')
@@ -199,6 +237,9 @@ echo "  已导入镜像 :"
 docker images --format '    {{.Repository}}:{{.Tag}} ({{.Size}})' | grep -E 'nss-ndr|elasticsearch|kibana' | sort -u
 echo
 echo "  部署配置   : ${INSTALL_DIR}/config/deploy.conf"
-echo "  下一步     : 使用 src/agent/salt 与 src/databus/salt 的 Salt 状态"
-echo "              进行 masterless 部署（salt-call --local state.apply ...）"
+echo "  Salt 状态  : /srv/salt/databus/ + /srv/salt/agent/"
+echo "  Pillar     : /srv/pillar/databus.sls + /srv/pillar/agent.sls（按需改密码/模型配置）"
+echo "  下一步     : 配置 /etc/nss-ndr/.env 与 pillar 后执行："
+echo "              salt-call --local state.apply databus.deploy"
+echo "              salt-call --local state.apply agent.deploy"
 echo "============================================================"
