@@ -29,6 +29,16 @@ mkdir -p "$WORK/payload/images"
 cp "$INSTALLER_DIR/install.sh" "$WORK/payload/install.sh"
 chmod +x "$WORK/payload/install.sh"
 cp "${TARS[@]}" "$WORK/payload/images/"
+
+# 镜像 tar 做 gzip 压缩（文件名保持 .tar，docker load 会自动识别解压），
+# 可显著减小安装包体积；NSS_RUN_COMPRESS=0 可关闭
+if [[ "${NSS_RUN_COMPRESS:-1}" != "0" ]]; then
+  echo "==> 压缩镜像包（gzip）..."
+  for t in "$WORK"/payload/images/*.tar; do
+    gzip -c "$t" > "$t.tmp" && mv "$t.tmp" "$t"
+  done
+fi
+
 mkdir -p "$WORK/payload/salt"
 cp -r "$ROOT_DIR/src/agent/salt" "$WORK/payload/salt/agent"
 cp -r "$ROOT_DIR/src/databus/salt" "$WORK/payload/salt/databus"
