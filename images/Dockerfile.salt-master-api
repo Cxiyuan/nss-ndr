@@ -22,7 +22,7 @@ FROM alpine:3.21
 
 ARG SALT_VERSION=3007.14
 
-# 运行时依赖（python3 + pip + system libs for salt + busybox-suid for adduser）
+# 运行时依赖（python3 + pip + salt 全套系统库）
 RUN apk add --no-cache \
         python3 \
         py3-pip \
@@ -37,6 +37,10 @@ RUN apk add --no-cache \
         py3-looseversion \
         py3-psutil \
         py3-distro \
+        py3-tornado \
+        py3-zmq \
+        py3-dateutil \
+        py3-m2crypto \
         zeromq \
         libffi \
         openssl \
