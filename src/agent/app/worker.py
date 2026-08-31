@@ -196,11 +196,15 @@ class AgentWorker:
             try:
                 processed = await self.run_once()
                 if not processed:
-                    await asyncio.wait_for(self._stop.wait(), timeout=self.config.idle_poll_seconds)
+                    # 空闲轮询超时是预期行为，不计入错误（避免每 ~idle_poll_seconds 秒刷一条 worker loop error）
+                    try:
+                        await asyncio.wait_for(self._stop.wait(), timeout=self.config.idle_poll_seconds)
+                    except asyncio.TimeoutError:
+                        pass
             except asyncio.CancelledError:
                 break
             except Exception as e:  # noqa: BLE001
-                log.exception("worker loop error", error=str(e))
+                log.exception("worker loop error", error=str(e) or type(e).__name__)
                 await asyncio.sleep(self.config.idle_poll_seconds)
         await self.redis_client.aclose()
 
