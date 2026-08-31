@@ -77,8 +77,9 @@ RUN python3 /tmp/salt-adduser.py \
 # 以 salt 用户身份安装 salt；pip --user 把入口点装到 /home/salt/.local/bin/
 # 自 3007 起 salt-api 已合并入 salt 主包，只需 pip install salt
 USER salt
-RUN pip3 install --user --no-cache-dir \
-        "salt==${SALT_VERSION}" 2>&1 | tail -5
+# pip install salt（PEP 668 强 EXTERNALLY-MANAGED，必须 --break-system-packages 兜底）
+RUN pip3 install --user --no-cache-dir --break-system-packages \
+        "salt==${SALT_VERSION}"
 USER root
 
 # 内置配置模板（容器启动时由 entrypoint 渲染到 /etc/salt-master-api/）

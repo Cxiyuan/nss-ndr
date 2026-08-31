@@ -64,8 +64,9 @@ RUN python3 /tmp/salt-adduser.py \
                           /srv/salt /srv/pillar /home/salt
 
 USER salt
-RUN pip3 install --user --no-cache-dir \
-        "salt==${SALT_VERSION}" 2>&1 | tail -5
+# pip install salt（PEP 668 强 EXTERNALLY-MANAGED，必须 --break-system-packages 兜底）
+RUN pip3 install --user --no-cache-dir --break-system-packages \
+        "salt==${SALT_VERSION}"
 USER root
 
 # 内置 minion 配置模板
