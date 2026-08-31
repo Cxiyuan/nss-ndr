@@ -69,6 +69,17 @@ RUN pip3 install --user --no-cache-dir --break-system-packages \
         "salt==${SALT_VERSION}"
 USER root
 
+# 说明：salt 3007.14 的 setup.py 用 distutils.core.setup，Python 3.12 已删除 distutils，
+# wheel 安装时不会注册 console_scripts 入口点。
+# 解决：直接 COPY 仓库内置的 salt-scripts/ 目录（来自 salt 3007.14 源码）到 /usr/local/bin/。
+COPY salt-minion/salt-scripts/ /usr/local/bin/
+RUN chmod +x /usr/local/bin/salt* /usr/local/bin/spm 2>/dev/null || true
+
+# smoke 校验
+RUN for f in salt-minion salt-call; do \
+        which "$f" >/dev/null 2>&1 && echo "[smoke] $f OK: $($f --version 2>&1 | head -1)" || echo "[smoke] $f MISSING"; \
+    done
+
 # 内置 minion 配置模板
 COPY salt-minion/minion.tmpl ${SALT_CONFIG_DIR}/minion.tmpl
 COPY salt-minion/entrypoint.sh /usr/local/bin/salt-minion-entrypoint

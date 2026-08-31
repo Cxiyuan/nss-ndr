@@ -82,6 +82,20 @@ RUN pip3 install --user --no-cache-dir --break-system-packages \
         "salt==${SALT_VERSION}"
 USER root
 
+# 说明：salt 3007.14 的 setup.py 用 distutils.core.setup，Python 3.12 已删除 distutils，
+# wheel 安装时不会注册 console_scripts 入口点。因此 pip install 后 /usr/local/bin
+# 没有 salt-master / salt-api / salt-minion 等可执行文件。
+# 解决：直接把仓库内置的 salt-scripts/ 目录（来自 salt 3007.14 源码 tar.gz 的
+# scripts/）拷贝到 /usr/local/bin/，每个脚本都是 ~25 行的 Python wrapper
+# （调用 salt.scripts:salt_master / salt_api 等 entry function）。
+COPY salt-master-api/salt-scripts/ /usr/local/bin/
+RUN chmod +x /usr/local/bin/salt* /usr/local/bin/spm 2>/dev/null || true
+
+# smoke 校验
+RUN for f in salt-master salt-api salt-key; do \
+        which "$f" >/dev/null 2>&1 && echo "[smoke] $f OK: $($f --version 2>&1 | head -1)" || echo "[smoke] $f MISSING"; \
+    done
+
 # 内置配置模板（容器启动时由 entrypoint 渲染到 /etc/salt-master-api/）
 COPY salt-master-api/master.tmpl ${SALT_CONFIG_DIR}/master.tmpl
 COPY salt-master-api/api.tmpl ${SALT_CONFIG_DIR}/api.tmpl
