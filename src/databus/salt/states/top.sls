@@ -12,7 +12,8 @@ include:
   - databus.volumes
   - databus.configs
   - databus.bootstrap
-  - databus.autostart
+  - databus.containers.salt-master-api
+  - databus.containers.salt-minion
   - databus.containers.elasticsearch
   - databus.containers.redis
   - databus.containers.kibana

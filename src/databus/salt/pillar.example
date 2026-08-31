@@ -1,9 +1,14 @@
 # ============================================================================
 # 数据总线 Salt pillar 示例
 # ----------------------------------------------------------------------------
-# masterless minion: 复制到 /srv/pillar/databus.sls
-# 调整密码、网卡、端口后使用。动态 token（KIBANA_SERVICE_TOKEN 等）由
-# bootstrap 阶段生成写入 /etc/nss-ndr/.env，不在 pillar 中维护。
+# 自 2026-08-31 起，本项目采用 master + minion 容器化部署：
+#   - nss-ndr-salt-master-api 容器（nss-ndr/salt-master-api 镜像）
+#   - nss-ndr-salt-minion    容器（nss-ndr/salt-minion    镜像，host network）
+# 盐命令模板（template state 文件）由以下命令铺到 /srv/salt/：
+#   salt-cp <master> databus/files/*  /srv/salt/databus/
+# 或初次部署时把仓库 src/databus/salt/{files,scripts,states/} 直接 scp。
+# 动态 token（KIBANA_SERVICE_TOKEN 等）由 bootstrap 阶段生成写入
+# /etc/nss-ndr/.env，不在 pillar 中维护。
 # ============================================================================
 
 databus:
@@ -38,6 +43,10 @@ databus:
       tar: nss-ndr_redis-databus_8.10.1.tar
     - name: nss-ndr/llm-server:0.1.0
       tar: nss-ndr_llm-server_0.1.0.tar
+    - name: nss-ndr/salt-master-api:0.1.0
+      tar: nss-ndr_salt-master-api_0.1.0.tar
+    - name: nss-ndr/salt-minion:0.1.0
+      tar: nss-ndr_salt-minion_0.1.0.tar
 
   fixed_ips:
     elasticsearch: 192.168.250.40
@@ -47,12 +56,14 @@ databus:
     logstash: 192.168.250.30
     redis: 192.168.250.60
     llm_server: 192.168.250.90
+    salt_master_api: 192.168.250.5
 
   host_ports:
     es: 9200
     kibana: 5601
     fleet_server: 8220
     redis: 6379
+    salt_api: 8000
   # 宿主机端口绑定地址（仅本机监听，外部不可达）
   host_bind: 127.0.0.1
 
@@ -90,6 +101,22 @@ databus:
     threads: ""
     api_key: ""
     extra_args: ""
+
+  # Salt Master + Salt API（容器化，自 2026-08-31 起替代宿主机 salt-minion RPM）
+  salt_master_api:
+    image: nss-ndr/salt-master-api:0.1.0
+    ip: 192.168.250.5
+    api_port: 8000
+    api_user: saltapi
+    # 默认空 = 容器 entrypoint 自动生成 24 位随机密码并写入 /etc/nss-ndr/.env
+    # 也可在此显式固定（适合需要给外部 salt-api 客户端的稳定凭证）
+    api_password: ""
+
+  # Salt Minion（容器化，host network + bind /var/run/docker.sock）
+  salt_minion:
+    image: nss-ndr/salt-minion:0.1.0
+    # minion id 与 master minion_key 绑定；改名后需重新 enroll
+    id: nss-ai-agent-minion
 
   configs:
     - src: salt://databus/files/kibana.yml

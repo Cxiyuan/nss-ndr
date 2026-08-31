@@ -23,6 +23,21 @@
     'extra_args':  salt['pillar.get']('databus:llm_server:extra_args',  ''),
 } -%}
 
+{# Salt Master + Salt API 命名空间 #}
+{%- set salt_master_api = {
+    'image':        salt['pillar.get']('databus:salt_master_api:image',       'nss-ndr/salt-master-api:0.1.0'),
+    'ip':           salt['pillar.get']('databus:salt_master_api:ip',          '192.168.250.5'),
+    'api_port':     salt['pillar.get']('databus:salt_master_api:api_port',    8000),
+    'api_user':     salt['pillar.get']('databus:salt_master_api:api_user',    'saltapi'),
+    'api_password': salt['pillar.get']('databus:salt_master_api:api_password',''),
+} -%}
+
+{# Salt Minion 命名空间（与本机 master-api 配对）#}
+{%- set salt_minion = {
+    'image': salt['pillar.get']('databus:salt_minion:image', 'nss-ndr/salt-minion:0.1.0'),
+    'id':    salt['pillar.get']('databus:salt_minion:id',    'nss-ai-agent-minion'),
+} -%}
+
 {# 注意：jinja2 宏体不能访问模板顶层 {% set %} 变量，
    因此 env_get 在宏体内自行读取文件（宏内可直接调用 salt 模块）。 #}
 {%- macro env_get(key) -%}

@@ -2,15 +2,17 @@
 # 数据总线全流程编排（从零部署 / 完整初始化）
 # ----------------------------------------------------------------------------
 # 用法：
-#   masterless: salt-call --local state.apply databus.deploy
-#   salt-ssh  : salt-ssh databus state.apply databus.deploy
-#   master    : salt-run state.orchestrate databus.deploy
+#   master 容器: salt <master> state.orchestrate databus.deploy
+#   master API : curl -k https://<master>:8000/run (POST body: client=local_async,
+#                tgt=databus, fun=state.orchestrate, arg=databus.deploy)
+#   masterless : （兼容）salt-call --local state.apply databus.deploy
 #
 # 阶段顺序：
-#   images -> network/volumes/configs -> es/redis -> 等 ES
+#   images -> network/volumes/configs -> salt-master-api -> salt-minion
+#   -> es/redis -> 等 ES
 #   -> 生成 KIBANA_SERVICE_TOKEN -> kibana -> 等 Kibana
 #   -> 创建 Fleet output/policy/enrollment keys/Zeek Integration
-#   -> fleet-server / elastic-agent / logstash / zeek -> 验证
+#   -> fleet-server / elastic-agent / logstash / zeek / llm-server / agent -> 验证
 # ============================================================================
 
 {% from "databus/map.jinja" import databus with context %}
@@ -41,6 +43,22 @@ deploy-configs:
     - require:
       - salt: deploy-images
 
+deploy-salt-master-api:
+  salt.state:
+    - tgt: {{ databus.get('target', 'databus') }}
+    - sls: databus.containers.salt-master-api
+    - require:
+      - salt: deploy-network
+      - salt: deploy-volumes
+      - salt: deploy-configs
+
+deploy-salt-minion:
+  salt.state:
+    - tgt: {{ databus.get('target', 'databus') }}
+    - sls: databus.containers.salt-minion
+    - require:
+      - salt: deploy-salt-master-api
+
 deploy-es-redis:
   salt.state:
     - tgt: {{ databus.get('target', 'databus') }}
@@ -51,6 +69,7 @@ deploy-es-redis:
       - salt: deploy-network
       - salt: deploy-volumes
       - salt: deploy-configs
+      - salt: deploy-salt-minion
 
 wait-es-healthy:
   http.wait_for_successful_query:

@@ -1,0 +1,77 @@
+# ============================================================================
+# Salt Master 配置模板
+# 启动时由 entrypoint.sh 渲染到 /etc/salt-master-api/master
+# ============================================================================
+
+##### 主标识 #####
+# interface 与 master 可达地址：默认监听 0.0.0.0，minion 用 4506 端口连接
+interface: 0.0.0.0
+
+# publish_port：salt-master 主动对外发布的 ZeroMQ 端口（minion 连接）
+publish_port: 4505
+# ret_port：master 返回结果的端口
+ret_port: 4506
+
+# ipv6 关闭
+ipv6: False
+
+##### 文件系统根 #####
+file_roots:
+  base:
+    - /srv/salt
+
+pillar_roots:
+  base:
+    - /srv/pillar
+
+##### Minion 接入控制 #####
+# 接受任意 minion 的 key（简化部署；生产建议配 external_auth）
+auto_accept: True
+# auto_accept 默认接受所有；如需手动审批改为 False 后用 salt-key -A
+
+##### 文件服务缓存 #####
+cachedir: /var/cache/salt/master
+sock_dir: /var/run/salt/master
+pki_dir: /etc/salt-master-api/pki/master
+log_file: /var/log/salt/master
+
+##### 线程 / Worker #####
+# 与 1 个 minion（小规模场景）保持默认即可
+worker_threads: 5
+ioflo_apps: False
+ioflo_time: False
+
+##### 超时 #####
+timeout: 30
+gather_job_timeout: 10
+
+##### State 输出 #####
+state_output: full
+state_verbose: False
+
+##### Reactor（（预留扩展））#####
+# reactor 暂时不启用：masterless 已有 systemd 等价功能
+reactor: []
+
+##### External Auth（API 用）#####
+external_auth:
+  pam:
+    saltapi:
+      - .*
+      - '@wheel'
+      - '@runner'
+      - '@jobs'
+
+##### NetAPI 设置（salt-api）#####
+rest_cherrypy:
+  port: 8000
+  host: 0.0.0.0
+  disable_ssl: True
+  webhook_disable_auth: False
+  thread_pool: 10
+
+##### Logging #####
+log_level: info
+log_level_logfile: info
+log_fmt_logfile: "%(asctime)s,%(msecs)03d [%(levelname)-8s][%(process)d] %(message)s"
+log_datefmt_logfile: "%Y-%m-%d %H:%M:%S"

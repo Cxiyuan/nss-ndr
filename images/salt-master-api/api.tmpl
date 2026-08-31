@@ -1,0 +1,20 @@
+# ============================================================================
+# Salt API 配置模板
+# 启动时由 entrypoint.sh 渲染到 /etc/salt-master-api/api
+# ============================================================================
+
+##### 基础 #####
+# api server 用 PAM external_auth（用户名/密码）
+rest_cherrypy:
+  port: 8000
+  host: 0.0.0.0
+  disable_ssl: True
+  webhook_disable_auth: False
+  thread_pool: 10
+
+# 可选：开启 webdriver（minion 在线/事件流）；先关掉
+netapi_enable_clients: []
+
+# Log
+log_file: /var/log/salt/api
+log_level: info

@@ -38,3 +38,17 @@ nss-ndr-elastic-agent-state:
 # 预留该卷用于以下场景：(1) 升级到更大模型；(2) 替换为非默认模型；(3) 多模型并存。
 nss-ndr-llm-models:
   docker_volume.present
+
+# Salt Master + API 容器持久化卷（pki / log / cache / run）
+nss-ndr-salt-config:
+  docker_volume.present
+nss-ndr-salt-run:
+  docker_volume.present
+nss-ndr-salt-cache:
+  docker_volume.present
+nss-ndr-salt-log:
+  docker_volume.present
+
+# Salt Minion 容器配置卷（与 master 共享 run/cache/log）
+nss-ndr-salt-config-minion:
+  docker_volume.present

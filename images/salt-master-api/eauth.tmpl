@@ -1,0 +1,9 @@
+# ============================================================================
+# Salt external_auth（账号密码）
+# 启动时由 entrypoint.sh 渲染到 /etc/salt-master-api/eauth.conf
+# （注：salt 不直接支持单独的 eauth 文件，但 master 配置支持 inclusion）
+# 这里我们改用 master 主配置内嵌 external_auth + entrypoint.sh 注入 OS 用户
+# ============================================================================
+
+##### 留空占位 #####
+# 实际 external_auth 在 master.tmpl 写好（避免额外文件）。此文件留作未来扩展。

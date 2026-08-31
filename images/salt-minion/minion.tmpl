@@ -1,0 +1,58 @@
+# ============================================================================
+# Salt Minion 配置模板
+# 启动时由 entrypoint.sh 渲染到 /etc/salt-minion/minion
+# ============================================================================
+
+##### Master 地址 #####
+# master 由 entrypoint.sh 通过环境变量 SALT_MASTER_HOST 注入
+master: ${SALT_MASTER_HOST}
+
+##### Minion 标识 #####
+# id 由 entrypoint.sh 通过环境变量 SALT_MINION_ID 注入
+# 默认使用容器主机名
+id: ${SALT_MINION_ID}
+
+##### 文件系统根（与 master 共享，bind mount /srv/salt /srv/pillar）#####
+file_roots:
+  base:
+    - /srv/salt
+
+pillar_roots:
+  base:
+    - /srv/pillar
+
+##### Master 连接 #####
+master_port: 4506
+master_alive_interval: 30
+retry_dns: 5
+
+##### TCP #####
+ipv6: False
+
+##### Minion 工作目录 #####
+cachedir: /var/cache/salt/minion
+sock_dir: /var/run/salt/minion
+pki_dir: /etc/salt-minion/pki/minion
+log_file: /var/log/salt/minion
+pidfile: /var/run/salt/minion.pid
+
+##### Acceptance #####
+# 配合 master 的 auto_accept: True，minion 启动后 key 自动被接受
+acceptance_wait_time: 5
+acceptance_wait_time_max: 10
+
+##### 杂项 #####
+random_reauth_delay: 3
+##### Grains（默认）#####
+grains:
+  roles:
+    - nss-ndr-databus
+    - nss-ndr-agent
+
+##### State 输出 #####
+state_output: full
+state_verbose: False
+
+##### Log #####
+log_level: info
+log_level_logfile: info

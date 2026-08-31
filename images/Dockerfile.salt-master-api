@@ -1,0 +1,127 @@
+# ============================================================================
+# 深瞳安全分析智能体 · Salt Master + Salt API 容器镜像
+# ----------------------------------------------------------------------------
+# 镜像名：nss-ndr/salt-master-api:<版本>
+# 用途：
+#   - salt-master：ZeroMQ 4505/4506 端口，接收本机 salt-minion 连接
+#   - salt-api：CherryPy + HTTP 8000 端口，对外暴露 REST/eauth API
+#   - 与同机 salt-minion 容器配合，完成 master+minion 集中管理
+# 设计要点：
+#   - 基于 Alpine 3.21（musl）+ Python 3.12
+#   - 固定 salt 3007.14（与宿主机 RPM 保持一致，避免 key 兼容性问题）
+#   - 内置 salt config（master / api 配置模板）于 /etc/salt-master-api/
+#   - 启动入口 /usr/local/bin/salt-master-api-entrypoint：
+#       1. 渲染 /etc/salt-master-api/master / api 配置
+#       2. 启动 salt-master -d（前台）
+#       3. 启动 salt-api（前台）
+#       4. 健康检查：salt-master 4505 + salt-api 8000 都通
+#   - 容器固定 IP nss-net 上 192.168.250.5（与本机 masterless 时代
+#     /etc/salt/minion.d/local.conf 不冲突）
+# ============================================================================
+
+FROM alpine:3.21 AS builder
+
+ARG SALT_VERSION=3007.14
+
+# 构建依赖：python/pip/cryptography 系统依赖
+RUN apk add --no-cache \
+        python3 \
+        python3-dev \
+        py3-pip \
+        py3-cryptography \
+        py3-pycryptodome \
+        py3-setuptools \
+        build-base \
+        linux-headers \
+        openssl-dev \
+        libffi-dev \
+        zeromq-dev \
+        openblas \
+        openssh-client \
+        curl
+
+# 安装 salt 3007.14（与宿主机 RPM 同版本，避免 minion key 兼容性问题）
+# salt 官方提供 Alpine 包：https://pkgs.alpinelinux.org/packages?name=salt*
+# 但 3007 系列需用 pip 装（更可控）
+RUN pip3 install --no-cache-dir --break-system-packages \
+        "salt==${SALT_VERSION}" \
+        "salt-api==${SALT_VERSION}"
+
+# 运行时镜像
+FROM alpine:3.21
+
+ARG SALT_VERSION=3007.14
+
+# 运行时依赖（不含编译工具）
+RUN apk add --no-cache \
+        python3 \
+        py3-cryptography \
+        py3-pycryptodome \
+        py3-pip \
+        py3-yaml \
+        py3-jinja2 \
+        py3-msgpack \
+        py3-requests \
+        py3-pygit2 \
+        py3-packaging \
+        py3-looseversion \
+        zeromq \
+        libffi \
+        openssl \
+        openblas \
+        openssh-client \
+        tini \
+        curl \
+        dumb-init \
+        tzdata
+
+# 镜像元数据
+LABEL org.opencontainers.image.title="nss-ndr/salt-master-api" \
+      org.opencontainers.image.description="深瞳安全分析智能体 Salt Master + Salt API 容器（Alpine + Python 3.12 + Salt 3007.14）" \
+      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.source="https://github.com/Cxiyuan/nss-ndr"
+
+# 复制 pip 安装的 salt 包（builder stage 已经装好，--from=builder 复用层）
+COPY --from=builder /usr/lib/python3*/site-packages/ /usr/lib/python3*/site-packages/ 2>/dev/null || true
+COPY --from=builder /usr/bin/salt-master /usr/bin/salt-master
+COPY --from=builder /usr/bin/salt-api /usr/bin/salt-api
+COPY --from=builder /usr/bin/salt /usr/bin/salt
+COPY --from=builder /usr/bin/salt-run /usr/bin/salt-run
+COPY --from=builder /usr/bin/salt-cp /usr/bin/salt-cp
+COPY --from=builder /usr/bin/salt-key /usr/bin/salt-key
+
+# Salt 运行时配置 / 状态目录
+ENV SALT_MASTER_API_HOME=/home/salt \
+    SALT_CONFIG_DIR=/etc/salt-master-api \
+    SALT_RUN_DIR=/var/run/salt \
+    SALT_CACHE_DIR=/var/cache/salt \
+    SALT_LOG_DIR=/var/log/salt
+
+# 非特权用户 + 必要目录
+RUN adduser -D -u 10002 -H -s /sbin/nologin salt \
+    && mkdir -p \
+        ${SALT_CONFIG_DIR} \
+        ${SALT_RUN_DIR} \
+        ${SALT_CACHE_DIR} \
+        ${SALT_LOG_DIR} \
+        /srv/salt /srv/pillar \
+    && chown -R salt:salt \
+        ${SALT_RUN_DIR} \
+        ${SALT_CACHE_DIR} \
+        ${SALT_LOG_DIR} \
+        /srv/salt /srv/pillar
+
+# 内置配置模板（容器启动时由 entrypoint 渲染到 /etc/salt-master-api/）
+COPY salt-master-api/master.tmpl ${SALT_CONFIG_DIR}/master.tmpl
+COPY salt-master-api/api.tmpl ${SALT_CONFIG_DIR}/api.tmpl
+COPY salt-master-api/eauth.tmpl ${SALT_CONFIG_DIR}/eauth.tmpl
+COPY salt-master-api/entrypoint.sh /usr/local/bin/salt-master-api-entrypoint
+RUN chmod +x /usr/local/bin/salt-master-api-entrypoint
+
+EXPOSE 4505 4506 8000
+
+# tini 兜底 PID 1 信号转发
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/salt-master-api-entrypoint"]
+
+# 默认 CMD 留空，由 entrypoint.sh 串行启动 salt-master + salt-api
+CMD []

@@ -59,25 +59,24 @@ Salt 自带一整套 docker 状态模块，覆盖数据总线需要的全部能�
 | `user: root` | `- user: root` | |
 | `container_name` | SLS 状态 ID（`name`） | |
 
-### 1.4 方案选型：salt-ssh vs salt-minion（masterless）vs master+minion
+### 1.4 方案选型：master + minion 容器化
 
-数据总线部署在**一台**服务器上，且该服务器还有其他业务。三种接入方式对比：
+自 2026-08-31 起，本项目采用 **salt-master + salt-minion 双容器 + 宿主 docker daemon** 模式：
 
-| 维度 | salt-ssh（无代理） | salt-minion masterless | salt-master + salt-minion |
-|---|---|---|---|
-| 目标机常驻进程 | 无（每次执行临时推 thin） | 有 `salt-minion` 守护进程 | 有 `salt-minion` |
-| 需要外部控制机 | 需要（装有 salt-ssh 的机器/本机） | 不需要，目标机自己跑 | 需要 salt-master |
-| 声明式状态 | ✅ | ✅ | ✅ |
-| 周期自愈（无人值守） | 需在控制机配 cron 调 `salt-ssh` | ✅ minion `schedule` 内置 | ✅ master schedule |
-| 实时事件/reactor/beacon | ❌（无常驻进程） | 部分（masterless 下 reactor 受限） | ✅ 完整 |
-| 对现有业务影响 | 最小（不装任何常驻软件） | 多一个 salt-minion 服务 | 多一个 salt-minion 服务 |
-| 适合场景 | 轻量、按需执行 | **单机自愈首选** | 多机规模化 |
+| 组件 | 容器 | 镜像 | 网络模式 | 必需权限 |
+|---|---|---|---|---|
+| Salt Master + Salt API | `nss-ndr-salt-master-api` | `nss-ndr/salt-master-api:0.1.0` | nss-net 内网 + publish 8000 | 普通用户 |
+| Salt Minion | `nss-ndr-salt-minion` | `nss-ndr/salt-minion:0.1.0` | **host network**（ZeroMQ 4505/4506） | **privileged + bind /var/run/docker.sock** |
 
-**推荐：**
+**Salt Master 同时提供 REST API（CherryPy / 8000）**：除内部 ZeroMQ 调度外，对外暴露
+`saltapi` 账号，可通过 HTTP API 触发 `state.apply` / `state.orchestrate`，
+便于 CI/CD 或外部运维平台集成。
 
-- **首选：salt-minion masterless**（`file_client: local`，状态文件放在目标机 `/srv/salt`，pillar 放 `/srv/pillar`）。目标机自己定时 `state.apply` 实现漂移自愈，不依赖外部控制机；不部署 salt-master，不引入额外单点。
-- **备选：salt-ssh**（roster 方式），零常驻进程，从操作机/本机执行 `salt-ssh databus state.apply`；适合"只做初始化、不强求周期自愈"或不想在目标机装任何软件的场景。周期执行用控制机 cron。
-- 将来要管多台 NDR 主机时，再把同一套 states 迁到 salt-master + minions 架构（SLS 不用改，只改 master 配置）。
+> **为什么 minion 必须 host network + privileged + docker.sock？**
+> Salt ZeroMQ 通信必须在网络栈层可见（4505 publish / 4506 return）；
+> Salt `docker_container` / `docker_image` / `docker_volume` 等 state 模块依赖
+> `docker-py` 调用本机 dockerd，所以 minion 容器必须 `privileged + bind /var/run/docker.sock`。
+> 这是 Salt 与 docker daemon 集成的固有限制，与 nss-ndr 无关。
 
 ---
 
@@ -88,43 +87,42 @@ Salt 自带一整套 docker 状态模块，覆盖数据总线需要的全部能�
 ```text
 src/databus/salt/
 ├── README.md                        # 本设计文档
-├── pillar.example                   # pillar 示例（IP、密码、网卡、镜像清单）
-├── roster.example                   # salt-ssh roster 示例（备选方案用）
-├── minion.example                   # masterless minion 配置示例
+├── pillar.example                   # pillar 示例（IP、密码、网卡、镜像清单 + salt_master_api/salt_minion 段）
 ├── files/                           # 需要下发的配置文件（从 src/databus 对应目录拷贝）
 │   ├── kibana.yml
 │   ├── elastic-agent-fleet-server.yml
 │   ├── jvm.options
-│   ├── logstash.yml / pipelines.yml / log4j2.properties
-│   ├── redis.conf
-│   └── zeek-local.zeek / detect.zeek
-├── scripts/                         # 初始化脚本（Salt 调用）
+│   └── agent/                       # agent 容器配置（agent.yaml / providers.yaml / rules/）
+├── scripts/                         # 初始化脚本（Salt 调用，落到容器内置路径或宿主机 /opt/nss-ndr/scripts/）
 │   ├── gen-kibana-token.sh          # Kibana 启动前：生成 KIBANA_SERVICE_TOKEN（仅需 ES）
-│   └── fleet-setup.sh               # Fleet output/policy/enrollment keys/Zeek Integration
-├── scripts/fleet-server-start.sh    # fleet-server 容器 entrypoint（enroll + 启动）
-├── scripts/elastic-agent-start.sh   # elastic-agent 容器 entrypoint（enroll + 启动）
-├── scripts/zeek-start.sh            # zeek 容器 entrypoint（抓包启动）
-├── scripts/saltctl.sh               # 一键操作：deploy/apply/status/verify/teardown/pillar
+│   ├── fleet-setup.sh               # Fleet output/policy/enrollment keys/Zeek Integration 43 streams
+│   ├── fleet-server-start.sh        # fleet-server 容器 entrypoint
+│   ├── elastic-agent-start.sh       # elastic-agent 容器 entrypoint
+│   ├── zeek-start.sh                # zeek 容器 entrypoint
+│   └── saltctl.sh                   # 一键操作：deploy/apply/status/verify/teardown/pillar（host 内 docker exec salt-master-api）
 └── states/
-    ├── top.sls                      # 入口：databus 主状态
+    ├── top.sls                      # 入口：databus 主状态（含 salt-master-api / salt-minion）
     ├── images.sls                   # 从 GHCR (ghcr.io/cxiyuan/nss-ndr-public/*) pull 镜像
     ├── network.sls                  # nss-net (192.168.250.0/24)
-    ├── volumes.sls                  # 8 个命名卷
+    ├── volumes.sls                  # 13 个命名卷（含 salt 配置/日志/cache 卷）
     ├── configs.sls                  # 外挂配置文件下发
     ├── bootstrap.sls                # Kibana 前：生成 KIBANA_SERVICE_TOKEN（调用 gen-kibana-token.sh）
     ├── fleet-setup.sls              # Fleet output/policy/enrollment keys/Zeek Integration
     ├── containers/
+    │   ├── salt-master-api.sls      # salt-master + salt-api 容器
+    │   ├── salt-minion.sls          # salt-minion 容器（host network + privileged + docker.sock）
     │   ├── zeek.sls
     │   ├── elasticsearch.sls
     │   ├── redis.sls
     │   ├── kibana.sls
     │   ├── fleet-server.sls
     │   ├── elastic-agent.sls
-    │   └── logstash.sls
+    │   ├── logstash.sls
+    │   ├── llm-server.sls
+    │   └── agent.sls
     ├── verify.sls                   # 部署后验证（数据流 / ECS 字段）
     ├── teardown.sls                 # 一键清理本项目（容器/网络/卷），保留其他业务
-    └── teardown/images.sls          # （可选）删除数据总线镜像
-    └── deploy.sls                   # 编排：按依赖顺序一次性部署
+    └── deploy.sls                   # 编排：salt-master → salt-minion → ES → ... → fleet-setup → apps → verify
 ```
 
 > 镜像从 GHCR 拉取：`images.sls` 调用 `docker_image.present` 时通过 `name: ghcr.io/cxiyuan/nss-ndr-public/<image>:<tag>`，由 Docker daemon 直接 `docker pull`（目标机能访问 `ghcr.io` 时即可）。目标机**不重新拉取本地文件、不生成离线 tar**；如需在完全离线环境部署，可用 `docker save` / `docker load` 把 GHCR 镜像中转到目标机后改 pillar `image` 为本地 tag。
@@ -411,26 +409,55 @@ generate-kibana-token:
 编排顺序（`states/deploy.sls`，orchestrate 风格）：
 
 ```yaml
-# states/deploy.sls（orchestrate 风格，masterless 下用 salt-ssh / salt-call 执行）
+# states/deploy.sls（orchestrate 风格；salt-master 容器跑通后，从 master 触发）
 deploy-images:   salt.state -> images.sls
 deploy-network:  salt.state -> network.sls      (require: deploy-images)
 deploy-volumes:  salt.state -> volumes.sls
 deploy-configs:  salt.state -> configs.sls
+deploy-salt-master-api: salt.state -> containers.salt-master-api
+deploy-salt-minion:     salt.state -> containers.salt-minion  (require: salt-master-api)
 deploy-es-redis: salt.state -> containers.elasticsearch, containers.redis
 wait-es:         http.wait_for_successful_query  (http://localhost:9200/_cluster/health, auth=elastic)
 deploy-bootstrap-token: salt.state -> bootstrap.sls   (生成 KIBANA_SERVICE_TOKEN)
 deploy-kibana:   salt.state -> containers.kibana
 wait-kibana:     http.wait_for_successful_query  (http://localhost:5601/api/status)
-deploy-fleet-setup: salt.state -> fleet-setup.sls     (创建 output/policy/enrollment keys/Zeek Integration, 复用 auto-init.sh 的 API 逻辑)
-deploy-apps:     salt.state -> containers.fleet-server, containers.elastic-agent, containers.logstash, containers.zeek
+deploy-fleet-setup: salt.state -> fleet-setup.sls     (创建 output/policy/enrollment keys/Zeek Integration 43 streams)
+deploy-llm-server: salt.state -> containers.llm-server
+deploy-apps:     salt.state -> containers.fleet-server, containers.elastic-agent, containers.logstash, containers.zeek, containers.agent
 verify:          salt.state -> verify.sls
 ```
 
-执行方式说明：
+执行方式（**全部通过容器化 salt-master** 完成）：
 
-- **masterless**：`salt-call --local state.apply databus.deploy` 即可。`salt.state` 在 masterless 下会**忽略 tgt、始终在本地执行**，且每次触发一次全新的状态运行 → 渲染时机正确，能读到前序阶段写入的 token。
-- **salt-ssh**：从装有 salt-master（配 ssh roster）的控制机跑 `salt-run state.orchestrate databus.deploy`；或由驱动脚本分阶段调用 `salt-ssh databus state.apply databus.<阶段>`。
-- **master+minion**：`salt-run state.orchestrate databus.deploy`，`tgt` 生效。
+1. **进入 master 容器**：
+   ```bash
+   docker exec -it nss-ndr-salt-master-api sh
+   ```
+
+2. **接受 minion key**（首次部署，master 已 `auto_accept: True` 自动接受；如需手动审批可用 `salt-key -A`）：
+   ```bash
+   salt-key -L                 # 列出
+   salt-key -A -y              # 接受所有
+   ```
+
+3. **编排部署**：
+   ```bash
+   # 方式 1（推荐）：master 容器内 orchestrate
+   salt-run state.orchestrate databus.deploy
+
+   # 方式 2：HTTP API（CherryPy / 8000）
+   curl -sk https://localhost:8000/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"saltapi","password":"<从 /etc/nss-ndr/.env SALT_API_PASSWORD 读取>","eauth":"pam"}' \
+     -c /tmp/salt_token.txt
+   curl -sk https://localhost:8000/run \
+     -H "Content-Type: application/json" \
+     -H "X-Auth-Token: $(jq -r '.token' /tmp/salt_token.txt)" \
+     -d '{"client":"local_async","tgt":"nss-ai-agent-minion","fun":"state.orchestrate","arg":["databus.deploy"]}'
+
+   # 方式 3（兼容）：minion 容器内 --local
+   docker exec -it nss-ndr-salt-minion salt-call --local state.apply databus
+   ```
 
 > 注意：不能把"生成 token 的 cmd.run"和"读取 token 的容器 SLS"放在**同一次** state 运行里 —— Salt 会先渲染全部 SLS 再执行，token 文件此时还不存在，读到的会是空值。这也是必须用编排（每个阶段独立运行）的原因。
 
@@ -453,32 +480,35 @@ verify:          salt.state -> verify.sls
 
 Docker 的 restart_policy **不会**因为 unhealthy 而重启。两种方案：
 
-1. **周期 state.apply（推荐，masterless minion 内置 schedule）**：
-   ```yaml
-   # /etc/salt/minion.d/schedule.conf
-   schedule:
-     databus-highstate:
-       function: state.apply
-       args: [databus]
-       hours: 1
+1. **周期 state.apply（推荐，master 容器内置 schedule）**：
+   ```bash
+   docker exec nss-ndr-salt-master-api sh -c '
+     echo "schedule:
+       databus-highstate:
+         function: state.apply
+         args: [databus]
+         minutes: 60" >> /etc/salt-master-api/master
+     kill -HUP $(pgrep -f salt-master)
+   '
    ```
    Salt 每次 apply 会对比容器期望配置，配置漂移会被修正；再配合一个小的健康检查 state（探测 unhealthy 则 `cmd.run: docker restart <容器>`）实现真正自愈。
-2. **外部 cron + 脚本**：控制机 cron 每 5 分钟 `salt-ssh ... state.apply databus.healthcheck` 或直接跑健康检查脚本。
 
-3.（进阶）**reactor**：master+minion 架构下用 docker engine 事件 + reactor 自动 restart；masterless 下不适用，本项目不采用。
+2. **reactor**：基于 docker engine 事件 + salt-master reactor 自动 restart（如 `salt-run reactor.add`）。
+   本项目当前不启用，仅预留 master.tmpl 模板位。
 
 ---
 
 ## 7. 风险与注意事项
 
 1. **zeek 使用 host 网络**：`network_mode: host` 与 hostname、固定 IP 冲突，SLS 里 zeek 不能写这两项（与 compose 一致）。
-2. **命名卷引用**：Salt 的 `binds` 直接写 `卷名:/容器路径` 即可，Docker 自动按命名卷解析；但卷必须先用 `docker_volume.present` 创建，并用 `require` 保证顺序。
-3. **镜像从 GHCR pull**：目标机需能访问 `ghcr.io/cxiyuan/nss-ndr-public/*`（无需 docker login，本项目 CI 推送到的是 public 仓库）。`docker_image.present` 不存在时才执行 pull。完全离线场景可用 `docker save/load` 中转。
-4. **不碰其他业务**：Salt 只管理本项目命名空间（`nss-ndr-*` 容器/卷/网络 + `/opt/nss-ndr` + `/etc/nss-ndr`），不设置全局 docker prune；`docker_container.absent` 只针对本项目容器。卸载 Salt 不会影响 zabbix/grafana/postgres。
-5. **masterless 无 reactor**：若以后要实时事件自愈，升级为 master+minion 即可，SLS 复用。
-6. **salt-ssh 的 thin 模式**：每次执行推送 thin 到目标机，稍慢（几十秒级），适合初始化/按需执行；周期自愈请用 masterless schedule 或控制机 cron。
-7. **docker-py 版本**：目标机 `pip3 install docker`（≥7.x），否则部分参数（如 healthcheck）可能不生效。
-8. **token 幂等**：`bootstrap.sls` 用 `creates`/`unless` 保证只生成一次；重装（从零部署）时删掉 `/etc/nss-ndr/.env` 及 token 标记文件即可重新生成。
+2. **salt-minion 使用 host network + privileged + /var/run/docker.sock**：Salt docker state 模块要求 minion 容器能与宿主 dockerd 通信。`docker_container.running` 在 minion 容器内执行时实际调用宿主 dockerd。
+3. **命名卷引用**：Salt 的 `binds` 直接写 `卷名:/容器路径` 即可，Docker 自动按命名卷解析；但卷必须先用 `docker_volume.present` 创建，并用 `require` 保证顺序。
+4. **镜像从 GHCR pull**：目标机需能访问 `ghcr.io/cxiyuan/nss-ndr-public/*`（无需 docker login，本项目 CI 推送到的是 public 仓库）。`docker_image.present` 不存在时才执行 pull。完全离线场景可用 `docker save/load` 中转。
+5. **不碰其他业务**：Salt 只管理本项目命名空间（`nss-ndr-*` 容器/卷/网络 + `/etc/nss-ndr`），不设置全局 docker prune；`docker_container.absent` 只针对本项目容器。卸载 Salt 不会影响 zabbix/grafana/postgres。
+6. **salt-master-api 端口安全**：默认 publish 到 127.0.0.1:8000（与 es/kibana 一致），外部不可达。如需 CI/CD 集成，放到反向代理后由 CI/CD 调用 token。
+7. **minion 与 master 版本一致**：镜像固定 salt 3007.14（与本项目之前宿主机 RPM 版本对齐），避免 key 兼容性问题。
+8. **docker-py 版本**：minion 镜像内置的 `docker-py ≥ 7.x`，否则部分参数（如 healthcheck）可能不生效。
+9. **token 幂等**：`bootstrap.sls` 用 `creates`/`unless` 保证只生成一次；重装（从零部署）时删掉 `/etc/nss-ndr/.env` 及 token 标记文件即可重新生成。
 
 ---
 
@@ -497,21 +527,54 @@ Docker 的 restart_policy **不会**因为 unhealthy 而重启。两种方案：
 
 ## 9. 落地路径（供后续执行，不在本次实施）
 
-1. 选定接入方式：**masterless minion（推荐）** 或 **salt-ssh**。
-2. 目标机准备：安装 salt-minion（masterless）或仅装 docker-py（salt-ssh）；`mkdir /opt/nss-ndr /etc/nss-ndr`。
-3. 镜像：CI 已自动推送 GHCR（`ghcr.io/cxiyuan/nss-ndr-public/*`，public 仓库无需登录）；目标机 docker pull 即可。完全离线场景下用 `docker save/load` 中转。states/pillar/files → `/srv/salt`、`/srv/pillar`（masterless 本机，或 salt-ssh 从控制机下发）。
-4. 首跑：`salt-call --local state.apply databus.deploy`（masterless）或 `salt-ssh databus state.apply databus.deploy`。
+1. 目标机准备：仅需 Docker（不再装宿主 salt-minion RPM）；`mkdir /etc/nss-ndr`。
+2. 镜像：CI 已自动推送 GHCR（`ghcr.io/cxiyuan/nss-ndr-public/*`，public 仓库无需登录）；
+   目标机 `docker pull` 即可。完全离线场景下用 `docker save/load` 中转。
+3. states/pillar/files → `/srv/salt`、`/srv/pillar`（salt-master-api 容器 bind 宿主机）：
+   ```bash
+   docker run --rm -v /srv/salt:/dst -v $PWD/src/databus/salt/states:/src \
+     alpine:3.21 sh -c 'cp -r /src/* /dst/databus/'
+   docker run --rm -v /srv/salt:/dst -v $PWD/src/databus/salt/files:/src \
+     alpine:3.21 sh -c 'cp -r /src/* /dst/databus/'
+   docker run --rm -v /srv/salt:/dst -v $PWD/src/databus/salt/scripts:/src \
+     alpine:3.21 sh -c 'cp -r /src/* /dst/databus/'
+   cp src/databus/salt/pillar.example /srv/pillar/databus.sls
+   ```
+4. 触发部署：
+   ```bash
+   docker exec -it nss-ndr-salt-master-api salt-run state.orchestrate databus.deploy
+   ```
 5. 验证：`verify.sls` 检查 agent online、`.ds-logs-zeek.*` 数据流、ECS 字段归一化。
-6. 开启周期自愈：minion `schedule` 每小时 `state.apply databus`（或控制机 cron）。
+6. 开启周期自愈：master 容器内置 `schedule` 每小时 `state.apply databus`。
 7. 回滚：Salt 一键 `docker_container.absent` 只清本项目容器，保留其他业务。
 
-### 日常操作速查（`scripts/saltctl.sh`）
+### 日常操作速查（在 master 容器内）
 
 ```bash
-./saltctl.sh deploy    # 从零部署 / 完整初始化（编排）
-./saltctl.sh apply     # 日常幂等自愈
-./saltctl.sh status    # 查看本项目容器状态
-./saltctl.sh verify    # 验证数据流 / ECS 字段
-./saltctl.sh teardown  # 清理本项目容器/网络/卷（保留其他业务）
-./saltctl.sh pillar    # 查看 pillar
+docker exec -it nss-ndr-salt-master-api sh
+
+# 部署/编排
+salt-run state.orchestrate databus.deploy
+salt 'nss-ai-agent-minion' state.apply databus
+
+# 单容器
+salt 'nss-ai-agent-minion' docker_container.running name=nss-ndr-agent action=restart
+
+# 高阶
+salt 'nss-ai-agent-minion' docker.ps
+salt 'nss-ai-agent-minion' state.single docker_container.running name=test image=alpine
+```
+
+### saltctl.sh 一键脚本（升级版）
+
+`src/databus/salt/scripts/saltctl.sh` 已更新：在容器内 `docker exec nss-ndr-salt-master-api`
+执行 salt 命令，宿主机调用方式不变：
+
+```bash
+/opt/nss-ndr/scripts/saltctl.sh deploy    # docker exec ... salt-run state.orchestrate databus.deploy
+/opt/nss-ndr/scripts/saltctl.sh apply     # docker exec ... salt nss-ai-agent-minion state.apply databus
+/opt/nss-ndr/scripts/saltctl.sh status    # docker ps --filter name=nss-ndr-
+/opt/nss-ndr/scripts/saltctl.sh verify    # docker exec ... salt nss-ai-agent-minion state.apply databus.verify
+/opt/nss-ndr/scripts/saltctl.sh teardown  # docker exec ... salt nss-ai-agent-minion state.apply databus.teardown
+/opt/nss-ndr/scripts/saltctl.sh pillar    # docker exec ... salt nss-ai-agent-minion pillar.items
 ```
