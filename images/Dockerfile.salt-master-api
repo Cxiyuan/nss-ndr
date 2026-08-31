@@ -63,33 +63,15 @@ ENV SALT_MASTER_API_HOME=/home/salt \
     SALT_CACHE_DIR=/var/cache/salt \
     SALT_LOG_DIR=/var/log/salt
 
-# 非特权用户（Alpine 3.21 BusyBox 标准镜像无 standalone adduser，用 python 直接编辑 /etc/passwd）
-RUN python3 -c "
-import crypt, os, sys
-# 创建 salt 用户（uid 10002，无登录 shell，home=/home/salt）
-if not os.path.exists('/home/salt'):
-    pw = crypt.crypt('!locked', crypt.mksalt())
-    line = f'salt:{pw}:10002:10002:salt:/home/salt:/sbin/nologin'
-    with open('/etc/passwd', 'a') as f:
-        f.write(line + '\n')
-    with open('/etc/group', 'a') as f:
-        f.write('salt:x:10002:\n')
-    os.makedirs('/home/salt', mode=0o755, exist_ok=True)
-" \
-    && mkdir -p \
-        ${SALT_CONFIG_DIR} \
-        ${SALT_RUN_DIR} \
-        ${SALT_CACHE_DIR} \
-        ${SALT_LOG_DIR} \
-        /srv/salt /srv/pillar \
-        /home/salt/.local/bin \
+# 非特权用户（Alpine 3.21 BusyBox 标准镜像无 standalone adduser，
+# 用 python 脚本（通过 COPY 而非 RUN python -c 避免 buildkit 多行字符串解析坑））
+COPY images/salt-adduser.py /tmp/salt-adduser.py
+RUN python3 /tmp/salt-adduser.py \
+    && mkdir -p /etc/salt-master-api /var/run/salt /var/cache/salt /var/log/salt \
+                /srv/salt /srv/pillar /home/salt/.local/bin \
     && chmod -R 0755 /home/salt \
-    && chown -R 10002:10002 \
-        ${SALT_RUN_DIR} \
-        ${SALT_CACHE_DIR} \
-        ${SALT_LOG_DIR} \
-        /srv/salt /srv/pillar \
-        /home/salt
+    && chown -R 10002:10002 /var/run/salt /var/cache/salt /var/log/salt \
+                          /srv/salt /srv/pillar /home/salt
 
 # 以 salt 用户身份安装 salt；pip --user 把入口点装到 /home/salt/.local/bin/
 # 自 3007 起 salt-api 已合并入 salt 主包，只需 pip install salt

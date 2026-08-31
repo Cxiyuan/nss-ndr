@@ -53,31 +53,15 @@ ENV PIP_USER=1 \
 ENV SALT_MINION_HOME=/home/salt \
     SALT_CONFIG_DIR=/etc/salt-minion
 
-RUN python3 -c "
-import crypt, os, sys
-if not os.path.exists('/home/salt'):
-    pw = crypt.crypt('!locked', crypt.mksalt())
-    line = f'salt:{pw}:10002:10002:salt:/home/salt:/sbin/nologin'
-    with open('/etc/passwd', 'a') as f:
-        f.write(line + '\n')
-    with open('/etc/group', 'a') as f:
-        f.write('salt:x:10002:\n')
-    os.makedirs('/home/salt', mode=0o755, exist_ok=True)
-" \
-    && mkdir -p \
-        ${SALT_CONFIG_DIR} \
-        /var/run/salt \
-        /var/cache/salt \
-        /var/log/salt \
-        /srv/salt /srv/pillar \
-        /home/salt/.local/bin \
+# 非特权用户（Alpine 3.21 BusyBox 标准镜像无 standalone adduser；
+# 通过独立 python 脚本添加，避免 buildkit 对 RUN python -c "..." 多行字符串解析坑）
+COPY images/salt-adduser.py /tmp/salt-adduser.py
+RUN python3 /tmp/salt-adduser.py \
+    && mkdir -p /etc/salt-minion /var/run/salt /var/cache/salt /var/log/salt \
+                /srv/salt /srv/pillar /home/salt/.local/bin \
     && chmod -R 0755 /home/salt \
-    && chown -R 10002:10002 \
-        /var/run/salt \
-        /var/cache/salt \
-        /var/log/salt \
-        /srv/salt /srv/pillar \
-        /home/salt
+    && chown -R 10002:10002 /var/run/salt /var/cache/salt /var/log/salt \
+                          /srv/salt /srv/pillar /home/salt
 
 USER salt
 RUN pip3 install --user --no-cache-dir \
