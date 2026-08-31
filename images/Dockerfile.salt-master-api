@@ -22,7 +22,7 @@ FROM alpine:3.21
 
 ARG SALT_VERSION=3007.14
 
-# 运行时依赖（python3 + pip + system libs for salt）
+# 运行时依赖（python3 + pip + system libs for salt + busybox-suid for adduser）
 RUN apk add --no-cache \
         python3 \
         py3-pip \
@@ -41,6 +41,7 @@ RUN apk add --no-cache \
         openssl \
         openblas \
         openssh-client \
+        shadow \
         tini \
         curl \
         dumb-init \
