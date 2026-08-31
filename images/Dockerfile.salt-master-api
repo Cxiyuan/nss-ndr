@@ -74,17 +74,13 @@ RUN python3 /tmp/salt-adduser.py \
     && chown -R 10002:10002 /var/run/salt /var/cache/salt /var/log/salt \
                           /srv/salt /srv/pillar /home/salt
 
-# 以 salt 用户身份安装 salt；pip --user 把入口点装到 /home/salt/.local/bin/
-# 自 3007 起 salt-api 已合并入 salt 主包，只需 pip install salt
-USER salt
-# pip install salt（PEP 668 强 EXTERNALLY-MANAGED，必须 --break-system-packages 兜底）
-RUN pip3 install --user --no-cache-dir --break-system-packages \
+# 以 root 直接安装 salt 到系统 site-packages（USER salt --user 装的包在 USER root 下不可见）
+# PEP 668 强 EXTERNALLY-MANAGED，必须 --break-system-packages 兜底
+RUN pip3 install --no-cache-dir --break-system-packages \
         "salt==${SALT_VERSION}"
-USER root
 
 # 说明：salt 3007.14 的 setup.py 用 distutils.core.setup，Python 3.12 已删除 distutils，
-# wheel 安装时不会注册 console_scripts 入口点。因此 pip install 后 /usr/local/bin
-# 没有 salt-master / salt-api / salt-minion 等可执行文件。
+# wheel 安装时不会注册 console_scripts 入口点（distutils 失败导致 entry_points 丢失）。
 # 解决：直接把仓库内置的 salt-scripts/ 目录（来自 salt 3007.14 源码 tar.gz 的
 # scripts/）拷贝到 /usr/local/bin/，每个脚本都是 ~25 行的 Python wrapper
 # （调用 salt.scripts:salt_master / salt_api 等 entry function）。

@@ -63,11 +63,10 @@ RUN python3 /tmp/salt-adduser.py \
     && chown -R 10002:10002 /var/run/salt /var/cache/salt /var/log/salt \
                           /srv/salt /srv/pillar /home/salt
 
-USER salt
-# pip install salt（PEP 668 强 EXTERNALLY-MANAGED，必须 --break-system-packages 兜底）
-RUN pip3 install --user --no-cache-dir --break-system-packages \
+# 以 root 直接安装 salt 到系统 site-packages（USER salt --user 装的包在 USER root 下不可见）
+# PEP 668 强 EXTERNALLY-MANAGED，必须 --break-system-packages 兜底
+RUN pip3 install --no-cache-dir --break-system-packages \
         "salt==${SALT_VERSION}"
-USER root
 
 # 说明：salt 3007.14 的 setup.py 用 distutils.core.setup，Python 3.12 已删除 distutils，
 # wheel 安装时不会注册 console_scripts 入口点。
