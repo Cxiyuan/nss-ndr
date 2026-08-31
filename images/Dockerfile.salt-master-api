@@ -84,18 +84,27 @@ LABEL org.opencontainers.image.title="nss-ndr/salt-master-api" \
 
 # 复制 pip 安装的 salt 包（builder stage 已经装好，--from=builder 复用层）
 # salt 3007 把 salt-api 合并进 salt 主包，但仍保留 salt / salt-master / salt-minion / salt-run / salt-key / salt-call 等入口点
-COPY --from=builder /usr/lib/python3*/site-packages/ /usr/lib/python3*/site-packages/
+# Alpine pip 默认装到 /usr/local/lib/python3.12/site-packages/；alpine 系统包用 /usr/lib/python3.12/site-packages/
+COPY --from=builder /usr/local/lib/python3*/site-packages/ /usr/local/lib/python3.12/site-packages/
+COPY --from=builder /usr/lib/python3*/site-packages/ /usr/lib/python3.12/site-packages/
 # 用 RUN 把 builder 阶段所有 salt* 入口点拷过来（缺失不报错）
 RUN set -eux; \
+    found=0; \
     for f in salt salt-master salt-minion salt-api salt-run salt-key salt-cp salt-call salt-syndic salt-cloud salt-ssh; do \
-        for src in /usr/bin /usr/local/bin; do \
+        for src in /usr/local/bin /usr/bin; do \
             if [ -f "${src}/${f}" ]; then \
                 install -m 0755 "${src}/${f}" /usr/bin/"${f}"; \
                 echo "[copy] ${src}/${f} -> /usr/bin/${f}"; \
+                found=1; \
                 break; \
             fi; \
         done; \
-    done
+    done; \
+    if [ "$found" -eq 0 ]; then \
+        echo "[ERROR] no salt* entry points found in builder /usr/local/bin or /usr/bin"; \
+        ls -la /usr/local/bin/ 2>&1 | head -30; \
+        exit 1; \
+    fi
 
 # Salt 运行时配置 / 状态目录
 ENV SALT_MASTER_API_HOME=/home/salt \

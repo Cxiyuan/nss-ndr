@@ -65,9 +65,24 @@ LABEL org.opencontainers.image.title="nss-ndr/salt-minion" \
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.source="https://github.com/Cxiyuan/nss-ndr"
 
-COPY --from=builder /usr/lib/python3*/site-packages/ /usr/lib/python3*/site-packages/
-COPY --from=builder /usr/bin/salt-minion /usr/bin/salt-minion
-COPY --from=builder /usr/bin/salt-call /usr/bin/salt-call
+COPY --from=builder /usr/local/lib/python3*/site-packages/ /usr/local/lib/python3.12/site-packages/
+COPY --from=builder /usr/lib/python3*/site-packages/ /usr/lib/python3.12/site-packages/
+# 用 RUN for 循环兜底查找 salt 入口点（缺失报错）
+RUN set -eux; \
+    for f in salt-minion salt-call salt-master salt-key salt-run salt-cp; do \
+        for src in /usr/local/bin /usr/bin; do \
+            if [ -f "${src}/${f}" ]; then \
+                install -m 0755 "${src}/${f}" /usr/bin/"${f}"; \
+                echo "[copy] ${src}/${f} -> /usr/bin/${f}"; \
+                break; \
+            fi; \
+        done; \
+    done; \
+    if [ ! -f /usr/bin/salt-minion ] || [ ! -f /usr/bin/salt-call ]; then \
+        echo "[ERROR] salt-minion or salt-call not found in builder"; \
+        ls -la /usr/local/bin/ 2>&1 | head -30; \
+        exit 1; \
+    fi
 
 ENV SALT_MINION_HOME=/home/salt \
     SALT_CONFIG_DIR=/etc/salt-minion
