@@ -1,11 +1,16 @@
 # Elastic Agent Fleet Server 配置
-# 硬编码 ES host，避免 enroll 时错误使用 localhost:9200
+# 硬编码 ES host，避免 enroll/bootstrap 时 agent 自监控错误使用 localhost:9200
 outputs:
   default:
     type: elasticsearch
     hosts:
       - http://elasticsearch:9200
     preset: balanced
+
+# agent 自监控：bootstrap 期 fleet policy 尚未下发，先固定指向 elasticsearch:9200，
+# enroll 完成后再由 fleet policy 的 monitoring_output 接管
+agent.monitoring:
+  use_output: default
 
 inputs:
   - type: system/metrics

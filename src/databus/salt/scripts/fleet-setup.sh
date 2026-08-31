@@ -51,6 +51,8 @@ kibana_req() {
   fi
 }
 
+
+
 # 1) Fleet default output（幂等 + 修正 hosts）
 # 注意：Kibana 首次启用 Fleet 时会自动预置 default output（hosts=localhost:9200），
 #       必须显式修正为 elasticsearch:9200，否则 agent/fleet-server 会连不上 ES。
@@ -103,6 +105,7 @@ if ! kibana_req GET "/api/fleet/agent_policies/$ZEEK_POLICY" >/dev/null 2>&1; th
   }' >/dev/null
   echo "  ✓ nss-ndr-zeek-policy 已创建"
 fi
+
 
 # 3) enrollment API keys（幂等）
 log "3) 创建 enrollment API keys"

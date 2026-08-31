@@ -11,6 +11,8 @@ include:
   - databus.network
   - databus.volumes
   - databus.configs
+  - databus.bootstrap
+  - databus.autostart
   - databus.containers.elasticsearch
   - databus.containers.redis
   - databus.containers.kibana
