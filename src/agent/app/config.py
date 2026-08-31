@@ -144,5 +144,22 @@ def load_config(base_dir: str | Path | None = None) -> AgentConfig:
         cfg.es_hosts = os.environ["ELASTICSEARCH_HOSTS"].split(",")
     cfg.es_username = os.environ.get("ELASTICSEARCH_USERNAME", cfg.es_username)
     cfg.es_password = os.environ.get("ELASTICSEARCH_PASSWORD", cfg.es_password)
+    # dry_run: 默认 0（生产模式，写 verdict / entity / ES / Redis Lua）。
+    # agent.yaml 里写 False 是同等语义；显式 opt-in 设 AGENT_DRY_RUN=1。
     cfg.dry_run = os.environ.get("AGENT_DRY_RUN", "0") in ("1", "true", "yes")
+
+    # LLM provider 健康自检：dry_run=False 但所有 provider 的 base_url/model 都为空时，
+    # 启动期 fail-fast 报错，避免出现"静默兜底到 uncertain low"导致看起来在跑、实际没用 LLM。
+    if not cfg.dry_run:
+        for name, p in cfg.providers.items():
+            if not p.base_url or not p.model:
+                missing = []
+                if not p.base_url: missing.append("base_url")
+                if not p.model:   missing.append("model")
+                raise RuntimeError(
+                    f"provider '{name}' 配置缺失: {', '.join(missing)}；"
+                    f"请检查 /etc/nss-ndr/agent/providers.yaml 或容器 ENV "
+                    f"(EDGE_LLM_BASE_URL / EDGE_LLM_MODEL)。如确实只想只读消费，"
+                    f"请设置 AGENT_DRY_RUN=1 显式启用 dry_run 模式。"
+                )
     return cfg

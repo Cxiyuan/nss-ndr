@@ -45,12 +45,17 @@ docker exec nss-ndr-redis redis-cli -a "$REDIS_PASS" --no-auth-warning \
   && echo "  ✓ analysis-group 已创建" || echo "  (analysis-group 已存在，幂等跳过)"
 
 log "3) .env 默认值"
-append_kv "EDGE_LLM_BASE_URL" ""
+# LLM 本地边缘：默认指向本机 llm-server 容器（nss-net 网络内 alias）。
+# llm-server 镜像默认未设置 LLM_API_KEY，留空。
+# 若需要切到云端高阶，部署后编辑 /etc/nss-ndr/.env 覆盖以下三个变量即可。
+append_kv "EDGE_LLM_BASE_URL" "http://llm-server:8080/v1"
 append_kv "EDGE_LLM_API_KEY" ""
-append_kv "EDGE_LLM_MODEL" ""
+append_kv "EDGE_LLM_MODEL" "Qwen3-0.6B-Q8_0"
 append_kv "CLOUD_LLM_BASE_URL" ""
 append_kv "CLOUD_LLM_API_KEY" ""
 append_kv "CLOUD_LLM_MODEL" ""
-append_kv "AGENT_DRY_RUN" "1"
+# 0 = 生产模式（写 verdict / entity / ES / Redis Lua）；1 = 只读消费、不写回
+# 修复点：早期默认 dry_run=1 导致 agent 永远走"无 LLM 兜底 uncertain low"分支
+append_kv "AGENT_DRY_RUN" "0"
 
 echo -e "\n===== agent-setup.sh 完成 ====="

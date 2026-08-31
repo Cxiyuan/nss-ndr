@@ -5,6 +5,24 @@
 
 {%- set databus = salt['pillar.get']('databus', {}) %}
 
+{# LLM Server 命名空间（独立于 databus，方便覆盖默认值） #}
+{%- set llm_server = {
+    'image':       salt['pillar.get']('databus:llm_server:image',       'nss-ndr/llm-server:0.1.0'),
+    'ip':          salt['pillar.get']('databus:llm_server:ip',          '192.168.250.90'),
+    'port':        salt['pillar.get']('databus:llm_server:port',        8080),
+    'model_path':  salt['pillar.get']('databus:llm_server:model_path',  '/models/Qwen3-0.6B-Q8_0.gguf'),
+    'model_alias': salt['pillar.get']('databus:llm_server:model_alias', 'Qwen3-0.6B-Q8_0'),
+    'context_size': salt['pillar.get']('databus:llm_server:context_size', 32768),
+    'parallel':    salt['pillar.get']('databus:llm_server:parallel',    1),
+    'batch_size':  salt['pillar.get']('databus:llm_server:batch_size',  2048),
+    'ubatch_size': salt['pillar.get']('databus:llm_server:ubatch_size', 512),
+    'cache_type_k': salt['pillar.get']('databus:llm_server:cache_type_k', 'q8_0'),
+    'cache_type_v': salt['pillar.get']('databus:llm_server:cache_type_v', 'q8_0'),
+    'threads':     salt['pillar.get']('databus:llm_server:threads',     ''),
+    'api_key':     salt['pillar.get']('databus:llm_server:api_key',     ''),
+    'extra_args':  salt['pillar.get']('databus:llm_server:extra_args',  ''),
+} -%}
+
 {# 注意：jinja2 宏体不能访问模板顶层 {% set %} 变量，
    因此 env_get 在宏体内自行读取文件（宏内可直接调用 salt 模块）。 #}
 {%- macro env_get(key) -%}

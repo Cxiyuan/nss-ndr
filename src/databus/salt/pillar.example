@@ -36,6 +36,8 @@ databus:
       tar: nss-ndr_logstash-databus_9.5.2.tar
     - name: nss-ndr/redis-databus:8.10.1
       tar: nss-ndr_redis-databus_8.10.1.tar
+    - name: nss-ndr/llm-server:0.1.0
+      tar: nss-ndr_llm-server_0.1.0.tar
 
   fixed_ips:
     elasticsearch: 192.168.250.40
@@ -44,6 +46,7 @@ databus:
     elastic_agent: 192.168.250.20
     logstash: 192.168.250.30
     redis: 192.168.250.60
+    llm_server: 192.168.250.90
 
   host_ports:
     es: 9200
@@ -57,15 +60,36 @@ databus:
   agent:
     image: nss-ndr/agent:0.1.1
     ip: 192.168.250.80
-    dry_run: "1"
+    # dry_run: 0 = 生产模式（写 verdict / entity / ES）；1 = 只读消费
+    # 上游已部署 llm-server + LLM 模型，启用 LLM 本地边缘分析时置 0；
+    # 仅做链路验证、不需要 LLM 真实调用时改回 1
+    dry_run: "0"
     log_level: INFO
     llm:
-      edge_base_url: ""
+      edge_base_url: "http://llm-server:8080/v1"
       edge_api_key: ""
-      edge_model: ""
+      edge_model: "Qwen3-0.6B-Q8_0"
       cloud_base_url: ""
       cloud_api_key: ""
       cloud_model: ""
+
+  # LLM Server（nss-ndr/llm-server）
+  llm_server:
+    image: nss-ndr/llm-server:0.1.0
+    ip: 192.168.250.90
+    port: 8080
+    model_path: /models/Qwen3-0.6B-Q8_0.gguf
+    model_alias: Qwen3-0.6B-Q8_0
+    context_size: 32768
+    parallel: 1
+    batch_size: 2048
+    ubatch_size: 512
+    cache_type_k: q8_0
+    cache_type_v: q8_0
+    # 空 = llama-server 自动按物理核数；高密度共享机器可显式限制避免争抢
+    threads: ""
+    api_key: ""
+    extra_args: ""
 
   configs:
     - src: salt://databus/files/kibana.yml

@@ -95,6 +95,13 @@ deploy-fleet-setup:
     - require:
       - http: wait-kibana-healthy
 
+deploy-llm-server:
+  salt.state:
+    - tgt: {{ databus.get('target', 'databus') }}
+    - sls: databus.containers.llm-server
+    - require:
+      - salt: deploy-fleet-setup
+
 deploy-apps:
   salt.state:
     - tgt: {{ databus.get('target', 'databus') }}
@@ -105,7 +112,7 @@ deploy-apps:
         - databus.containers.zeek
         - databus.containers.agent
     - require:
-      - salt: deploy-fleet-setup
+      - salt: deploy-llm-server
 
 verify-databus:
   salt.state:

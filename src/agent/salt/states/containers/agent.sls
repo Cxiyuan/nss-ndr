@@ -35,7 +35,9 @@ nss-ndr-agent:
         - CLOUD_LLM_BASE_URL={{ env_get('CLOUD_LLM_BASE_URL') }}
         - CLOUD_LLM_API_KEY={{ env_get('CLOUD_LLM_API_KEY') }}
         - CLOUD_LLM_MODEL={{ env_get('CLOUD_LLM_MODEL') }}
-        - AGENT_DRY_RUN={{ env_get('AGENT_DRY_RUN') or '1' }}
+        # AGENT_DRY_RUN: 0=生产模式（写 verdict/entity/ES/Redis Lua）；1=只读消费
+        # 上游 agent-setup.sh 已默认写入 0；此处兜底 '0' 防止 .env 未及时刷新
+        - AGENT_DRY_RUN={{ env_get('AGENT_DRY_RUN') or '0' }}
         - AGENT_LOG_LEVEL=INFO
     - log_driver: json-file
     - log_opt:

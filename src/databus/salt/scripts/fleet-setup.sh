@@ -7,11 +7,19 @@
 #   2. 创建 agent policies（fleet-server-policy / nss-ndr-zeek-policy）
 #   3. 创建 enrollment API keys，写回 /etc/nss-ndr/.env
 #   4. 创建 Zeek Integration package policy
+#      - 新部署：直接建 43 streams 全启用
+#      - 已部署（如旧版只有 5 streams）：通过 NSS_ZEEK_POLICY_FORCE_RECREATE=1
+#        或带 --force 参数删除旧的 nss-ndr-zeek-1.0.0 后重建为 43 streams
 #
 # 依赖：ES + Kibana 已 healthy，KIBANA_SERVICE_TOKEN 已写入 .env
-# 用法：/opt/nss-ndr/scripts/fleet-setup.sh
+# 用法：/opt/nss-ndr/scripts/fleet-setup.sh [--force]
 # ============================================================
 set -euo pipefail
+
+FORCE_RECREATE="false"
+if [[ "${1:-}" == "--force" || "${NSS_ZEEK_POLICY_FORCE_RECREATE:-0}" == "1" ]]; then
+  FORCE_RECREATE="true"
+fi
 
 ENV_FILE="${NSS_ENV_FILE:-/etc/nss-ndr/.env}"
 ES_URL="http://localhost:9200"
@@ -134,11 +142,28 @@ AGENT_KEY=$(create_enroll_key "nss-ndr-zeek-agent-key" "$ZEEK_POLICY")
 write_kv "ELASTIC_AGENT_ENROLLMENT_TOKEN" "$AGENT_KEY"
 
 # 4) Zeek Integration package policy（幂等）
-log "4) 创建 Zeek Integration package policy"
+# 启用 Zeek Integration 5.0.1 全部 43 个 dataset（与 manifest.yml 一致）。
+# 每个 stream 的 filenames / tags 取自 images/zeek-integration/zeek-5.0.1/data_stream/<ds>/manifest.yml
+# 的 vars.filenames.default / vars.tags.default —— 不要再手工挑选，否则会漏。
+# 升级路径：旧版只配 5 streams 的部署，带 --force（或 NSS_ZEEK_POLICY_FORCE_RECREATE=1）
+#           会先删除旧的 nss-ndr-zeek-1.0.0，再重建为 43 streams。
+log "4) 创建 Zeek Integration package policy（43 个 dataset）"
+if [[ "$FORCE_RECREATE" == "true" ]]; then
+  OLD_ID=$(kibana_req GET "/api/fleet/package_policies" | python3 -c "
+import sys, json
+for p in json.load(sys.stdin).get('items', []):
+  if p.get('name') == 'nss-ndr-zeek-1.0.0':
+    print(p.get('id')); break
+" 2>/dev/null || true)
+  if [[ -n "$OLD_ID" ]]; then
+    kibana_req DELETE "/api/fleet/package_policies/$OLD_ID?force=true" >/dev/null 2>&1 || true
+    echo "  ✓ 旧的 nss-ndr-zeek-1.0.0 ($OLD_ID) 已删除（--force）"
+  fi
+fi
 if ! kibana_req GET "/api/fleet/package_policies" | grep -q '"name":"nss-ndr-zeek-1.0.0"'; then
   kibana_req POST "/api/fleet/package_policies" '{
     "name": "nss-ndr-zeek-1.0.0",
-    "description": "NSS-NDR Zeek Integration",
+    "description": "NSS-NDR Zeek Integration (43 datasets, full coverage)",
     "namespace": "default",
     "policy_id": "nss-ndr-zeek-policy",
     "package": {"name": "zeek", "version": "5.0.1"},
@@ -148,22 +173,69 @@ if ! kibana_req GET "/api/fleet/package_policies" | grep -q '"name":"nss-ndr-zee
       "enabled": true,
       "vars": {"base_paths": {"type": "text", "value": ["/var/log/zeek"]}},
       "streams": [
-        {"id": "nss-ndr-zeek-conn", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.connection"},
-         "vars": {"filenames": {"type": "text", "value": ["conn.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-connection"]}, "preserve_original_event": {"type": "bool", "value": false}}},
-        {"id": "nss-ndr-zeek-http", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.http"},
-         "vars": {"filenames": {"type": "text", "value": ["http.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-http"]}, "preserve_original_event": {"type": "bool", "value": false}}},
-        {"id": "nss-ndr-zeek-dns", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.dns"},
-         "vars": {"filenames": {"type": "text", "value": ["dns.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-dns"]}, "preserve_original_event": {"type": "bool", "value": false}}},
-        {"id": "nss-ndr-zeek-ssl", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.ssl"},
-         "vars": {"filenames": {"type": "text", "value": ["ssl.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-ssl"]}, "preserve_original_event": {"type": "bool", "value": false}}},
-        {"id": "nss-ndr-zeek-notice", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.notice"},
-         "vars": {"filenames": {"type": "text", "value": ["notice.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-notice"]}, "preserve_original_event": {"type": "bool", "value": false}}}
+        {"id": "nss-ndr-zeek-capture-loss", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.capture_loss"}, "vars": {"filenames": {"type": "text", "value": ["capture_loss.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-capture-loss"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-connection", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.connection"}, "vars": {"filenames": {"type": "text", "value": ["conn.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-connection"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-dce-rpc", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.dce_rpc"}, "vars": {"filenames": {"type": "text", "value": ["dce_rpc.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-dce-rpc"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-dhcp", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.dhcp"}, "vars": {"filenames": {"type": "text", "value": ["dhcp.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-dhcp"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-dnp3", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.dnp3"}, "vars": {"filenames": {"type": "text", "value": ["dnp3.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-dnp3"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-dns", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.dns"}, "vars": {"filenames": {"type": "text", "value": ["dns.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-dns"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-dpd", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.dpd"}, "vars": {"filenames": {"type": "text", "value": ["dpd.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-dpd"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-files", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.files"}, "vars": {"filenames": {"type": "text", "value": ["files.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-files"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-ftp", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.ftp"}, "vars": {"filenames": {"type": "text", "value": ["ftp.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-ftp"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-http", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.http"}, "vars": {"filenames": {"type": "text", "value": ["http.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-http"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-intel", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.intel"}, "vars": {"filenames": {"type": "text", "value": ["intel.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-intel"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-irc", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.irc"}, "vars": {"filenames": {"type": "text", "value": ["irc.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-irc"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-kerberos", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.kerberos"}, "vars": {"filenames": {"type": "text", "value": ["kerberos.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-kerberos"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-known-certs", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.known_certs"}, "vars": {"filenames": {"type": "text", "value": ["known_certs.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-known_certs"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-known-hosts", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.known_hosts"}, "vars": {"filenames": {"type": "text", "value": ["known_hosts.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-known_hosts"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-known-services", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.known_services"}, "vars": {"filenames": {"type": "text", "value": ["known_services.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-known_services"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-modbus", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.modbus"}, "vars": {"filenames": {"type": "text", "value": ["modbus.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-modbus"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-mysql", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.mysql"}, "vars": {"filenames": {"type": "text", "value": ["mysql.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-mysql"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-notice", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.notice"}, "vars": {"filenames": {"type": "text", "value": ["notice.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-notice"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-ntlm", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.ntlm"}, "vars": {"filenames": {"type": "text", "value": ["ntlm.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-ntlm"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-ntp", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.ntp"}, "vars": {"filenames": {"type": "text", "value": ["ntp.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-ntp"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-ocsp", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.ocsp"}, "vars": {"filenames": {"type": "text", "value": ["ocsp.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-ocsp"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-pe", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.pe"}, "vars": {"filenames": {"type": "text", "value": ["pe.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-pe"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-radius", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.radius"}, "vars": {"filenames": {"type": "text", "value": ["radius.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-radius"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-rdp", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.rdp"}, "vars": {"filenames": {"type": "text", "value": ["rdp.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-rdp"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-rfb", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.rfb"}, "vars": {"filenames": {"type": "text", "value": ["rfb.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-rfb"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-signature", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.signature"}, "vars": {"filenames": {"type": "text", "value": ["signature.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-signature"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-sip", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.sip"}, "vars": {"filenames": {"type": "text", "value": ["sip.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-sip"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-smb-cmd", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.smb_cmd"}, "vars": {"filenames": {"type": "text", "value": ["smb_cmd.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-smb-cmd"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-smb-files", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.smb_files"}, "vars": {"filenames": {"type": "text", "value": ["smb_files.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-smb-files"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-smb-mapping", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.smb_mapping"}, "vars": {"filenames": {"type": "text", "value": ["smb_mapping.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek.smb_mapping"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-smtp", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.smtp"}, "vars": {"filenames": {"type": "text", "value": ["smtp.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-smtp"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-snmp", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.snmp"}, "vars": {"filenames": {"type": "text", "value": ["snmp.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-snmp"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-socks", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.socks"}, "vars": {"filenames": {"type": "text", "value": ["socks.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-socks"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-software", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.software"}, "vars": {"filenames": {"type": "text", "value": ["software.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-software"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-ssh", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.ssh"}, "vars": {"filenames": {"type": "text", "value": ["ssh.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-ssh"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-ssl", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.ssl"}, "vars": {"filenames": {"type": "text", "value": ["ssl.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-ssl"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-stats", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.stats"}, "vars": {"filenames": {"type": "text", "value": ["stats.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-stats"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-syslog", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.syslog"}, "vars": {"filenames": {"type": "text", "value": ["syslog.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-syslog"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-traceroute", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.traceroute"}, "vars": {"filenames": {"type": "text", "value": ["traceroute.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-traceroute"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-tunnel", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.tunnel"}, "vars": {"filenames": {"type": "text", "value": ["tunnel.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-tunnel"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-weird", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.weird"}, "vars": {"filenames": {"type": "text", "value": ["weird.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-weird"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-x509", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.x509"}, "vars": {"filenames": {"type": "text", "value": ["x509.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-x509"]}, "preserve_original_event": {"type": "bool", "value": false}}}
       ]
     }]
   }' >/dev/null
-  echo "  ✓ Zeek Integration package policy 已创建"
+  echo "  ✓ Zeek Integration package policy 已创建（43 streams 全启用）"
 else
-  echo "  Zeek Integration package policy 已存在"
+  # 检查现有 policy 的 stream 数，若 <43 提示用户用 --force 升级
+  STREAM_COUNT=$(kibana_req GET "/api/fleet/package_policies" | python3 -c "
+import sys, json
+for p in json.load(sys.stdin).get('items', []):
+  if p.get('name') == 'nss-ndr-zeek-1.0.0':
+    for i in p.get('inputs', []):
+      print(len(i.get('streams', [])))
+    break
+" 2>/dev/null || echo 0)
+  if [[ "$STREAM_COUNT" -lt 43 ]]; then
+    echo "  ⚠ Zeek Integration package policy 已存在但只有 $STREAM_COUNT streams（<43）"
+    echo "    升级方式: /opt/nss-ndr/scripts/fleet-setup.sh --force"
+  else
+    echo "  ✓ Zeek Integration package policy 已存在（43 streams）"
+  fi
 fi
 
 log "完成 ✓ Fleet 初始化完成（output/policy/enrollment keys/Zeek Integration）"

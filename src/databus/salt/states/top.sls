@@ -20,4 +20,5 @@ include:
   - databus.containers.elastic-agent
   - databus.containers.logstash
   - databus.containers.zeek
+  - databus.containers.llm-server
   - databus.containers.agent
