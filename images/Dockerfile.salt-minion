@@ -53,9 +53,9 @@ ENV PIP_USER=1 \
 ENV SALT_MINION_HOME=/home/salt \
     SALT_CONFIG_DIR=/etc/salt-minion
 
-# 非特权用户（Alpine 3.21 BusyBox 标准镜像无 standalone adduser；
-# 通过独立 python 脚本添加，避免 buildkit 对 RUN python -c "..." 多行字符串解析坑）
-COPY images/salt-adduser.py /tmp/salt-adduser.py
+# 非特权用户（Alpine 3.21 BusyBox 标准镜像无 standalone adduser）
+# 路径是相对 build context（images/），不要加 images/ 前缀
+COPY salt-adduser.py /tmp/salt-adduser.py
 RUN python3 /tmp/salt-adduser.py \
     && mkdir -p /etc/salt-minion /var/run/salt /var/cache/salt /var/log/salt \
                 /srv/salt /srv/pillar /home/salt/.local/bin \

@@ -63,9 +63,10 @@ ENV SALT_MASTER_API_HOME=/home/salt \
     SALT_CACHE_DIR=/var/cache/salt \
     SALT_LOG_DIR=/var/log/salt
 
-# 非特权用户（Alpine 3.21 BusyBox 标准镜像无 standalone adduser，
-# 用 python 脚本（通过 COPY 而非 RUN python -c 避免 buildkit 多行字符串解析坑））
-COPY images/salt-adduser.py /tmp/salt-adduser.py
+# 非特权用户（Alpine 3.21 BusyBox 标准镜像无 standalone adduser）
+# 用 python 脚本（通过 COPY 而非 RUN python -c 避免 buildkit 多行字符串解析坑）
+# 路径是相对 build context（images/），不要加 images/ 前缀
+COPY salt-adduser.py /tmp/salt-adduser.py
 RUN python3 /tmp/salt-adduser.py \
     && mkdir -p /etc/salt-master-api /var/run/salt /var/cache/salt /var/log/salt \
                 /srv/salt /srv/pillar /home/salt/.local/bin \
