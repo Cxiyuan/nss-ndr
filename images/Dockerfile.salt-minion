@@ -65,7 +65,7 @@ LABEL org.opencontainers.image.title="nss-ndr/salt-minion" \
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.source="https://github.com/Cxiyuan/nss-ndr"
 
-COPY --from=builder /usr/lib/python3*/site-packages/ /usr/lib/python3*/site-packages/ 2>/dev/null || true
+COPY --from=builder /usr/lib/python3*/site-packages/ /usr/lib/python3*/site-packages/
 COPY --from=builder /usr/bin/salt-minion /usr/bin/salt-minion
 COPY --from=builder /usr/bin/salt-call /usr/bin/salt-call
 

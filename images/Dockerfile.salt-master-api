@@ -84,15 +84,8 @@ LABEL org.opencontainers.image.title="nss-ndr/salt-master-api" \
 
 # 复制 pip 安装的 salt 包（builder stage 已经装好，--from=builder 复用层）
 # salt 3007 把 salt-api 合并进 salt 主包，但仍保留 salt / salt-master / salt-minion / salt-run / salt-key / salt-call 等入口点
-COPY --from=builder /usr/lib/python3*/site-packages/ /usr/lib/python3*/site-packages/ 2>/dev/null || true
-# 关键 salt 入口点（缺失时 chmod 让后续 RUN 不报错）
-COPY --from=builder /usr/bin/salt /usr/bin/salt
-COPY --from=builder /usr/bin/salt-master /usr/bin/salt-master
-COPY --from=builder /usr/bin/salt-run /usr/bin/salt-run
-COPY --from=builder /usr/bin/salt-key /usr/bin/salt-key
-COPY --from=builder /usr/bin/salt-cp /usr/bin/salt-cp
-COPY --from=builder /usr/bin/salt-api /usr/bin/salt-api
-# 兜底：用 RUN 把 builder 阶段所有 salt* 入口点拷过来（缺失不报错）
+COPY --from=builder /usr/lib/python3*/site-packages/ /usr/lib/python3*/site-packages/
+# 用 RUN 把 builder 阶段所有 salt* 入口点拷过来（缺失不报错）
 RUN set -eux; \
     for f in salt salt-master salt-minion salt-api salt-run salt-key salt-cp salt-call salt-syndic salt-cloud salt-ssh; do \
         for src in /usr/bin /usr/local/bin; do \
