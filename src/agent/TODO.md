@@ -5,6 +5,8 @@
 > 范围：**只做智能体本身的代码开发**。
 > - 大模型运行环境不在范围内：智能体只对接外部提供的 OpenAI 兼容模型接口（本地边缘 + 云端高阶，差异仅配置）
 > - 容器镜像、Salt 部署、上线运维不在当前范围内（后续另行规划）
+> 注：自 2026-08-31 起，容器镜像仅通过 GHCR（`ghcr.io/cxiyuan/nss-ndr-public/*`）发布，
+> 不再生成 `.run` 自解压安装包与本地离线 tar；部署由 Salt + docker pull 完成。
 > - 数据总线已在服务器生产运行：智能体消费其 Redis Stream `analysis:events`（Logstash 双写产出，见
 >   `src/databus/logstash/pipeline/zeek-pipeline.conf`），复用 ES（回溯/落盘）与 Redis（Stream/缓存/水位）
 
@@ -112,7 +114,7 @@ src/agent/
 
 - [x] `images/Dockerfile.agent`：python:3.12-slim + `pip install .` 依赖锁定 + 内置 `app/config/prompts/skills/data`；非 root（uid 10001）+ HEALTHCHECK；`ENTRYPOINT ["python","-m","app"]`，默认 `worker`
 - [x] `images/scripts/build-agent.sh`：`docker build --platform linux/amd64` + `docker save`（沿用数据总线 build 脚本模式）
-- [x] 产物：`images/offline/nss-ndr_agent_0.1.0.tar`（67M，镜像 312M）；容器内 `version/once` 冒烟通过（无 Redis 优雅降级）
+- [x] 产物：镜像 `ghcr.io/cxiyuan/nss-ndr-public/agent:0.1.0`（约 312MB）；CI 直接推送 GHCR（不再生成本地离线 tar）；容器内 `version/once` 冒烟通过（无 Redis 优雅降级）
 
 ---
 
@@ -129,7 +131,7 @@ src/agent/
 
 - [x] `pillar.example` → `/srv/pillar/agent.sls`：镜像 `nss-ndr/agent:0.1.1`、固定 IP `.80`、配置路径
 - [x] `map.jinja`：复用数据总线 `.env` 的 `env_get` 宏（ES/REDIS/LLM 密钥不入 pillar）
-- [x] `images.sls`：从 `/root/nss-agent/nss-ndr_agent_0.1.1.tar` load（不拉取不构建）
+- [x] `images.sls`：从 `ghcr.io/cxiyuan/nss-ndr-public/agent:0.1.1` pull（CI 推送 GHCR；不再使用本地 offline tar）
 - [x] `configs.sls`：`agent.yaml / providers.yaml / rules/beh-rules.yaml` → `/etc/nss-ndr/agent/`，容器只读挂载
 - [x] `bootstrap.sls`：预检 databus ES/Redis 运行中（不满足则阻断）
 - [x] `setup.sls` + `agent-setup.sh`：ES 索引 + ILM、Redis 消费组 `analysis-group`、`.env` 补 `AGENT_DRY_RUN=1` 与 LLM 空默认值

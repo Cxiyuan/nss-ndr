@@ -107,7 +107,7 @@ src/databus/salt/
 ├── scripts/saltctl.sh               # 一键操作：deploy/apply/status/verify/teardown/pillar
 └── states/
     ├── top.sls                      # 入口：databus 主状态
-    ├── images.sls                   # 从 offline tar 加载 6 个镜像
+    ├── images.sls                   # 从 GHCR (ghcr.io/cxiyuan/nss-ndr-public/*) pull 镜像
     ├── network.sls                  # nss-net (192.168.250.0/24)
     ├── volumes.sls                  # 8 个命名卷
     ├── configs.sls                  # 外挂配置文件下发
@@ -127,7 +127,7 @@ src/databus/salt/
     └── deploy.sls                   # 编排：按依赖顺序一次性部署
 ```
 
-> 镜像不随 states 走：offline tar 放在仓库 `images/offline/`，部署时通过 `file.managed`（或 scp/rsync）拷到目标机 `/opt/nss-ndr/images/`，再 `docker_image.present - load`。目标机**不重新拉取、不重新构建**。
+> 镜像从 GHCR 拉取：`images.sls` 调用 `docker_image.present` 时通过 `name: ghcr.io/cxiyuan/nss-ndr-public/<image>:<tag>`，由 Docker daemon 直接 `docker pull`（目标机能访问 `ghcr.io` 时即可）。目标机**不重新拉取本地文件、不生成离线 tar**；如需在完全离线环境部署，可用 `docker save` / `docker load` 把 GHCR 镜像中转到目标机后改 pillar `image` 为本地 tag。
 
 ### 2.1 fileserver 布局（masterless / salt-ssh）
 
@@ -135,11 +135,10 @@ Salt 的 `salt://` 路径按 file_roots 映射，本设计按如下约定组织�
 
 ```text
 /srv/salt/
-├── databus/            # 本目录 states/ + files/ + scripts/ 的内容
-│   ├── states/  -> salt://databus/states/   （SLS 实际用 databus.* 前缀）
-│   ├── files/   -> salt://databus/files/
-│   └── scripts/ -> salt://databus/scripts/
-└── offline/            # images/offline/*.tar 拷贝到此 -> salt://offline/
+└── databus/            # 本目录 states/ + files/ + scripts/ 的内容
+    ├── states/  -> salt://databus/states/   （SLS 实际用 databus.* 前缀）
+    ├── files/   -> salt://databus/files/
+    └── scripts/ -> salt://databus/scripts/
 ```
 
 部署时按如下映射拷贝（仓库目录 → 目标机 fileserver）：
@@ -149,12 +148,11 @@ src/databus/salt/states/*           -> /srv/salt/databus/        （含 map.jinj
 src/databus/salt/states/containers/ -> /srv/salt/databus/containers/
 src/databus/salt/files/*            -> /srv/salt/databus/files/
 src/databus/salt/scripts/*          -> /srv/salt/databus/scripts/
-images/offline/*.tar           -> /srv/salt/offline/
 ```
 
 > 说明：仓库里把 states 放在 `salt/states/` 子目录只是便于组织；落盘到 fileserver 时**必须拍平**成 `/srv/salt/databus/`（`map.jinja` 与 `top.sls`、`images.sls` 同级），否则 `{% from "databus/map.jinja" %}` 和 `state.apply databus.deploy` 的路径解析会不一致。
 
-> 注意：`images.sls` 里 `source: salt://offline/<tar>` 依赖 offline tar 已在 fileserver 中；首次部署也可用 scp 直传 `/opt/nss-ndr/images/` 后把 `images.sls` 的 `file.managed` 步骤去掉（`docker_image.present - load` 直接加载本地 tar）。
+> 镜像不再通过 salt fileserver 分发：`images.sls` 改用 `docker_image.present - name: ghcr.io/...`，目标机直接从 GHCR 拉取。完全离线场景下用 `docker save/load` 中转。
 
 ---
 
@@ -166,8 +164,7 @@ images/offline/*.tar           -> /srv/salt/offline/
 # pillar.example —— 复制到 /srv/pillar/databus.sls（masterless 时即本机）
 databus:
   env_file: /etc/nss-ndr/.env          # 运行时环境变量文件（含动态 token）
-  base_dir: /opt/nss-ndr               # 目标机工作目录
-  images_dir: /opt/nss-ndr/images      # 镜像 tar 存放目录
+  base_dir: /opt/nss-ndr               # 目标机工作目录（保留兼容，新部署不再写入镜像 tar）
   network:
     name: nss-net
     subnet: 192.168.250.0/24
@@ -177,19 +174,14 @@ databus:
     elastic_password: ChangeMe_Elastic_2026!
     redis_password: ChangeMe_Redis_2026!
     kibana_encryption_key: NSS-NDR-Default-Kibana-Encryption-Key-2026!
-  images:                              # image 名 → tar 文件
+  images:                              # image 名（GHCR tag）；images.sls 用 docker pull 拉取
     - name: nss-ndr/zeek:8.2.2
-      tar: nss-ndr_zeek_8.2.2.tar
     - name: docker.elastic.co/elasticsearch/elasticsearch:9.5.2
-      tar: docker.elastic.co_elasticsearch_elasticsearch_9.5.2.tar
     - name: docker.elastic.co/kibana/kibana:9.5.2
-      tar: docker.elastic.co_kibana_kibana_9.5.2.tar
     - name: nss-ndr/elastic-agent-zeek:9.5.2
-      tar: nss-ndr_elastic-agent-zeek_9.5.2.tar
     - name: nss-ndr/logstash-databus:9.5.2
-      tar: nss-ndr_logstash-databus_9.5.2.tar
     - name: nss-ndr/redis-databus:8.10.1
-      tar: nss-ndr_redis-databus_8.10.1.tar
+    - name: nss-ndr/llm-server:0.1.0    # 本地边缘 LLM（llama.cpp + 内置 Qwen3-0.6B-Q8_0），为 agent.containers.agent 的 edge provider 提供 OpenAI 兼容推理
   fixed_ips:
     elasticsearch: 192.168.250.40
     kibana: 192.168.250.50
@@ -210,26 +202,22 @@ databus:
 
 ## 4. 核心 SLS 设计
 
-### 4.1 镜像加载 images.sls（关键：直接 load tar，不拉取不构建）
+### 4.1 镜像加载 images.sls（关键：从 GHCR pull，不使用本地 tar）
 
 ```yaml
 {% from "databus/map.jinja" import databus with context %}
 
 {% for img in databus.images %}
-load-image-{{ img.name | replace('/', '_') | replace(':', '_') }}:
-  file.managed:
-    - name: {{ databus.images_dir }}/{{ img.tar }}
-    - source: salt://offline/{{ img.tar }}
-    - makedirs: True
+pull-image-{{ img.name | replace('/', '_') | replace(':', '_') }}:
   docker_image.present:
     - name: {{ img.name }}
-    - load: {{ databus.images_dir }}/{{ img.tar }}
-    - require:
-      - file: load-image-{{ img.name | replace('/', '_') | replace(':', '_') }}
+    # 默认走 Docker daemon 的 docker pull；目标机能访问 ghcr.io 即可。
+    # 完全离线场景：先在能访问 ghcr.io 的中转机 docker save，再 docker load，
+    # 镜像仍按本 pillar 的 name 标签管理。
 {% endfor %}
 ```
 
-> `docker_image.present` 会先检查镜像是否已存在；不存在才执行 `load`。tar 已存在时 `file.managed` 幂等跳过。
+> `docker_image.present` 会先检查镜像是否已存在；不存在才执行 `pull`。换镜像版本时直接改 pillar `images` 列表里的 tag。
 > 实际实现放在 `states/images.sls`，用 map.jinja 统一取值（示例见本目录 `states/`）。
 
 ### 4.2 网络与卷
@@ -485,7 +473,7 @@ Docker 的 restart_policy **不会**因为 unhealthy 而重启。两种方案：
 
 1. **zeek 使用 host 网络**：`network_mode: host` 与 hostname、固定 IP 冲突，SLS 里 zeek 不能写这两项（与 compose 一致）。
 2. **命名卷引用**：Salt 的 `binds` 直接写 `卷名:/容器路径` 即可，Docker 自动按命名卷解析；但卷必须先用 `docker_volume.present` 创建，并用 `require` 保证顺序。
-3. **镜像只 load 不拉取**：目标机需先有 6 个 tar（`images/offline/`）。`docker_image.present` 的 `load` 只在该镜像不存在时执行；换镜像版本时改 pillar 里的 `images` 列表即可。
+3. **镜像从 GHCR pull**：目标机需能访问 `ghcr.io/cxiyuan/nss-ndr-public/*`（无需 docker login，本项目 CI 推送到的是 public 仓库）。`docker_image.present` 不存在时才执行 pull。完全离线场景可用 `docker save/load` 中转。
 4. **不碰其他业务**：Salt 只管理本项目命名空间（`nss-ndr-*` 容器/卷/网络 + `/opt/nss-ndr` + `/etc/nss-ndr`），不设置全局 docker prune；`docker_container.absent` 只针对本项目容器。卸载 Salt 不会影响 zabbix/grafana/postgres。
 5. **masterless 无 reactor**：若以后要实时事件自愈，升级为 master+minion 即可，SLS 复用。
 6. **salt-ssh 的 thin 模式**：每次执行推送 thin 到目标机，稍慢（几十秒级），适合初始化/按需执行；周期自愈请用 masterless schedule 或控制机 cron。
@@ -501,7 +489,7 @@ Docker 的 restart_policy **不会**因为 unhealthy 而重启。两种方案：
 | 现有资产 | Salt 中如何使用 |
 |---|---|
 | `src/databus/scripts/`（auto-init.sh / bootstrap-tokens.sh，已移除） | 功能被 Salt 完全接管：编排 `deploy.sls` + `bootstrap.sls`（gen-kibana-token.sh）+ `fleet-setup.sls`（fleet-setup.sh）+ `verify.sls`；目录仅保留迁移说明 README |
-| `images/offline/*.tar`（6 个有效镜像） | `file.managed` 下发 + `docker_image.present - load` |
+| `images/offline/*.tar`（已弃用） | 镜像改由 CI 直接推送 GHCR（`ghcr.io/cxiyuan/nss-ndr-public/*`），`images.sls` 用 `docker_image.present - name: ...` 从 GHCR pull；不再使用离线 tar |
 | `src/databus/*.yml` / `kibana.yml` 等 | `file.managed` 下发到 `/etc/nss-ndr/`，再 binds 进容器 |
 | ~~`data-bus.yaml`~~ | **已删除**：容器定义以 `salt/states/` 为唯一实现 |
 
@@ -511,7 +499,7 @@ Docker 的 restart_policy **不会**因为 unhealthy 而重启。两种方案：
 
 1. 选定接入方式：**masterless minion（推荐）** 或 **salt-ssh**。
 2. 目标机准备：安装 salt-minion（masterless）或仅装 docker-py（salt-ssh）；`mkdir /opt/nss-ndr /etc/nss-ndr`。
-3. 上传：offline tar → `/opt/nss-ndr/images/`；states/pillar/files → `/srv/salt`、`/srv/pillar`（masterless 本机，或 salt-ssh 从控制机下发）。
+3. 镜像：CI 已自动推送 GHCR（`ghcr.io/cxiyuan/nss-ndr-public/*`，public 仓库无需登录）；目标机 docker pull 即可。完全离线场景下用 `docker save/load` 中转。states/pillar/files → `/srv/salt`、`/srv/pillar`（masterless 本机，或 salt-ssh 从控制机下发）。
 4. 首跑：`salt-call --local state.apply databus.deploy`（masterless）或 `salt-ssh databus state.apply databus.deploy`。
 5. 验证：`verify.sls` 检查 agent online、`.ds-logs-zeek.*` 数据流、ECS 字段归一化。
 6. 开启周期自愈：minion `schedule` 每小时 `state.apply databus`（或控制机 cron）。

@@ -19,6 +19,11 @@
 - **内置模型**：`Qwen3-0.6B-Q8_0.gguf`（约 624MB，Apache-2.0）已打包进镜像，
   构建时从官方 `Qwen/Qwen3-0.6B-GGUF` 仓库下载并做 SHA-256 校验；无需外挂模型目录即可运行。
   更换模型可挂载 `/models` 覆盖或改 `LLM_MODEL` 指向其他 GGUF。
+- **现阶段线上默认选型**：`Qwen3-0.6B-Q8_0` 是当前 NSS-NDR 项目线上默认的本地边缘 LLM
+  （与 agent `EDGE_LLM_MODEL=Qwen3-0.6B-Q8_0`、salt pillar `llm_server.model_alias` 一致）。
+  设计文档 §8 把它定位为"预筛 + 初判 + 结构化输出"的快速执行器，复杂任务由 agent 网关升级云端，
+  选型理由：Apache-2.0、工具调用能力可接受、模型与 KV 缓存合计约 1.1GB，
+  在 6C/12G 预算内仍能给 baseline / MCP 工具留足余地。
 
 ## 文件清单
 
@@ -103,7 +108,9 @@ llama-server 不校验请求里的 `model` 字段，agent 侧模型名只需与 
 
 ## 模型备选（设计文档 §8.5，仅换 GGUF + 重启）
 
-- `Qwen3-0.6B-Q8_0`（**已内置**，Apache-2.0，0.6B / Q8_0，工具调用好、内存占用低）
+> 现状：**`Qwen3-0.6B-Q8_0` 是线上默认选型**（已内置）。本节给出后续如需升级/替换的备选清单。
+
+- `Qwen3-0.6B-Q8_0`（**已内置，线上默认**，Apache-2.0，0.6B / Q8_0，工具调用好、内存占用低）
 - `xLAM-2-3b-fc-r`（Q4_K_M 约 1.93GB，工具调用更强）
 - `Granite-4.1-3B`（Apache 2.0，131K 上下文，商用合规）
 
@@ -111,9 +118,15 @@ llama-server 不校验请求里的 `model` 字段，agent 侧模型名只需与 
 images/llm-server/scripts/fetch-model.sh xLAM-2-3B-fc-r-Q4_K_M.gguf
 ```
 
+> **重要**：切换备选模型时务必同步修改以下三处，否则 agent 无法正确路由：
+> 1. `llm-server` 启动环境变量 `LLM_ALIAS`（决定 `/v1/models` 返回的 model 字段）
+> 2. agent `providers.yaml` 的 `edge.model`（通过 `.env` 的 `EDGE_LLM_MODEL` 注入）
+> 3. salt pillar `databus.llm_server.model_alias`（保持同步）
+
 ## 说明与限制
 
-- 纯 CPU 0.6B 模型推理速度有限，设计文档定位其为“预筛 + 初判 + 结构化输出”的快速执行器，
+- 纯 CPU 0.6B 模型（**当前线上默认 `Qwen3-0.6B-Q8_0`**）推理速度有限，
+  设计文档定位其为"预筛 + 初判 + 结构化输出"的快速执行器，
   复杂任务由 agent 网关升级云端（`needs_cloud`），不依赖本服务做深度分析。
 - 模型已内置镜像（`/models/Qwen3-0.6B-Q8_0.gguf`，约 624MB），
   构建时从 HF 官方仓库下载并校验 SHA-256；挂载 `/models` 仍可覆盖或补充其他 GGUF。

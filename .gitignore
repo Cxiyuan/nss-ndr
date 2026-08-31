@@ -8,5 +8,6 @@ __pycache__/
 dist/
 build/
 .env
-images/offline/*.tar
+# 产品发布改为镜像直发（CI 推送 GHCR）；不再使用本地 .tar / .run 安装包
+images/offline/
 部署发布/

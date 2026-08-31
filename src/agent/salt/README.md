@@ -28,14 +28,19 @@ nss-ndr-agent（192.168.250.80，加入 nss-net）
 ## 部署步骤
 
 ```bash
-# 1. 上传镜像 tar
-mkdir -p /root/nss-agent && scp images/offline/nss-ndr_agent_0.1.1.tar root@172.16.199.235:/root/nss-agent/
-# 2. 上传 salt states / pillar
-scp -r salt/states/* salt/files salt/scripts root@172.16.199.235:/srv/salt/agent/
-scp salt/pillar.example root@172.16.199.235:/srv/pillar/agent.sls
-# 3. 更新 top.sls / pillar top.sls，然后：
+# 1. 镜像：CI 已推送 GHCR，目标机直接 pull
+#    如目标机不能直连 GHCR，可先 docker pull 到中转机再 docker save/load
+docker pull ghcr.io/cxiyuan/nss-ndr-public/agent:0.1.1
+
+# 2. salt 状态由 bootstrap systemd oneshot 铺设到 /srv/salt/agent/ 与 /srv/pillar/
+#    （masterless 本地调用，无需 scp）
+
+# 3. 触发部署
 salt-call --local state.apply agent.deploy
 ```
+
+> 自 2026-08-31 起，容器镜像仅通过 GHCR 发布，不再使用本地 `images/offline/*.tar` 或 `.run` 安装包；
+> 目标机部署 = `docker pull` + `salt-call state.apply`，Salt 状态文件由 systemd oneshot 负责落盘。
 
 ## 日常操作
 
@@ -53,7 +58,7 @@ salt-call --local state.apply agent.deploy
 
 | 变量 | 说明 |
 |---|---|
-| `EDGE_LLM_BASE_URL` / `EDGE_LLM_API_KEY` / `EDGE_LLM_MODEL` | 本地边缘模型 OpenAI 兼容接口 |
+| `EDGE_LLM_BASE_URL` / `EDGE_LLM_API_KEY` / `EDGE_LLM_MODEL` | 本地边缘模型 OpenAI 兼容接口（默认 `http://llm-server:8080/v1`，模型 `Qwen3-0.6B-Q8_0`，由 `nss-ndr/llm-server` 镜像提供） |
 | `CLOUD_LLM_BASE_URL` / `CLOUD_LLM_API_KEY` / `CLOUD_LLM_MODEL` | 云端高阶模型接口 |
 | `AGENT_DRY_RUN` | `1`=只读消费（不写结论/不 XACK）；`0`=生产写回（默认上线前先 `1`） |
 
@@ -63,5 +68,6 @@ salt-call --local state.apply agent.deploy
 
 - 只管理 `nss-ndr-agent` 容器与 `/etc/nss-ndr/agent` 配置，不触碰数据总线 7 容器与其他业务。
 - 复用数据总线 `nss-net`，固定 IP `.80`（已确认未被占用）。
-- 镜像只 load 不拉取：tar 在 `/root/nss-agent/`，换版本改 `pillar.example` 的 images 清单。
+- 镜像走 GHCR：换版本只需修改 pillar `agent.image`，salt 会触发 `docker pull` 后重建容器；
+  离线场景可用 `docker save/load` 把 GHCR 镜像导入目标机。
 - 动态密钥走 `/etc/nss-ndr/.env`（`map.jinja` 的 `env_get` 宏），pillar 不放密钥。

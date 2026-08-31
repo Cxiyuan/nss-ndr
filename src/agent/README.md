@@ -7,7 +7,7 @@
 ## 范围
 
 - 只做智能体本身：模型接口为外部提供的 OpenAI 兼容 API（`config/providers.yaml` 配置）
-- 容器镜像已构建：`images/Dockerfile.agent` + `images/scripts/build-agent.sh` → `images/offline/nss-ndr_agent_<版本>.tar`
+- 容器镜像由 CI 构建并直接推送 GHCR：`ghcr.io/cxiyuan/nss-ndr-public/agent:<版本>`
 - Salt 部署 / 模型运行环境不在本仓库当前范围（见 `TODO.md` 范围外）
 
 ## 目录
@@ -43,7 +43,7 @@ python -m app once           # 单批消费（调试）
 |---|---|
 | `REDIS_URL` / `REDIS_PASSWORD` | Redis 连接（Stream 消费） |
 | `ELASTICSEARCH_HOSTS` / `ELASTICSEARCH_USERNAME` / `ELASTICSEARCH_PASSWORD` | ES 连接 |
-| `EDGE_LLM_BASE_URL` / `EDGE_LLM_API_KEY` / `EDGE_LLM_MODEL` | 本地边缘模型接口 |
+| `EDGE_LLM_BASE_URL` / `EDGE_LLM_API_KEY` / `EDGE_LLM_MODEL` | 本地边缘模型接口（默认指向 `http://llm-server:8080/v1`，模型 `Qwen3-0.6B-Q8_0`） |
 | `CLOUD_LLM_BASE_URL` / `CLOUD_LLM_API_KEY` / `CLOUD_LLM_MODEL` | 云端高阶模型接口 |
 | `AGENT_DRY_RUN` | 1=只读消费（不写结论/不 XACK） |
 
@@ -62,13 +62,16 @@ analysis:events (Redis Stream)
 ## 容器镜像
 
 ```bash
-# 构建 + 导出离线 tar（默认版本 0.1.0）
-images/scripts/build-agent.sh [版本]
+# 直接从 GHCR 拉取（推荐）
+docker pull ghcr.io/cxiyuan/nss-ndr-public/agent:0.1.0
 
-# 产物
-images/offline/nss-ndr_agent_0.1.0.tar
+# 本地构建（可选；CI 已自动推送 GHCR）
+images/scripts/build-agent.sh [版本]   # 仅产 tar，自行 docker load
 
 # 运行（无 Redis 时优雅降级；对接生产需要 REDIS_URL / ELASTICSEARCH_HOSTS 等环境变量）
-docker run --rm nss-ndr/agent:0.1.0 once
-docker run --rm nss-ndr/agent:0.1.0 worker
+docker run --rm ghcr.io/cxiyuan/nss-ndr-public/agent:0.1.0 once
+docker run --rm ghcr.io/cxiyuan/nss-ndr-public/agent:0.1.0 worker
 ```
+
+> 自 2026-08-31 起不再发布 `.run` 自解压安装包与离线镜像 tar；
+> 上线部署统一使用 `docker pull` + Salt 编排。
