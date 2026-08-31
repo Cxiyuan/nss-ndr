@@ -36,6 +36,7 @@ RUN apk add --no-cache \
         py3-packaging \
         py3-looseversion \
         py3-psutil \
+        py3-distro \
         zeromq \
         libffi \
         openssl \
