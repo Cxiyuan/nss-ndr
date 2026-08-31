@@ -38,7 +38,6 @@ RUN apk add --no-cache \
         py3-psutil \
         py3-distro \
         py3-tornado \
-        py3-zmq \
         py3-dateutil \
         zeromq \
         libffi \
