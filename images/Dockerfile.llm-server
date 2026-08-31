@@ -91,8 +91,12 @@ ENV LLM_HOST=0.0.0.0 \
     LLM_CACHE_TYPE_K=q8_0 \
     LLM_CACHE_TYPE_V=q8_0 \
     LLM_THREADS= \
-    LLM_API_KEY= \
     LLM_EXTRA_ARGS=
+
+# LLM_API_KEY 不在默认 ENV 中：默认无鉴权（部署在内网 nss-net，仅 agent alias
+# 可达）。如需开启鉴权，部署时通过 docker run -e LLM_API_KEY=xxx 或 Salt pillar
+# llm_server.api_key 注入，Hadolint 规则 DL3059 友好。
+# 说明：entrypoint.sh 对空 LLM_API_KEY 不传 --api-key 参数，与"无鉴权"等价。
 
 # 非特权运行（与 agent 镜像 uid 10001 一致）
 RUN adduser -D -u 10001 -H -s /sbin/nologin llm \

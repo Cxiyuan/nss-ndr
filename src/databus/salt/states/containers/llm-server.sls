@@ -45,8 +45,11 @@ nss-ndr-llm-server:
         - LLM_CACHE_TYPE_K={{ llm_server.cache_type_k }}
         - LLM_CACHE_TYPE_V={{ llm_server.cache_type_v }}
         - LLM_THREADS={{ llm_server.threads | string }}
-        - LLM_API_KEY={{ llm_server.api_key }}
         - LLM_EXTRA_ARGS={{ llm_server.extra_args }}
+        # LLM_API_KEY 仅在 pillar 显式非空时注入（默认无鉴权，符合内网部署假设）
+        {%- if llm_server.api_key %}
+        - LLM_API_KEY={{ llm_server.api_key }}
+        {%- endif %}
     - log_driver: json-file
     - log_opt:
         - max-size=20m
