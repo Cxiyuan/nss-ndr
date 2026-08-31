@@ -7,45 +7,83 @@
 #   - 通过 host network 与 master-api ZeroMQ（4505/4506）通信
 #   - 通过 bind mount /var/run/docker.sock 调用 docker state 模块
 # 设计要点：
-#   - 基于官方 Salt 镜像 saltstack/salt:3007.14-py3
+#   - 基于 Alpine 3.21 + Python 3.12 + Salt 3007.14
+#   - pip install --user 让 salt 入口点落到 ~/.local/bin
 #   - 必须 host network（salt ZeroMQ 通信）
 #   - 必须 bind /var/run/docker.sock（Salt docker 状态调用）
 #   - 必须 bind /srv/salt、/srv/pillar（state 文件共享给 master）
-#   - 启动入口 /usr/local/bin/salt-minion-entrypoint：
-#       1. 渲染 /etc/salt-minion/minion 配置（master host + id）
-#       2. 前台启动 salt-minion
 # ============================================================================
 
-FROM saltstack/salt:3007.14-py3
+FROM alpine:3.21
 
 ARG SALT_VERSION=3007.14
 
+RUN apk add --no-cache \
+        python3 \
+        py3-pip \
+        py3-cryptography \
+        py3-pycryptodome \
+        py3-yaml \
+        py3-jinja2 \
+        py3-msgpack \
+        py3-requests \
+        py3-pygit2 \
+        py3-packaging \
+        py3-looseversion \
+        py3-psutil \
+        zeromq \
+        libffi \
+        openssl \
+        openblas \
+        openssh-client \
+        tini \
+        curl \
+        dumb-init \
+        tzdata \
+    && rm -rf /var/cache/apk/*
+
 LABEL org.opencontainers.image.title="nss-ndr/salt-minion" \
-      org.opencontainers.image.description="深瞳安全分析智能体 Salt Minion 容器（基于 saltstack/salt:3007.14-py3 + host network + Docker state）" \
+      org.opencontainers.image.description="深瞳安全分析智能体 Salt Minion 容器（Alpine 3.21 + Python 3.12 + Salt 3007.14 + host network）" \
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.source="https://github.com/Cxiyuan/nss-ndr"
 
-RUN (id salt 2>/dev/null || adduser -D -u 10002 -H -s /sbin/nologin salt) \
+ENV PIP_USER=1 \
+    PATH="/home/salt/.local/bin:/usr/local/bin:/usr/bin:/sbin:/bin"
+ENV SALT_MINION_HOME=/home/salt \
+    SALT_CONFIG_DIR=/etc/salt-minion
+
+RUN adduser -D -u 10002 -H -s /sbin/nologin salt \
     && mkdir -p \
-        /etc/salt-minion \
+        ${SALT_CONFIG_DIR} \
         /var/run/salt \
         /var/cache/salt \
         /var/log/salt \
         /srv/salt /srv/pillar \
+        /home/salt/.local/bin \
     && chown -R salt:salt \
         /var/run/salt \
         /var/cache/salt \
         /var/log/salt \
         /srv/salt /srv/pillar \
-    || true
+        /home/salt
+
+USER salt
+RUN pip3 install --user --no-cache-dir \
+        "salt==${SALT_VERSION}" 2>&1 | tail -5
+USER root
 
 # 内置 minion 配置模板
-COPY salt-minion/minion.tmpl /etc/salt-minion/minion.tmpl
+COPY salt-minion/minion.tmpl ${SALT_CONFIG_DIR}/minion.tmpl
 COPY salt-minion/entrypoint.sh /usr/local/bin/salt-minion-entrypoint
-RUN chmod +x /usr/local/bin/salt-minion-entrypoint
+RUN chmod +x /usr/local/bin/salt-minion-entrypoint \
+    && chown -R salt:salt /etc/salt-minion
+
+# smoke 校验
+RUN salt-minion --version || echo "[smoke] salt-minion not found" \
+    && salt-call --version || echo "[smoke] salt-call not found"
 
 # 注意：Salt Minion ZeroMQ 通信必须 host network；启动时由 docker run --network=host 指定
 EXPOSE 4505 4506
 
-ENTRYPOINT ["/usr/local/bin/salt-minion-entrypoint"]
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/salt-minion-entrypoint"]
 CMD []

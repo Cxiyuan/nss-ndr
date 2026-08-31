@@ -7,54 +7,99 @@
 #   - salt-api：CherryPy + HTTP 8000 端口，对外暴露 REST/eauth API
 #   - 与同机 salt-minion 容器配合，完成 master+minion 集中管理
 # 设计要点：
-#   - 基于官方 Salt 镜像 saltstack/salt:3007.14-py3（Alpine + Python 3.12 +
-#     Salt 3007.14，salt-master / salt-api / salt-key / salt-run / salt-call 等
-#     入口点已正确生成）
+#   - 基于 Alpine 3.21（musl）+ Python 3.12
+#   - pip install --user 让 salt 入口点落到 ~/.local/bin（已加入 PATH）
+#   - 固定 salt 3007.14
 #   - 内置 salt 配置（master / api 模板）于 /etc/salt-master-api/
 #   - 启动入口 /usr/local/bin/salt-master-api-entrypoint：
 #       1. 渲染 /etc/salt-master-api/master / api 配置
-#       2. 启动 salt-master（后台）
+#       2. 后台启动 salt-master
 #       3. 等 4505 端口 ready
-#       4. 启动 salt-api（前台）
-#   - 容器固定 IP nss-net 上 192.168.250.5（与本机 masterless 时代
-#     /etc/salt/minion.d/local.conf 不冲突）
+#       4. 前台启动 salt-api
 # ============================================================================
 
-FROM saltstack/salt:3007.14-py3
+FROM alpine:3.21
 
 ARG SALT_VERSION=3007.14
 
+# 运行时依赖（python3 + pip + system libs for salt）
+RUN apk add --no-cache \
+        python3 \
+        py3-pip \
+        py3-cryptography \
+        py3-pycryptodome \
+        py3-yaml \
+        py3-jinja2 \
+        py3-msgpack \
+        py3-requests \
+        py3-pygit2 \
+        py3-packaging \
+        py3-looseversion \
+        py3-psutil \
+        zeromq \
+        libffi \
+        openssl \
+        openblas \
+        openssh-client \
+        tini \
+        curl \
+        dumb-init \
+        tzdata \
+    && rm -rf /var/cache/apk/*
+
 # 镜像元数据
 LABEL org.opencontainers.image.title="nss-ndr/salt-master-api" \
-      org.opencontainers.image.description="深瞳安全分析智能体 Salt Master + Salt API 容器（基于 saltstack/salt:3007.14-py3）" \
+      org.opencontainers.image.description="深瞳安全分析智能体 Salt Master + Salt API 容器（Alpine 3.21 + Python 3.12 + Salt 3007.14）" \
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.source="https://github.com/Cxiyuan/nss-ndr"
 
-# 镜像运行时 UID 已是 root；不必再加 adduser。
-# 但我们建议用非 root uid 10002 跑 salt-master。
-RUN (id salt 2>/dev/null || adduser -D -u 10002 -H -s /sbin/nologin salt) \
+# 安装 salt 到 ~/.local（Alpine pip3 默认 USER_BASE = ~/.local）
+ENV PIP_USER=1 \
+    PATH="/home/salt/.local/bin:/usr/local/bin:/usr/bin:/sbin:/bin"
+ENV SALT_MASTER_API_HOME=/home/salt \
+    SALT_CONFIG_DIR=/etc/salt-master-api \
+    SALT_RUN_DIR=/var/run/salt \
+    SALT_CACHE_DIR=/var/cache/salt \
+    SALT_LOG_DIR=/var/log/salt
+
+# 非特权用户
+RUN adduser -D -u 10002 -H -s /sbin/nologin salt \
     && mkdir -p \
-        /etc/salt-master-api \
-        /var/run/salt \
-        /var/cache/salt \
-        /var/log/salt \
+        ${SALT_CONFIG_DIR} \
+        ${SALT_RUN_DIR} \
+        ${SALT_CACHE_DIR} \
+        ${SALT_LOG_DIR} \
         /srv/salt /srv/pillar \
+        /home/salt/.local/bin \
     && chown -R salt:salt \
-        /var/run/salt \
-        /var/cache/salt \
-        /var/log/salt \
+        ${SALT_RUN_DIR} \
+        ${SALT_CACHE_DIR} \
+        ${SALT_LOG_DIR} \
         /srv/salt /srv/pillar \
-    || true
+        /home/salt
+
+# 以 salt 用户身份安装 salt；pip --user 把入口点装到 /home/salt/.local/bin/
+# 自 3007 起 salt-api 已合并入 salt 主包，只需 pip install salt
+USER salt
+RUN pip3 install --user --no-cache-dir \
+        "salt==${SALT_VERSION}" 2>&1 | tail -5
+USER root
 
 # 内置配置模板（容器启动时由 entrypoint 渲染到 /etc/salt-master-api/）
-COPY salt-master-api/master.tmpl /etc/salt-master-api/master.tmpl
-COPY salt-master-api/api.tmpl /etc/salt-master-api/api.tmpl
-COPY salt-master-api/eauth.tmpl /etc/salt-master-api/eauth.tmpl
+COPY salt-master-api/master.tmpl ${SALT_CONFIG_DIR}/master.tmpl
+COPY salt-master-api/api.tmpl ${SALT_CONFIG_DIR}/api.tmpl
+COPY salt-master-api/eauth.tmpl ${SALT_CONFIG_DIR}/eauth.tmpl
 COPY salt-master-api/entrypoint.sh /usr/local/bin/salt-master-api-entrypoint
-RUN chmod +x /usr/local/bin/salt-master-api-entrypoint
+RUN chmod +x /usr/local/bin/salt-master-api-entrypoint \
+    && chown -R salt:salt /etc/salt-master-api
+
+# smoke 校验：salt-master / salt-api / salt-call 都应在 PATH
+RUN echo "PATH=$PATH" >> /etc/environment \
+    && salt-master --version || echo "[smoke] salt-master not found" \
+    && salt-api --version 2>&1 | head -3 || echo "[smoke] salt-api not found"
 
 EXPOSE 4505 4506 8000
 
-# 官方镜像默认 entrypoint 已是 tini 包装的 python；直接覆盖为我们的 entrypoint
-ENTRYPOINT ["/usr/local/bin/salt-master-api-entrypoint"]
+# tini 兜底 PID 1 信号转发
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/salt-master-api-entrypoint"]
 CMD []
