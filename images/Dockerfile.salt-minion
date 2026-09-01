@@ -26,7 +26,7 @@ RUN apk add --no-cache \
         shadow \
         tini \
         curl \
-        nc \
+        busybox-extras \
         tzdata \
     && rm -rf /var/cache/apk/*
 

@@ -23,7 +23,7 @@ FROM python:3.10-alpine
 
 ARG SALT_VERSION=3007.14
 
-# 运行时依赖（Alpine musl + salt 系统库 + iproute2 等）
+# 运行时依赖（Alpine musl + salt 系统库 + busybox-nc 用于端口探活）
 RUN apk add --no-cache \
         zeromq \
         libffi \
@@ -33,7 +33,7 @@ RUN apk add --no-cache \
         shadow \
         tini \
         curl \
-        nc \
+        busybox-extras \
         tzdata \
     && rm -rf /var/cache/apk/*
 
