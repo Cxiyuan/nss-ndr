@@ -21,6 +21,7 @@ RUN apk add --no-cache \
         zeromq \
         libffi \
         openssl \
+        openssl-dev \
         openblas \
         openssh-client \
         shadow \
@@ -28,7 +29,9 @@ RUN apk add --no-cache \
         curl \
         busybox-extras \
         tzdata \
-    && rm -rf /var/cache/apk/*
+    && rm -rf /var/cache/apk/* \
+    && ln -sf /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so \
+    && ln -sf /usr/lib/libssl.so.3 /usr/lib/libssl.so
 
 LABEL org.opencontainers.image.title="nss-ndr/salt-minion" \
       org.opencontainers.image.description="深瞳安全分析智能体 Salt Minion 容器（Python 3.10 + Salt 3007.14 + docker-py）" \

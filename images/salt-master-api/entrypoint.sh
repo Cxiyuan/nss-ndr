@@ -52,7 +52,7 @@ trap "kill -TERM ${MASTER_PID} 2>/dev/null || true" EXIT INT TERM
 echo "[entrypoint] waiting salt-master 4505..."
 i=0
 while [ $i -lt 60 ]; do
-  if nc -z 127.0.0.1 4505 2>/dev/null; then
+  if python3 -c "import socket; s=socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', 4505)); s.close()" 2>/dev/null; then
     echo "[entrypoint] salt-master 4505 ready (after ${i}s)"
     break
   fi
@@ -60,7 +60,7 @@ while [ $i -lt 60 ]; do
   sleep 1
 done
 
-if ! nc -z 127.0.0.1 4505 2>/dev/null; then
+if ! python3 -c "import socket; s=socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', 4505)); s.close()" 2>/dev/null; then
   echo "[entrypoint] ERROR: salt-master 4505 not ready after 60s" >&2
   tail -30 /var/log/salt/master >&2 || true
   exit 1

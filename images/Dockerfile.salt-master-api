@@ -24,10 +24,12 @@ FROM python:3.10-alpine
 ARG SALT_VERSION=3007.14
 
 # 运行时依赖（Alpine musl + salt 系统库 + busybox-nc 用于端口探活）
+# openssl-dev 提供 libcrypto.so 符号链接（salt 的 rsax931.py 用 ctypes 查找）
 RUN apk add --no-cache \
         zeromq \
         libffi \
         openssl \
+        openssl-dev \
         openblas \
         openssh-client \
         shadow \
@@ -35,7 +37,10 @@ RUN apk add --no-cache \
         curl \
         busybox-extras \
         tzdata \
-    && rm -rf /var/cache/apk/*
+    && rm -rf /var/cache/apk/* \
+    # 确保 ctypes.util.find_library('crypto') 能找到 libcrypto（salt rsax931.py 依赖）
+    && ln -sf /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so \
+    && ln -sf /usr/lib/libssl.so.3 /usr/lib/libssl.so
 
 # 镜像元数据
 LABEL org.opencontainers.image.title="nss-ndr/salt-master-api" \
