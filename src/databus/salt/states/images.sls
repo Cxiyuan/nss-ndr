@@ -1,12 +1,11 @@
 # ============================================================================
-# 镜像：从 offline tar 加载，目标机不拉取、不构建
-# 镜像 tar 已上传到 databus.images_dir（默认 /root/nss-ndr/images）
+# 镜像：从国内 GHCR 镜像源拉取（/etc/docker/daemon.json 已配 registry-mirrors）
+# 自 2026-08-31 起：产品发布改为镜像直发，不再使用本地 offline tar
 # ============================================================================
 
 {% from "databus/map.jinja" import databus with context %}
 
 {% for img in databus.get('images', []) %}
-{%   set safe = img.name | replace('/', '__') | replace(':', '__') %}
 {%   set repo_tag = img.name | string %}
 {%   if ':' in repo_tag %}
 {%     set repo = repo_tag.rsplit(':', 1)[0] %}
@@ -19,6 +18,6 @@
   docker_image.present:
     - name: {{ repo }}
     - tag: {{ tag }}
-    - load: {{ databus.images_dir }}/{{ img.tar }}
+    # 不指定 load: / pull: 字段，由 docker daemon 按 daemon.json 的 registry-mirrors 拉取
     - force: False
 {% endfor %}

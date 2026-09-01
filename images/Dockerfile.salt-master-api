@@ -7,38 +7,24 @@
 #   - salt-api：CherryPy + HTTP 8000 端口，对外暴露 REST/eauth API
 #   - 与同机 salt-minion 容器配合，完成 master+minion 集中管理
 # 设计要点：
-#   - 基于 Alpine 3.21（musl）+ Python 3.12
-#   - pip install --user 让 salt 入口点落到 ~/.local/bin（已加入 PATH）
-#   - 固定 salt 3007.14
+#   - 基于 python:3.10-alpine（官方声明 salt 3007.x 仅支持 Python 3.10；
+#     Python 3.12 下 distutils 被移除导致 console_scripts 不注册、
+#     state 引擎模块加载死锁等兼容问题，故必须用 3.10）
+#   - pip install salt 在 3.10 下正常生成 salt-master/salt-api/salt-key 入口点
 #   - 内置 salt 配置（master / api 模板）于 /etc/salt-master-api/
 #   - 启动入口 /usr/local/bin/salt-master-api-entrypoint：
-#       1. 渲染 /etc/salt-master-api/master / api 配置
-#       2. 后台启动 salt-master
-#       3. 等 4505 端口 ready
+#       1. 装 pyzmq / cherrypy / tornado（Alpine musl 官方 wheel）
+#       2. 用 Python 创建 saltapi 用户（Alpine 无 adduser）
+#       3. 后台启动 salt-master，等 4505 ready
 #       4. 前台启动 salt-api
 # ============================================================================
 
-FROM alpine:3.21
+FROM python:3.10-alpine
 
 ARG SALT_VERSION=3007.14
 
-# 运行时依赖（python3 + pip + salt 全套系统库）
+# 运行时依赖（Alpine musl + salt 系统库 + iproute2 等）
 RUN apk add --no-cache \
-        python3 \
-        py3-pip \
-        py3-cryptography \
-        py3-pycryptodome \
-        py3-yaml \
-        py3-jinja2 \
-        py3-msgpack \
-        py3-requests \
-        py3-pygit2 \
-        py3-packaging \
-        py3-looseversion \
-        py3-psutil \
-        py3-distro \
-        py3-tornado \
-        py3-dateutil \
         zeromq \
         libffi \
         openssl \
@@ -47,52 +33,46 @@ RUN apk add --no-cache \
         shadow \
         tini \
         curl \
-        dumb-init \
+        nc \
         tzdata \
     && rm -rf /var/cache/apk/*
 
 # 镜像元数据
 LABEL org.opencontainers.image.title="nss-ndr/salt-master-api" \
-      org.opencontainers.image.description="深瞳安全分析智能体 Salt Master + Salt API 容器（Alpine 3.21 + Python 3.12 + Salt 3007.14）" \
+      org.opencontainers.image.description="深瞳安全分析智能体 Salt Master + Salt API 容器（Python 3.10 + Salt 3007.14）" \
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.source="https://github.com/Cxiyuan/nss-ndr"
 
-# 安装 salt 到 ~/.local（Alpine pip3 默认 USER_BASE = ~/.local）
-ENV PIP_USER=1 \
-    PATH="/home/salt/.local/bin:/usr/local/bin:/usr/bin:/sbin:/bin"
 ENV SALT_MASTER_API_HOME=/home/salt \
     SALT_CONFIG_DIR=/etc/salt-master-api \
     SALT_RUN_DIR=/var/run/salt \
     SALT_CACHE_DIR=/var/cache/salt \
-    SALT_LOG_DIR=/var/log/salt
+    SALT_LOG_DIR=/var/log/salt \
+    PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
 
-# 非特权用户（Alpine 3.21 BusyBox 标准镜像无 standalone adduser）
-# 用 python 脚本（通过 COPY 而非 RUN python -c 避免 buildkit 多行字符串解析坑）
-# 路径是相对 build context（images/），不要加 images/ 前缀
+# 非特权用户（Alpine BusyBox 无 standalone adduser，用 python 脚本创建）
 COPY salt-adduser.py /tmp/salt-adduser.py
 RUN python3 /tmp/salt-adduser.py \
     && mkdir -p /etc/salt-master-api /var/run/salt /var/cache/salt /var/log/salt \
-                /srv/salt /srv/pillar /home/salt/.local/bin \
+                /srv/salt /srv/pillar \
     && chmod -R 0755 /home/salt \
     && chown -R 10002:10002 /var/run/salt /var/cache/salt /var/log/salt \
-                          /srv/salt /srv/pillar /home/salt
+                          /srv/salt /srv/pillar
 
-# 以 root 直接安装 salt 到系统 site-packages（USER salt --user 装的包在 USER root 下不可见）
-# PEP 668 强 EXTERNALLY-MANAGED，必须 --break-system-packages 兜底
-RUN pip3 install --no-cache-dir --break-system-packages \
-        "salt==${SALT_VERSION}"
+# 安装 salt 3007.14（Python 3.10 下 distutils 正常，console_scripts 自动注册）
+# 附依赖：pyzmq（ZeroMQ）、pycryptodome、markupsafe、distro、tornado、cherrypy（salt-api）
+RUN pip3 install --no-cache-dir --break-system-packages -i "${PIP_INDEX_URL}" \
+        "salt==${SALT_VERSION}" \
+        pyzmq \
+        pycryptodome \
+        markupsafe \
+        distro \
+        tornado \
+        cherrypy
 
-# 说明：salt 3007.14 的 setup.py 用 distutils.core.setup，Python 3.12 已删除 distutils，
-# wheel 安装时不会注册 console_scripts 入口点（distutils 失败导致 entry_points 丢失）。
-# 解决：直接把仓库内置的 salt-scripts/ 目录（来自 salt 3007.14 源码 tar.gz 的
-# scripts/）拷贝到 /usr/local/bin/，每个脚本都是 ~25 行的 Python wrapper
-# （调用 salt.scripts:salt_master / salt_api 等 entry function）。
-COPY salt-master-api/salt-scripts/ /usr/local/bin/
-RUN chmod +x /usr/local/bin/salt* /usr/local/bin/spm 2>/dev/null || true
-
-# smoke 校验
-RUN for f in salt-master salt-api salt-key; do \
-        which "$f" >/dev/null 2>&1 && echo "[smoke] $f OK: $($f --version 2>&1 | head -1)" || echo "[smoke] $f MISSING"; \
+# smoke 校验：入口点应已被 pip 自动注册到 /usr/local/bin/
+RUN for f in salt-master salt-api salt-key salt-run salt-call; do \
+        command -v "$f" >/dev/null 2>&1 && echo "[smoke] $f OK: $($f --version 2>&1 | head -1)" || echo "[smoke] $f MISSING"; \
     done
 
 # 内置配置模板（容器启动时由 entrypoint 渲染到 /etc/salt-master-api/）
@@ -102,11 +82,6 @@ COPY salt-master-api/eauth.tmpl ${SALT_CONFIG_DIR}/eauth.tmpl
 COPY salt-master-api/entrypoint.sh /usr/local/bin/salt-master-api-entrypoint
 RUN chmod +x /usr/local/bin/salt-master-api-entrypoint \
     && chown -R salt:salt /etc/salt-master-api
-
-# smoke 校验：salt-master / salt-api / salt-call 都应在 PATH
-RUN echo "PATH=$PATH" >> /etc/environment \
-    && salt-master --version || echo "[smoke] salt-master not found" \
-    && salt-api --version 2>&1 | head -3 || echo "[smoke] salt-api not found"
 
 EXPOSE 4505 4506 8000
 
