@@ -1,0 +1,14 @@
+# Elastic Agent 本地配置（Fleet-managed 模式）
+# 注意：本地 elastic-agent.yml 只保留 minimal 的 outputs 声明，不能带
+# username/password/api_key 占位符 —— 否则与 Fleet policy 下发的 monitoring
+# output（api_key）冲突，OTel 报 "cannot set both api_key and username/password"。
+# 认证完全由 Fleet policy 提供。
+outputs:
+  default:
+    type: elasticsearch
+    hosts:
+      - http://elasticsearch:9200
+    preset: balanced
+
+agent.monitoring:
+  use_output: default

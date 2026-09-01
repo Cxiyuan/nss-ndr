@@ -1,19 +1,16 @@
 # 数据总线 · Zeek 自定义镜像
-# 基础镜像默认 nss-ndr/zeek:8.2.2（本地手工注入 JSON redef 的版本）；
-# CI 构建时传 BASE_IMAGE=zeek/zeek:8.2.2 直接从官方镜像构建——
-# databus 的 local.zeek 自带 JSON redef，最终镜像内容一致。
-# 1) 镜像默认 site/local.zeek 第一行注入 JSON redef（base init 前生效）
-# 2) 内置 databus 的 local.zeek（协议加载 + default_logdir）和检测脚本
+# 基础镜像 zeek/zeek:8.2.2（官方镜像，zeek 安装在 /usr/local/zeek）
+# databus 的 local.zeek 自带 JSON redef + default_logdir + 43 协议加载
 # 运行环境参数（ZEEK_INTERFACE）通过环境变量注入
-ARG BASE_IMAGE=nss-ndr/zeek:8.2.2
+ARG BASE_IMAGE=zeek/zeek:8.2.2
 FROM ${BASE_IMAGE}
 
 # 内置 databus 配置：local.zeek（含 default_logdir + JSON + 协议加载）覆盖镜像默认
-# 基础镜像 nss-ndr/zeek:8.2.2 已注入 JSON 输出 redef 到镜像默认 site/local.zeek，
-# 此处用 databus 的 local.zeek（含 default_logdir）覆盖到 /opt/zeek/share/zeek/site/
-COPY zeek/local.zeek /opt/zeek/share/zeek/site/local.zeek
+# 注意：官方 zeek 镜像安装路径是 /usr/local/zeek（不是 /opt/zeek），
+# 必须 COPY 到 /usr/local/zeek/share/zeek/site/ 才会被 zeek 加载
+COPY zeek/local.zeek /usr/local/zeek/share/zeek/site/local.zeek
 # 检测脚本
-COPY zeek/scripts/detect.zeek /opt/zeek/share/zeek/site/scripts/detect.zeek
+COPY zeek/scripts/detect.zeek /usr/local/zeek/share/zeek/site/scripts/detect.zeek
 
 LABEL org.opencontainers.image.title="nss-ndr/zeek-databus" \
       org.opencontainers.image.description="Zeek 8.2.2 with JSON output + databus config pre-installed" \

@@ -13,6 +13,9 @@ nss-ndr-redis:
   docker_container.running:
     - image: nss-ndr/redis-databus:8.10.1
     - restart_policy: unless-stopped
+    - network_mode: nss-net
+    - detach: True
+    - skip_translate: volumes
     # 保持镜像默认用户，与原始编排定义一致
     - binds:
         - nss-ndr-redis-data:/data
@@ -25,19 +28,9 @@ nss-ndr-redis:
                 - redis
     - environment:
         - TZ={{ databus.tz }}
-        - REDIS_PASSWORD={{ databus.creds.redis_password }}
-    - command: /bin/bash -lc "exec redis-server /usr/local/etc/redis/redis.conf --requirepass '{{ databus.creds.redis_password }}' --appendonly yes --appendfsync everysec --maxmemory 1gb --maxmemory-policy allkeys-lru"
+    - command: ["redis-server", "--requirepass", "{{ databus.creds.redis_password }}", "--maxmemory", "1gb", "--maxmemory-policy", "allkeys-lru"]
     - log_driver: json-file
-    - log_opt:
-        - max-size=20m
-        - max-file=5
-    - healthcheck:
-        - test: ["CMD", "redis-cli", "-a", "{{ databus.creds.redis_password }}", "--no-auth-warning", "ping"]
-        - interval: 15000000000
-        - timeout: 5000000000
-        - retries: 10
-        - start_period: 30000000000
     - require:
-      - cmd: ensure-nss-network
+      - docker_network: ensure-nss-net-present
       - docker_volume: nss-ndr-redis-data
       - docker_image: nss-ndr/redis-databus:8.10.1

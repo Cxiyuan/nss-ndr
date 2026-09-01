@@ -22,8 +22,9 @@ if [[ "${1:-}" == "--force" || "${NSS_ZEEK_POLICY_FORCE_RECREATE:-0}" == "1" ]];
 fi
 
 ENV_FILE="${NSS_ENV_FILE:-/etc/nss-ndr/.env}"
-ES_URL="http://localhost:9200"
-KIBANA_URL="http://localhost:5601"
+# 脚本在 salt-minion 容器内执行（nss-net），用 DNS 名访问 ES / Kibana
+ES_URL="${NSS_ES_URL:-http://elasticsearch:9200}"
+KIBANA_URL="${NSS_KIBANA_URL:-http://kibana:5601}"
 
 SUPER_USER="elastic"
 SUPER_PASS=$(grep '^ELASTIC_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)
@@ -34,6 +35,13 @@ log() { echo -e "\n===== $1 ====="; }
 
 write_kv() {
   local KEY="$1" VAL="$2"
+  # 幂等：值未变化且 .env 只读时跳过写入（容器内 .env 挂载 ro，重复执行不报错）
+  local CURRENT
+  CURRENT=$(grep "^$KEY=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- | head -1 || true)
+  if [[ "$CURRENT" == "$VAL" ]]; then
+    echo "  ✓ $KEY 已是最新（跳过写入）"
+    return 0
+  fi
   if grep -q "^$KEY=" "$ENV_FILE"; then
     python3 - << PYEOF
 import re

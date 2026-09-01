@@ -73,7 +73,7 @@ deploy-es-redis:
 
 wait-es-healthy:
   http.wait_for_successful_query:
-    - name: http://localhost:9200/_cluster/health
+    - name: http://elasticsearch:9200/_cluster/health
     - username: {{ databus.creds.elastic_username }}
     - password: {{ databus.creds.elastic_password }}
     - status: 200
@@ -98,7 +98,7 @@ deploy-kibana:
 
 wait-kibana-healthy:
   http.wait_for_successful_query:
-    - name: http://localhost:5601/api/status
+    - name: http://kibana:5601/api/status
     - username: {{ databus.creds.elastic_username }}
     - password: {{ databus.creds.elastic_password }}
     - status: 200

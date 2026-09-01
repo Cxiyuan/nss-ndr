@@ -8,14 +8,14 @@ verify-zeek-datastream:
   cmd.run:
     - name: |
         curl -fsS -u {{ databus.creds.elastic_username }}:{{ databus.creds.elastic_password }} \
-          "http://localhost:9200/_cat/indices/.ds-logs-zeek.*?h=index,docs.count&s=index" | head -20
+          "http://elasticsearch:9200/_cat/indices/.ds-logs-zeek.*?h=index,docs.count&s=index" | head -20
     - failhard: False
 
 verify-ecs-fields:
   cmd.run:
     - name: |
         curl -fsS -u {{ databus.creds.elastic_username }}:{{ databus.creds.elastic_password }} \
-          "http://localhost:9200/.ds-logs-zeek.connection-*/_search?size=1" \
+          "http://elasticsearch:9200/.ds-logs-zeek.connection-*/_search?size=1" \
           -H "Content-Type: application/json" \
           -d '{"query":{"match_all":{}}}' | python3 -c "
         import sys, json

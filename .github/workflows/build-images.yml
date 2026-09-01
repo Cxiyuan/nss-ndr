@@ -84,7 +84,9 @@ jobs:
             fixed_tags: type=raw,value=9.5.2
 
           # 数据总线：Zeek 自定义镜像（CI 直接用官方基础镜像，无需手工中间镜像）
-          - image: zeek
+          # 注意：镜像名与 Dockerfile.zeek-custom 的 LABEL 一致（zeek-databus），
+          # 且 zeek 官方镜像安装路径是 /usr/local/zeek（Dockerfile 内 COPY 目标必须匹配）
+          - image: zeek-databus
             context: src/databus
             dockerfile: images/Dockerfile.zeek-custom
             platforms: linux/amd64

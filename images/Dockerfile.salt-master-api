@@ -25,7 +25,10 @@ ARG SALT_VERSION=3007.14
 
 # 运行时依赖（Alpine musl + salt 系统库 + busybox-nc 用于端口探活）
 # openssl-dev 提供 libcrypto.so 符号链接（salt 的 rsax931.py 用 ctypes 查找）
-RUN apk add --no-cache \
+# 用阿里云 Alpine 镜像加速（dl-cdn.alpinelinux.org 在国内慢），并修正重复 /alpine 路径
+RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.aliyun.com/alpine#g; s#alpine/alpine/v3#alpine/v3#g' /etc/apk/repositories \
+    && apk update \
+    && apk add --no-cache \
         zeromq \
         libffi \
         openssl \
@@ -71,6 +74,7 @@ RUN pip3 install --no-cache-dir --break-system-packages -i "${PIP_INDEX_URL}" \
         "salt==${SALT_VERSION}" \
         pyzmq \
         pycryptodome \
+        cryptography \
         markupsafe \
         distro \
         tornado \

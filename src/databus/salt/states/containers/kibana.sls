@@ -14,8 +14,11 @@ include:
 
 nss-ndr-kibana:
   docker_container.running:
-    - image: docker.elastic.co/kibana/kibana:9.5.2
+    - image: nss-ndr/kibana:9.5.2
     - restart_policy: unless-stopped
+    - network_mode: nss-net
+    - detach: True
+    - skip_translate: volumes
     # 保持镜像默认用户（kibana），与原始编排定义一致
     - binds:
         - nss-ndr-kibana-data:/usr/share/kibana/data
@@ -31,29 +34,10 @@ nss-ndr-kibana:
         - TZ={{ databus.tz }}
         - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
         - ELASTICSEARCH_SERVICEACCOUNTTOKEN={{ env_get('KIBANA_SERVICE_TOKEN') }}
-        - KIBANA_SYSTEM_PASSWORD={{ databus.creds.elastic_password }}
-        - XPACK_SECURITY_ENABLED=true
-        - XPACK_ENCRYPTED_SAVED_OBJECTS=true
-        - XPACK_ENCRYPTED_SAVED_OBJECTS_ENCRYPTIONKEY={{ databus.creds.kibana_encryption_key }}
-        - XPACK_ENCRYPTED_SAVED_OBJECTS_ENCKEY={{ databus.creds.kibana_encryption_key }}
-        - MONITORING_KIBANA_COLLECTION_ENABLED=true
-        - XPACK_FLEET_ENABLED=true
-        - XPACK_FLEET_AGENTS_FLEET_SERVER_HOSTS=["https://fleet-server:8220"]
-        - FLEET_CA_TRUSTED_FINGERPRINT=
-        - I18N_LOCALE=zh-CN
     - log_driver: json-file
-    - log_opt:
-        - max-size=20m
-        - max-file=5
-    - healthcheck:
-        - test: ["CMD-SHELL", "curl -fsS -u {{ databus.creds.elastic_username }}:{{ databus.creds.elastic_password }} http://localhost:5601/api/status | grep -q available"]
-        - interval: 30000000000
-        - timeout: 10000000000
-        - retries: 20
-        - start_period: 180000000000
     - require:
-      - cmd: ensure-nss-network
+      - docker_network: ensure-nss-net-present
       - docker_volume: nss-ndr-kibana-data
-      - docker_image: docker.elastic.co/kibana/kibana:9.5.2
+      - docker_image: nss-ndr/kibana:9.5.2
       - docker_container: nss-ndr-elasticsearch
       - file: /etc/nss-ndr/kibana.yml

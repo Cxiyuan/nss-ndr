@@ -1,10 +1,11 @@
-# 镜像：从离线 tar 加载，目标机不拉取、不构建
-# tar 已上传到 agent.images_dir（默认 /root/nss-agent）
+# ============================================================================
+# 镜像：从国内 GHCR 镜像源拉取（/etc/docker/daemon.json 已配 registry-mirrors）
+# 自 2026-08-31 起：产品发布改为镜像直发，不再使用本地 offline tar
+# ============================================================================
 
 {% from "agent/map.jinja" import agent with context %}
 
 {% for img in agent.get('images', []) %}
-{%   set safe = img.name | replace('/', '_') | replace(':', '_') %}
 {%   set repo_tag = img.name | string %}
 {%   if ':' in repo_tag %}
 {%     set repo = repo_tag.rsplit(':', 1)[0] %}
@@ -17,6 +18,6 @@
   docker_image.present:
     - name: {{ repo }}
     - tag: {{ tag }}
-    - load: {{ agent.images_dir }}/{{ img.tar }}
+    # 不指定 load: / pull: 字段，由 docker daemon 按 daemon.json 的 registry-mirrors 拉取
     - force: False
 {% endfor %}

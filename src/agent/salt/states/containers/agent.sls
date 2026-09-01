@@ -12,6 +12,9 @@ nss-ndr-agent:
     - image: nss-ndr/agent:0.1.1
     - name: {{ agent.container_name }}
     - restart_policy: unless-stopped
+    - network_mode: nss-net
+    - detach: True
+    - skip_translate: volumes
     - user: agent
     - entrypoint: ["python", "-m", "app"]
     - command: ["worker"]
@@ -40,9 +43,6 @@ nss-ndr-agent:
         - AGENT_DRY_RUN={{ env_get('AGENT_DRY_RUN') or '0' }}
         - AGENT_LOG_LEVEL=INFO
     - log_driver: json-file
-    - log_opt:
-        - max-size=20m
-        - max-file=5
     - healthcheck:
         - test: ["CMD", "python", "-c", "import sys; sys.exit(0 if b'python' in open('/proc/1/cmdline','rb').read() else 1)"]
         - interval: 30000000000

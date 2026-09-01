@@ -12,6 +12,8 @@
 # ============================================================================
 
 databus:
+  # orchestrate/deploy.sls 的目标 minion id（salt.state - tgt 使用）
+  target: nss-ai-agent-minion
   env_file: /etc/nss-ndr/.env
   base_dir: /opt/nss-ndr
   images_dir: /root/nss-ndr/images
@@ -21,6 +23,7 @@ databus:
   network:
     name: nss-net
     subnet: 192.168.250.0/24
+    gateway: 192.168.250.1
 
   creds:
     elastic_username: elastic
@@ -29,7 +32,7 @@ databus:
     kibana_encryption_key: NSS-NDR-Default-Kibana-Encryption-Key-2026!
 
   images:
-    - name: nss-ndr/zeek:8.2.2
+    - name: nss-ndr/zeek-databus:8.2.2
       tar: nss-ndr_zeek_8.2.2.tar
     - name: docker.elastic.co/elasticsearch/elasticsearch:9.5.2
       tar: docker.elastic.co_elasticsearch_elasticsearch_9.5.2.tar
@@ -41,12 +44,12 @@ databus:
       tar: nss-ndr_logstash-databus_9.5.2.tar
     - name: nss-ndr/redis-databus:8.10.1
       tar: nss-ndr_redis-databus_8.10.1.tar
-    - name: nss-ndr/llm-server:0.1.0
-      tar: nss-ndr_llm-server_0.1.0.tar
-    - name: nss-ndr/salt-master-api:0.1.0
-      tar: nss-ndr_salt-master-api_0.1.0.tar
-    - name: nss-ndr/salt-minion:0.1.0
-      tar: nss-ndr_salt-minion_0.1.0.tar
+    - name: nss-ndr/llm-server:latest
+      tar: nss-ndr_llm-server_latest.tar
+    - name: nss-ndr/salt-master-api:0.1.1
+      tar: nss-ndr_salt-master-api_0.1.1.tar
+    - name: nss-ndr/salt-minion:0.1.2
+      tar: nss-ndr_salt-minion_0.1.1.tar
 
   fixed_ips:
     elasticsearch: 192.168.250.40
@@ -86,7 +89,7 @@ databus:
 
   # LLM Server（nss-ndr/llm-server）
   llm_server:
-    image: nss-ndr/llm-server:0.1.0
+    image: nss-ndr/llm-server:latest
     ip: 192.168.250.90
     port: 8080
     model_path: /models/Qwen3-0.6B-Q8_0.gguf
@@ -104,19 +107,20 @@ databus:
 
   # Salt Master + Salt API（容器化，自 2026-08-31 起替代宿主机 salt-minion RPM）
   salt_master_api:
-    image: nss-ndr/salt-master-api:0.1.0
+    image: nss-ndr/salt-master-api:0.1.1
     ip: 192.168.250.5
     api_port: 8000
     api_user: saltapi
-    # 默认空 = 容器 entrypoint 自动生成 24 位随机密码并写入 /etc/nss-ndr/.env
-    # 也可在此显式固定（适合需要给外部 salt-api 客户端的稳定凭证）
-    api_password: ""
+    # 与 create-saltapi.py 内置的 OS 用户密码一致（salt-api PAM external_auth 使用）
+    api_password: saltapi-pass
 
   # Salt Minion（容器化，host network + bind /var/run/docker.sock）
   salt_minion:
-    image: nss-ndr/salt-minion:0.1.0
+    image: nss-ndr/salt-minion:0.1.2
     # minion id 与 master minion_key 绑定；改名后需重新 enroll
     id: nss-ai-agent-minion
+    # minion 固定 IP（nss-net 内）
+    ip: 192.168.250.2
 
   configs:
     - src: salt://databus/files/kibana.yml
@@ -124,6 +128,9 @@ databus:
       mode: "644"
     - src: salt://databus/files/elastic-agent-fleet-server.yml
       dst: /etc/nss-ndr/elastic-agent-fleet-server.yml
+      mode: "644"
+    - src: salt://databus/files/elastic-agent.yml
+      dst: /etc/nss-ndr/elastic-agent.yml
       mode: "644"
     - src: salt://databus/files/jvm.options
       dst: /etc/nss-ndr/jvm.options

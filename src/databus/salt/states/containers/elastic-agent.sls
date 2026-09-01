@@ -18,41 +18,50 @@ include:
 
 deploy-elastic-agent-start-script:
   file.managed:
-    - name: /opt/nss-ndr/scripts/elastic-agent-start.sh
+    - name: /srv/salt/databus/scripts/elastic-agent-start.sh
     - source: salt://databus/scripts/elastic-agent-start.sh
     - user: root
     - group: root
-    - mode: "700"
+    - mode: "644"
     - makedirs: True
 
 nss-ndr-elastic-agent:
   docker_container.running:
     - image: nss-ndr/elastic-agent-zeek:9.5.2
     - restart_policy: unless-stopped
-    - user: root
+    - network_mode: nss-net
+    - detach: True
+    - skip_translate: volumes
+    # 与线上验证通过的容器一致：镜像默认用户 elastic-agent + privileged
+    - privileged: True
     - binds:
         - nss-ndr-elastic-agent-data:/usr/share/elastic-agent/data
-        - nss-ndr-elastic-agent-state:/usr/share/elastic-agent/state
+        - nss-ndr-elastic-agent-state:/var/lib/elastic-agent
         - nss-ndr-zeek-logs:/var/log/zeek:ro
-        - /opt/nss-ndr/scripts/elastic-agent-start.sh:/opt/nss-ndr/scripts/elastic-agent-start.sh:ro
+        - /srv/salt/databus/scripts/elastic-agent-start.sh:/opt/nss-ndr/scripts/elastic-agent-start.sh:ro
+        # 干净的本地 elastic-agent.yml（无 username/password/api_key 占位符），
+        # 避免与 Fleet policy 的 monitoring output(api_key) 冲突
+        - /etc/nss-ndr/elastic-agent.yml:/usr/share/elastic-agent/elastic-agent.yml:ro
     - networks:
         - nss-net:
             - ipv4_address: {{ databus.fixed_ips.elastic_agent }}
             - aliases:
                 - elastic-agent
-    - entrypoint: /opt/nss-ndr/scripts/elastic-agent-start.sh
+    - command: /opt/nss-ndr/scripts/elastic-agent-start.sh
     - environment:
         - TZ={{ databus.tz }}
-        - FLEET_ENROLLMENT_TOKEN={{ env_get('ELASTIC_AGENT_ENROLLMENT_TOKEN') }}
         - FLEET_URL=https://fleet-server:8220
-        - KIBANA_HOST=http://kibana:5601
+        - FLEET_ENROLLMENT_TOKEN={{ env_get('ELASTIC_AGENT_ENROLLMENT_TOKEN') }}
         - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     - log_driver: json-file
-    - log_opt:
-        - max-size=20m
-        - max-file=5
+    - healthcheck:
+        - test: ["CMD-SHELL", "elastic-agent status || exit 1"]
+        - interval: 30000000000
+        - timeout: 10000000000
+        - retries: 3
+        - start_period: 30000000000
     - require:
-      - cmd: ensure-nss-network
+      - docker_network: ensure-nss-net-present
       - docker_volume: nss-ndr-elastic-agent-data
       - docker_volume: nss-ndr-elastic-agent-state
       - docker_volume: nss-ndr-zeek-logs
@@ -60,4 +69,4 @@ nss-ndr-elastic-agent:
       - docker_container: nss-ndr-elasticsearch
       - docker_container: nss-ndr-kibana
       - docker_container: nss-ndr-fleet-server
-      - file: /opt/nss-ndr/scripts/elastic-agent-start.sh
+      - file: /srv/salt/databus/scripts/elastic-agent-start.sh

@@ -30,5 +30,6 @@ run-fleet-setup:
 mark-fleet-setup-done:
   file.touch:
     - name: /etc/nss-ndr/.fleet-setup.done
+    - unless: test -f /etc/nss-ndr/.fleet-setup.done
     - require:
       - cmd: run-fleet-setup

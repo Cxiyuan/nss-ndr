@@ -17,7 +17,9 @@ FROM python:3.10-alpine
 
 ARG SALT_VERSION=3007.14
 
-RUN apk add --no-cache \
+RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.aliyun.com/alpine#g; s#alpine/alpine/v3#alpine/v3#g' /etc/apk/repositories \
+    && apk update \
+    && apk add --no-cache \
         zeromq \
         libffi \
         openssl \
@@ -27,6 +29,7 @@ RUN apk add --no-cache \
         shadow \
         tini \
         curl \
+        bash \
         busybox-extras \
         tzdata \
     && rm -rf /var/cache/apk/* \
@@ -57,6 +60,7 @@ RUN pip3 install --no-cache-dir --break-system-packages -i "${PIP_INDEX_URL}" \
         "salt==${SALT_VERSION}" \
         pyzmq \
         pycryptodome \
+        cryptography \
         markupsafe \
         distro \
         docker \

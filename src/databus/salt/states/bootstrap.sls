@@ -40,5 +40,6 @@ generate-kibana-service-token:
 mark-bootstrap-done:
   file.touch:
     - name: /etc/nss-ndr/.bootstrap.done
+    - unless: test -f /etc/nss-ndr/.bootstrap.done
     - require:
       - cmd: generate-kibana-service-token

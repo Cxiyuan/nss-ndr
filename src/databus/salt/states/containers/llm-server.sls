@@ -24,9 +24,11 @@ nss-ndr-llm-server:
   docker_container.running:
     - image: {{ llm_server.image }}
     - restart_policy: unless-stopped
+    - network_mode: nss-net
+    - detach: True
+    - skip_translate: volumes
     # 镜像默认非特权用户 llm（uid 10001），与 agent 镜像一致
-    - binds:
-        - nss-ndr-llm-models:/models:ro
+    # 模型 Qwen3-0.6B-Q8_0.gguf 已内置进镜像（/models），无需外挂模型卷
     - networks:
         - nss-net:
             - ipv4_address: {{ llm_server.ip }}
@@ -51,15 +53,12 @@ nss-ndr-llm-server:
         - LLM_API_KEY={{ llm_server.api_key }}
         {%- endif %}
     - log_driver: json-file
-    - log_opt:
-        - max-size=20m
-        - max-file=5
     - healthcheck:
-        - test: ["CMD-SHELL", "wget -q -O /dev/null 'http://127.0.0.1:{{ llm_server.port }}/health' || exit 1"]
+        - test: ["CMD-SHELL", "wget -q -O /dev/null \"http://127.0.0.1:${LLM_PORT:-8080}/health\" || exit 1"]
         - interval: 30000000000
         - timeout: 5000000000
         - retries: 3
         - start_period: 120000000000
     - require:
       - docker_image: {{ llm_server.image }}
-      - docker_volume: nss-ndr-llm-models
+      - docker_network: ensure-nss-net-present

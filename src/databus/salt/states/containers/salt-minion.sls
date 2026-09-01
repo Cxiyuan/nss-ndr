@@ -1,10 +1,11 @@
 # ============================================================================
 # Salt Minion（nss-ndr/salt-minion）
 # ----------------------------------------------------------------------------
-# 容器以 host network + 特权运行（必须与本机 docker daemon / cgroup 交互）：
+# 容器以 nss-net + 特权运行（必须与本机 docker daemon 交互）：
 #   - bind /var/run/docker.sock 让 docker state 模块能调用 docker CLI
 #   - bind /srv/salt 与 /srv/pillar 与 master-api 共享（同一 nss-net 内 master 也 bind）
-#   - bind /etc/nss-ndr 读取 .env（动态 token）
+#   - bind /etc/nss-ndr 读写：bootstrap/fleet-setup 要写回 .env（动态 token），
+#     configs.sls 要下发 kibana.yml 等配置；只读会导致这些 state 失败
 # 注意：
 #   - 容器必须有 docker.sock 写权限
 #   - 必须先于 databus.containers.* 启动（minion 是 master 调度的执行者）
@@ -13,6 +14,7 @@
 
 include:
   - databus.network
+  - databus.volumes
   - databus.images
   - databus.containers.salt-master-api
 
@@ -24,40 +26,40 @@ nss-ndr-salt-minion:
   docker_container.running:
     - image: {{ salt_minion.image }}
     - restart_policy: unless-stopped
-    # 必须 host network（Salt ZeroMQ 4505/4506 通信）
-    - network_mode: host
+    # 与 master 同网段（nss-net），通过 alias salt-master-api 连接 master
+    # network_mode 必须显式 nss-net（与线上容器一致；缺省会变 bridge 触发重建）
+    - network_mode: nss-net
+    - detach: True
+    - skip_translate: volumes
+    - networks:
+        - nss-net:
+            - ipv4_address: {{ salt_minion.ip }}
+            - aliases:
+                - salt-minion
     # 特权模式：让 salt-minion 能调用 docker CLI / cgroup
     - privileged: True
     - binds:
-        # Docker socket（Salt docker state 模块调用 dockerd）
-        - /var/run/docker.sock:/var/run/docker.sock
-        # 与 master-api 共享 state 文件
+        # 顺序与线上容器 HostConfig.Binds 一致（docker_container 按序比较）
         - nss-ndr-salt-config-minion:/etc/salt-minion
         - nss-ndr-salt-run:/var/run/salt
         - nss-ndr-salt-cache:/var/cache/salt
         - nss-ndr-salt-log:/var/log/salt
-        - /srv/salt:/srv/salt:rw
-        - /srv/pillar:/srv/pillar:rw
-        # 读取 .env（dynamic token）
-        - /etc/nss-ndr:/etc/nss-ndr:ro
+        - /srv/salt:/srv/salt:ro
+        - /srv/pillar:/srv/pillar:ro
+        # /etc/nss-ndr 读写：bootstrap/fleet-setup 写回 .env，configs.sls 下发配置
+        - /etc/nss-ndr:/etc/nss-ndr
+        # Docker socket（Salt docker state 模块调用 dockerd）
+        - /var/run/docker.sock:/var/run/docker.sock
     - environment:
         - TZ={{ databus.tz }}
-        - SALT_MASTER_HOST={{ salt_master_api.ip }}        # nss-net 内 alias
+        - SALT_MASTER_HOST=salt-master-api        # nss-net 内 alias（与 master 同网段）
         - SALT_MINION_ID={{ salt_minion.id }}
+        - PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
     - log_driver: json-file
-    - log_opt:
-        - max-size=20m
-        - max-file=5
-    - healthcheck:
-        # minion 与 master 建立 ZeroMQ 连接后 8000 端口才能正常返回 jobs
-        - test: ["CMD-SHELL", "salt-call --config-dir /etc/salt-minion test.ping 2>&1 | grep -q True || (echo > /dev/tcp/127.0.0.1/4505) >/dev/null 2>&1"]
-        - interval: 60000000000
-        - timeout: 10000000000
-        - retries: 10
-        - start_period: 90000000000
     - require:
       - docker_image: {{ salt_minion.image }}
       - docker_container: nss-ndr-salt-master-api
+      - docker_network: ensure-nss-net-present
       - docker_volume: nss-ndr-salt-config-minion
       - docker_volume: nss-ndr-salt-run
       - docker_volume: nss-ndr-salt-cache

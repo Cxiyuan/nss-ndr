@@ -10,7 +10,8 @@
 set -euo pipefail
 
 ENV_FILE="${NSS_ENV_FILE:-/etc/nss-ndr/.env}"
-ES_URL="http://localhost:9200"
+# 脚本在 salt-minion 容器内执行（nss-net），用 DNS 名访问 ES
+ES_URL="${NSS_ES_URL:-http://elasticsearch:9200}"
 
 SUPER_USER="elastic"
 SUPER_PASS=$(grep '^ELASTIC_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)
@@ -23,6 +24,13 @@ fi
 KIBANA_TOKEN=$(curl -fsS -X POST -u "$SUPER_USER:$SUPER_PASS" \
   "$ES_URL/_security/service/elastic/kibana/credential/token" |
   python3 -c "import sys,json; print(json.load(sys.stdin)['token']['value'])")
+
+# 幂等：.env 只读且已有 token 时跳过写入（容器内 .env 挂载 ro，重复执行不报错）
+CURRENT=$(grep "^KIBANA_SERVICE_TOKEN=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- | head -1 || true)
+if [[ -n "$CURRENT" ]]; then
+  echo "  ✓ KIBANA_SERVICE_TOKEN 已存在（跳过写入）"
+  exit 0
+fi
 
 if grep -q "^KIBANA_SERVICE_TOKEN=" "$ENV_FILE"; then
   python3 - "$KIBANA_TOKEN" "$ENV_FILE" <<'PYEOF'
