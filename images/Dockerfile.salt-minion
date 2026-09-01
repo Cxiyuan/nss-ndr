@@ -74,6 +74,10 @@ RUN for f in salt-minion salt-call; do \
         command -v "$f" >/dev/null 2>&1 && echo "[smoke] $f OK: $($f --version 2>&1 | head -1)" || echo "[smoke] $f MISSING"; \
     done
 
+# 修补 salt/utils/rsax931.py（Alpine musl 下 find_library 找不到 libcrypto）
+COPY salt-master-api/patch-rsax931.py /opt/patch-rsax931.py
+RUN python3 /opt/patch-rsax931.py
+
 # 内置 minion 配置模板
 COPY salt-minion/minion.tmpl ${SALT_CONFIG_DIR}/minion.tmpl
 COPY salt-minion/entrypoint.sh /usr/local/bin/salt-minion-entrypoint

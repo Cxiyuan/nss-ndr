@@ -93,6 +93,10 @@ RUN for f in salt-master salt-api salt-key salt-run salt-call; do \
 COPY salt-master-api/patch-event.py /opt/patch-event.py
 RUN python3 /opt/patch-event.py
 
+# 修补 salt/utils/rsax931.py（Alpine musl 下 find_library 找不到 libcrypto）
+COPY salt-master-api/patch-rsax931.py /opt/patch-rsax931.py
+RUN python3 /opt/patch-rsax931.py
+
 # 创建 saltapi 系统用户（salt-api PAM external_auth 需要；Alpine 无 adduser）
 COPY salt-master-api/create-saltapi.py /opt/create-saltapi.py
 RUN python3 /opt/create-saltapi.py
