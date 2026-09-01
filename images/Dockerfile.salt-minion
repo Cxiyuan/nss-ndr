@@ -56,7 +56,15 @@ RUN pip3 install --no-cache-dir --break-system-packages -i "${PIP_INDEX_URL}" \
         pycryptodome \
         markupsafe \
         distro \
-        docker
+        docker \
+        PyYAML \
+        jinja2 \
+        msgpack \
+        requests \
+        packaging \
+        looseversion \
+        psutil \
+        distro
 
 # smoke 校验
 RUN for f in salt-minion salt-call; do \

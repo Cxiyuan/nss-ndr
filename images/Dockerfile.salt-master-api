@@ -61,6 +61,7 @@ RUN python3 /tmp/salt-adduser.py \
 
 # 安装 salt 3007.14（Python 3.10 下 distutils 正常，console_scripts 自动注册）
 # 附依赖：pyzmq（ZeroMQ）、pycryptodome、markupsafe、distro、tornado、cherrypy（salt-api）
+# PyYAML / jinja2 / msgpack / requests 等 salt 核心依赖（python:3.10-alpine 不自带）
 RUN pip3 install --no-cache-dir --break-system-packages -i "${PIP_INDEX_URL}" \
         "salt==${SALT_VERSION}" \
         pyzmq \
@@ -68,7 +69,15 @@ RUN pip3 install --no-cache-dir --break-system-packages -i "${PIP_INDEX_URL}" \
         markupsafe \
         distro \
         tornado \
-        cherrypy
+        cherrypy \
+        PyYAML \
+        jinja2 \
+        msgpack \
+        requests \
+        packaging \
+        looseversion \
+        psutil \
+        distro
 
 # smoke 校验：入口点应已被 pip 自动注册到 /usr/local/bin/
 RUN for f in salt-master salt-api salt-key salt-run salt-call; do \
