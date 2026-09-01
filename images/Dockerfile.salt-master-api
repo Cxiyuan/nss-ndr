@@ -75,6 +75,14 @@ RUN for f in salt-master salt-api salt-key salt-run salt-call; do \
         command -v "$f" >/dev/null 2>&1 && echo "[smoke] $f OK: $($f --version 2>&1 | head -1)" || echo "[smoke] $f MISSING"; \
     done
 
+# 修补 salt/utils/event.py（非 dict return 时的事件丢失 bug，见 patch-event.py 注释）
+COPY salt-master-api/patch-event.py /opt/patch-event.py
+RUN python3 /opt/patch-event.py
+
+# 创建 saltapi 系统用户（salt-api PAM external_auth 需要；Alpine 无 adduser）
+COPY salt-master-api/create-saltapi.py /opt/create-saltapi.py
+RUN python3 /opt/create-saltapi.py
+
 # 内置配置模板（容器启动时由 entrypoint 渲染到 /etc/salt-master-api/）
 COPY salt-master-api/master.tmpl ${SALT_CONFIG_DIR}/master.tmpl
 COPY salt-master-api/api.tmpl ${SALT_CONFIG_DIR}/api.tmpl

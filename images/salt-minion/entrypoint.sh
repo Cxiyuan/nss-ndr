@@ -17,6 +17,12 @@ MINION_CFG="${CFG_DIR}/minion"
 
 echo "[entrypoint] salt minion entrypoint starting..."
 
+# ---------- 0) 装 pyzmq + docker-py（salt docker state 模块需要 docker-py 直连 docker daemon）----------
+PIP_INDEX="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+python3 -c "import zmq, docker" 2>/dev/null \
+  || pip3 install --no-cache-dir --break-system-packages -i "$PIP_INDEX" \
+       pyzmq docker 2>&1 | tail -3
+
 # ---------- 1) 渲染 minion 配置 ----------
 mkdir -p "${CFG_DIR}" /etc/salt /var/run/salt /var/cache/salt /var/log/salt
 if [ ! -f "${MINION_CFG}" ]; then
