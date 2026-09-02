@@ -67,6 +67,20 @@ kibana_req() {
   fi
 }
 
+# 0) Fleet Server 的 ES service token（幂等，仅需 ES；fleet-server 容器必需）
+# elastic-agent 以 fleet-server 模式启动需要 FLEET_SERVER_SERVICE_TOKEN，
+# 无则 bootstrap 失败。与 gen-kibana-token.sh 同源的 ES service token 机制。
+log "0) 生成 Fleet Server service token"
+CUR_TOKEN=$(grep "^FLEET_SERVICE_TOKEN=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- | head -1 || true)
+if [[ -n "$CUR_TOKEN" ]]; then
+  echo "  ✓ FLEET_SERVICE_TOKEN 已存在（跳过生成）"
+else
+  FS_TOKEN=$(curl -fsS -X POST -u "$SUPER_USER:$SUPER_PASS" \
+    "$ES_URL/_security/service/elastic/fleet-server/credential/token" |
+    python3 -c "import sys,json; print(json.load(sys.stdin)['token']['value'])")
+  write_kv "FLEET_SERVICE_TOKEN" "$FS_TOKEN"
+fi
+
 
 
 # 1) Fleet default output（幂等 + 修正 hosts）

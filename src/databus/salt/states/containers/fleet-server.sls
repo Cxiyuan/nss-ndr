@@ -21,7 +21,7 @@ include:
 
 nss-ndr-fleet-server:
   docker_container.running:
-    - image: nss-ndr/elastic-agent-zeek:9.5.2
+    - image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
     - restart_policy: unless-stopped
     - network_mode: nss-net
     - detach: True
@@ -55,7 +55,7 @@ nss-ndr-fleet-server:
       - docker_network: ensure-nss-net-present
       - docker_volume: nss-ndr-fleet-server-data
       - docker_volume: nss-ndr-fleet-server-state
-      - docker_image: nss-ndr/elastic-agent-zeek:9.5.2
+      - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
       - docker_container: nss-ndr-elasticsearch
       - docker_container: nss-ndr-kibana
       - file: /etc/nss-ndr/elastic-agent-fleet-server.yml

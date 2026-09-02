@@ -15,7 +15,7 @@ include:
 
 nss-ndr-logstash:
   docker_container.running:
-    - image: nss-ndr/logstash-databus:9.5.2
+    - image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/logstash-databus:9.5.2
     - restart_policy: unless-stopped
     - network_mode: nss-net
     - detach: True
@@ -41,6 +41,6 @@ nss-ndr-logstash:
       - docker_network: ensure-nss-net-present
       - docker_volume: nss-ndr-logstash-data
       - docker_volume: nss-ndr-zeek-logs
-      - docker_image: nss-ndr/logstash-databus:9.5.2
+      - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/logstash-databus:9.5.2
       - docker_container: nss-ndr-elasticsearch
       - docker_container: nss-ndr-redis

@@ -27,7 +27,7 @@ deploy-elastic-agent-start-script:
 
 nss-ndr-elastic-agent:
   docker_container.running:
-    - image: nss-ndr/elastic-agent-zeek:9.5.2
+    - image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
     - restart_policy: unless-stopped
     - network_mode: nss-net
     - detach: True
@@ -65,7 +65,7 @@ nss-ndr-elastic-agent:
       - docker_volume: nss-ndr-elastic-agent-data
       - docker_volume: nss-ndr-elastic-agent-state
       - docker_volume: nss-ndr-zeek-logs
-      - docker_image: nss-ndr/elastic-agent-zeek:9.5.2
+      - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
       - docker_container: nss-ndr-elasticsearch
       - docker_container: nss-ndr-kibana
       - docker_container: nss-ndr-fleet-server

@@ -12,7 +12,7 @@ include:
 
 nss-ndr-zeek:
   docker_container.running:
-    - image: nss-ndr/zeek-databus:8.2.2
+    - image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/zeek-databus:8.2.2
     - restart_policy: unless-stopped
     - detach: True
     - skip_translate: volumes
@@ -32,4 +32,4 @@ nss-ndr-zeek:
     - log_driver: json-file
     - require:
       - docker_volume: nss-ndr-zeek-logs
-      - docker_image: nss-ndr/zeek-databus:8.2.2
+      - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/zeek-databus:8.2.2

@@ -9,7 +9,7 @@ include:
 
 nss-ndr-agent:
   docker_container.running:
-    - image: nss-ndr/agent:0.1.1
+    - image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/agent:latest
     - name: {{ agent.container_name }}
     - restart_policy: unless-stopped
     - network_mode: nss-net
@@ -50,7 +50,7 @@ nss-ndr-agent:
         - retries: 5
         - start_period: 30000000000
     - require:
-      - docker_image: nss-ndr/agent:0.1.1
+      - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/agent:latest
       - file: /etc/nss-ndr/agent/agent.yaml
       - file: /etc/nss-ndr/agent/providers.yaml
       - file: /etc/nss-ndr/agent/rules/beh-rules.yaml

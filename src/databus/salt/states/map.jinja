@@ -7,7 +7,7 @@
 
 {# LLM Server 命名空间（独立于 databus，方便覆盖默认值） #}
 {%- set llm_server = {
-    'image':       salt['pillar.get']('databus:llm_server:image',       'nss-ndr/llm-server:latest'),
+    'image':       salt['pillar.get']('databus:llm_server:image',       'ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/llm-server:latest'),
     'ip':          salt['pillar.get']('databus:llm_server:ip',          '192.168.250.90'),
     'port':        salt['pillar.get']('databus:llm_server:port',        8080),
     'model_path':  salt['pillar.get']('databus:llm_server:model_path',  '/models/Qwen3-0.6B-Q8_0.gguf'),
@@ -32,7 +32,7 @@
 
 {# Salt Master + Salt API 命名空间 #}
 {%- set salt_master_api = {
-    'image':        salt['pillar.get']('databus:salt_master_api:image',       'nss-ndr/salt-master-api:0.1.1'),
+    'image':        salt['pillar.get']('databus:salt_master_api:image',       'ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-master-api:latest'),
     'ip':           salt['pillar.get']('databus:salt_master_api:ip',          '192.168.250.5'),
     'api_port':     salt['pillar.get']('databus:salt_master_api:api_port',    8000),
     'api_user':     salt['pillar.get']('databus:salt_master_api:api_user',    'saltapi'),
@@ -41,7 +41,7 @@
 
 {# Salt Minion 命名空间（与本机 master-api 配对）#}
 {%- set salt_minion = {
-    'image': salt['pillar.get']('databus:salt_minion:image', 'nss-ndr/salt-minion:0.1.2'),
+    'image': salt['pillar.get']('databus:salt_minion:image', 'ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-minion:latest'),
     'id':    salt['pillar.get']('databus:salt_minion:id',    'nss-ai-agent-minion'),
     'ip':    salt['pillar.get']('databus:salt_minion:ip',    '192.168.250.2'),
 } -%}

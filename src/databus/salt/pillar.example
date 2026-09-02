@@ -32,23 +32,23 @@ databus:
     kibana_encryption_key: NSS-NDR-Default-Kibana-Encryption-Key-2026!
 
   images:
-    - name: nss-ndr/zeek-databus:8.2.2
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/zeek-databus:8.2.2
       tar: nss-ndr_zeek_8.2.2.tar
     - name: docker.elastic.co/elasticsearch/elasticsearch:9.5.2
       tar: docker.elastic.co_elasticsearch_elasticsearch_9.5.2.tar
     - name: docker.elastic.co/kibana/kibana:9.5.2
       tar: docker.elastic.co_kibana_kibana_9.5.2.tar
-    - name: nss-ndr/elastic-agent-zeek:9.5.2
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
       tar: nss-ndr_elastic-agent-zeek_9.5.2.tar
-    - name: nss-ndr/logstash-databus:9.5.2
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/logstash-databus:9.5.2
       tar: nss-ndr_logstash-databus_9.5.2.tar
-    - name: nss-ndr/redis-databus:8.10.1
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/redis-databus:8.10.1
       tar: nss-ndr_redis-databus_8.10.1.tar
-    - name: nss-ndr/llm-server:latest
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/llm-server:latest
       tar: nss-ndr_llm-server_latest.tar
-    - name: nss-ndr/salt-master-api:0.1.1
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-master-api:latest
       tar: nss-ndr_salt-master-api_0.1.1.tar
-    - name: nss-ndr/salt-minion:0.1.2
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-minion:latest
       tar: nss-ndr_salt-minion_0.1.1.tar
 
   fixed_ips:
@@ -72,7 +72,7 @@ databus:
 
   # AI 分析智能体（nss-ndr/agent）
   agent:
-    image: nss-ndr/agent:0.1.1
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/agent:latest
     ip: 192.168.250.80
     # dry_run: 0 = 生产模式（写 verdict / entity / ES）；1 = 只读消费
     # 上游已部署 llm-server + LLM 模型，启用 LLM 本地边缘分析时置 0；
@@ -89,7 +89,7 @@ databus:
 
   # LLM Server（nss-ndr/llm-server）
   llm_server:
-    image: nss-ndr/llm-server:latest
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/llm-server:latest
     ip: 192.168.250.90
     port: 8080
     model_path: /models/Qwen3-0.6B-Q8_0.gguf
@@ -116,7 +116,7 @@ databus:
 
   # Salt Master + Salt API（容器化，自 2026-08-31 起替代宿主机 salt-minion RPM）
   salt_master_api:
-    image: nss-ndr/salt-master-api:0.1.1
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-master-api:latest
     ip: 192.168.250.5
     api_port: 8000
     api_user: saltapi
@@ -125,7 +125,7 @@ databus:
 
   # Salt Minion（容器化，host network + bind /var/run/docker.sock）
   salt_minion:
-    image: nss-ndr/salt-minion:0.1.2
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-minion:latest
     # minion id 与 master minion_key 绑定；改名后需重新 enroll
     id: nss-ai-agent-minion
     # minion 固定 IP（nss-net 内）

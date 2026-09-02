@@ -14,7 +14,7 @@ include:
 
 nss-ndr-kibana:
   docker_container.running:
-    - image: nss-ndr/kibana:9.5.2
+    - image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/kibana:9.5.2
     - restart_policy: unless-stopped
     - network_mode: nss-net
     - detach: True
@@ -38,6 +38,6 @@ nss-ndr-kibana:
     - require:
       - docker_network: ensure-nss-net-present
       - docker_volume: nss-ndr-kibana-data
-      - docker_image: nss-ndr/kibana:9.5.2
+      - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/kibana:9.5.2
       - docker_container: nss-ndr-elasticsearch
       - file: /etc/nss-ndr/kibana.yml

@@ -11,7 +11,7 @@ include:
 
 nss-ndr-elasticsearch:
   docker_container.running:
-    - image: nss-ndr/elasticsearch:9.5.2
+    - image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elasticsearch:9.5.2
     - restart_policy: unless-stopped
     # network_mode 必须显式 nss-net（与线上容器一致）；detach/skip_translate 消除 docker-py 对比伪差异
     - network_mode: nss-net
@@ -48,4 +48,4 @@ nss-ndr-elasticsearch:
       - docker_network: ensure-nss-net-present
       - docker_volume: nss-ndr-es-data
       - docker_volume: nss-ndr-es-backup
-      - docker_image: nss-ndr/elasticsearch:9.5.2
+      - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elasticsearch:9.5.2

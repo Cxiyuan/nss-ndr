@@ -11,7 +11,7 @@ include:
 
 nss-ndr-redis:
   docker_container.running:
-    - image: nss-ndr/redis-databus:8.10.1
+    - image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/redis-databus:8.10.1
     - restart_policy: unless-stopped
     - network_mode: nss-net
     - detach: True
@@ -33,4 +33,4 @@ nss-ndr-redis:
     - require:
       - docker_network: ensure-nss-net-present
       - docker_volume: nss-ndr-redis-data
-      - docker_image: nss-ndr/redis-databus:8.10.1
+      - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/redis-databus:8.10.1
