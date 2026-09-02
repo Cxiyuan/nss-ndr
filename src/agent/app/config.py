@@ -164,12 +164,16 @@ def load_config(base_dir: str | Path | None = None) -> AgentConfig:
 
     # LLM provider 健康自检：dry_run=False 但所有 provider 的 base_url/model 都为空时，
     # 启动期 fail-fast 报错，避免出现"静默兜底到 uncertain low"导致看起来在跑、实际没用 LLM。
+    # 预留未启用的 provider（如 cloud，weight=0，base_url/model/api_key 全空）跳过自检，
+    # 允许 edge-only 部署；一旦配置了其中任一项就必须配齐，防手误。
     if not cfg.dry_run:
         for name, p in cfg.providers.items():
-            if not p.base_url or not p.model:
-                missing = []
-                if not p.base_url: missing.append("base_url")
-                if not p.model:   missing.append("model")
+            if not p.base_url and not p.model and not p.api_key:
+                continue
+            missing = []
+            if not p.base_url: missing.append("base_url")
+            if not p.model:   missing.append("model")
+            if missing:
                 raise RuntimeError(
                     f"provider '{name}' 配置缺失: {', '.join(missing)}；"
                     f"请检查 /etc/nss-ndr/agent/providers.yaml 或容器 ENV "

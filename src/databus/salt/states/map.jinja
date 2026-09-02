@@ -5,18 +5,18 @@
 
 {%- set databus = salt['pillar.get']('databus', {}) %}
 
-{# LLM Server 命名空间（独立于 databus，方便覆盖默认值） #}
+{# LLM Server 命名空间（独立于 databus，方便覆盖默认值）。
+   默认 ctx 4096 避免长 prompt 触发 llama.cpp 主动 cancel；并行 2 提升吞吐
+   （每个请求用 threads_ratio 比例的核）；减小 batch / ubatch 让单会话推理更轻量；
+   资源比例默认 0.75（占宿主机 75%），换硬件环境无需调整数值，可通过 pillar 覆盖。 #}
 {%- set llm_server = {
     'image':       salt['pillar.get']('databus:llm_server:image',       'ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/llm-server:latest'),
     'ip':          salt['pillar.get']('databus:llm_server:ip',          '192.168.250.90'),
     'port':        salt['pillar.get']('databus:llm_server:port',        8080),
     'model_path':  salt['pillar.get']('databus:llm_server:model_path',  '/models/Qwen3-0.6B-Q8_0.gguf'),
     'model_alias': salt['pillar.get']('databus:llm_server:model_alias', 'Qwen3-0.6B-Q8_0'),
-    # 默认 ctx 4096 避免长 prompt 触发 llama.cpp 主动 cancel；可通过 pillar 覆盖
     'context_size': salt['pillar.get']('databus:llm_server:context_size', 4096),
-    # 并行 2 提升吞吐（每个请求用 threads_ratio 比例的核）
     'parallel':    salt['pillar.get']('databus:llm_server:parallel',    2),
-    # 减小 batch / ubatch 让单会话推理更轻量
     'batch_size':  salt['pillar.get']('databus:llm_server:batch_size',  1024),
     'ubatch_size': salt['pillar.get']('databus:llm_server:ubatch_size', 256),
     'cache_type_k': salt['pillar.get']('databus:llm_server:cache_type_k', 'q8_0'),
@@ -24,7 +24,6 @@
     'threads':     salt['pillar.get']('databus:llm_server:threads',     ''),
     'api_key':     salt['pillar.get']('databus:llm_server:api_key',     ''),
     'extra_args':  salt['pillar.get']('databus:llm_server:extra_args',  ''),
-    # 资源比例（默认 0.75 = 占宿主机 75%）。换硬件环境无需调整数值。
     'cpu_ratio':     salt['pillar.get']('databus:llm_server:cpu_ratio',     0.75),
     'threads_ratio': salt['pillar.get']('databus:llm_server:threads_ratio', 0.75),
     'context_ratio': salt['pillar.get']('databus:llm_server:context_ratio', 0.75),
