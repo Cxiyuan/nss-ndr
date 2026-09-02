@@ -31,10 +31,17 @@ nss-ndr-llm-server:
     # 模型 Qwen3-0.6B-Q8_0.gguf 已内置进镜像（/models），无需外挂模型卷
     # ----------------------------------------------------------------------
     # CPU 资源：按宿主机比例（默认 0.75 = 75%）限制，不写绝对值。
-    # Docker 的 cpus=0.75 是硬限（hard cap），cpu_shares=768 是相对权重。
-    # 线程数也按比例动态算（entrypoint 读取 /proc/cpuinfo）。
+    # 注意：salt 3007 dockermod 不支持 cpus/NanoCpus（会静默忽略），
+    # 因此用 cpuset_cpus 按宿主机核数 num_cpus × cpu_ratio 动态算出可用的
+    # 物理核区间（如 10 核 × 0.75 → 0-6 共 7 核 ≈ 70%），换硬件自动适配；
+    # cpu_shares=768 是相对权重，线程数也按比例动态算（entrypoint 读 /proc/cpuinfo）。
     # ----------------------------------------------------------------------
-    - cpus: "{{ llm_server.get('cpu_ratio', 0.75) }}"
+{% set _ncpu = salt['grains.get']('num_cpus', 0) | int %}
+{% if _ncpu <= 0 %}{% set _ncpu = 1 %}{% endif %}
+{% set _llm_cores = ((_ncpu * llm_server.get('cpu_ratio', 0.75)) | int) %}
+{% if _llm_cores < 1 %}{% set _llm_cores = 1 %}{% endif %}
+{% if _llm_cores > 1 %}{% set _cpuset = '0-' ~ (_llm_cores - 1) %}{% else %}{% set _cpuset = '0' %}{% endif %}
+    - cpuset_cpus: {{ _cpuset }}
     - cpu_shares: "{{ ((llm_server.get('cpu_ratio', 0.75) * 1024) | int) }}"
     - networks:
         - nss-net:
