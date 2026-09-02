@@ -57,6 +57,19 @@ ALERT_MAPPING = {
     }
 }
 
+OUTBOX_MAPPING = {
+    "mappings": {
+        "properties": {
+            # _target_index 记录原要写向的索引（verdict/asset/alert）
+            "_target_index": {"type": "keyword"},
+            "trace_id": {"type": "keyword"},
+            "error": {"type": "text"},
+            "@timestamp": {"type": "date"},
+            # 暂存项原始 doc（dynamic mapping）
+        }
+    }
+}
+
 
 class ESStore:
     """数据总线 ES 的智能体侧封装。client 可注入（测试用 fake）。"""
@@ -67,6 +80,8 @@ class ESStore:
         self.verdict_index = idx.get("verdict", "nss-ndr-agent-verdict")
         self.asset_index = idx.get("asset", "nss-ndr-agent-assets")
         self.alert_index = idx.get("alert", "nss-ndr-agent-events")
+        # 修复：新增 outbox_index 用于 ES 写入失败的暂存补偿
+        self.outbox_index = idx.get("outbox", "nss-ndr-agent-outbox")
 
     @classmethod
     async def make_client(
@@ -80,25 +95,85 @@ class ESStore:
             await self.client.close()
 
     async def init_indices(self) -> None:
-        """幂等创建索引（含 ILM 策略挂载）。"""
+        """幂等创建索引（含 ILM 策略挂载，修复原 init_indices 未被调用导致索引走动态映射）。"""
         if self.client is None:
             return
+        # 1) 挂载 ILM 策略（7d rollover + 30d delete），失败则降级为普通索引
         try:
             await self.client.ilm.put_lifecycle(
                 "nss-ndr-agent-policy",
-                policy={"policy": {"phases": {"hot": {"min_age": "0ms", "actions": {"rollover": {"max_age": "7d", "max_size": "20gb"}}}, "delete": {"min_age": "30d", "actions": {"delete": {}}}}}},
+                policy={
+                    "phases": {
+                        "hot": {
+                            "min_age": "0ms",
+                            "actions": {"rollover": {"max_age": "7d", "max_size": "20gb"}},
+                        },
+                        "delete": {
+                            "min_age": "30d",
+                            "actions": {"delete": {}},
+                        },
+                    }
+                },
             )
         except Exception:
             pass  # ILM 不可用时降级为普通索引
+        # 2) 显式创建索引（避免动态映射），已存在则跳过
         for name, mapping in (
             (self.verdict_index, VERDICT_MAPPING),
             (self.asset_index, ASSET_MAPPING),
             (self.alert_index, ALERT_MAPPING),
+            (self.outbox_index, OUTBOX_MAPPING),
         ):
             try:
                 await self.client.indices.create(index=name, **mapping)
             except Exception:
                 pass  # 已存在
+
+    async def write_outbox(self, doc: dict, ttl: int = 3600) -> dict:
+        """ES 写入失败时暂存到 outbox 索引（带 TTL，独立补偿），返回是否写入成功。"""
+        if self.client is None:
+            return {"ok": False, "reason": "no-client"}
+        try:
+            await self.client.index(
+                index=self.outbox_index, document=doc, refresh=True
+            )
+            return {"ok": True}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "reason": str(e)}
+
+    async def retry_outbox(self, max_items: int = 50) -> dict:
+        """补偿 outbox：尝试把暂存项重新写入 verdict 索引；返回重试成功数。
+        由后台 cron / 启动时调用。"""
+        if self.client is None:
+            return {"retried": 0, "remaining": 0}
+        try:
+            resp = await self.client.search(
+                index=self.outbox_index,
+                query={"match_all": {}},
+                size=max_items,
+                sort=[{"@timestamp": "asc"}],
+            )
+            items = resp.get("hits", {}).get("hits", [])
+        except Exception:
+            return {"retried": 0, "remaining": 0}
+        retried = 0
+        for h in items:
+            src = h["_source"]
+            doc = {k: v for k, v in src.items() if k not in ("_id", "@timestamp")}
+            try:
+                await self.client.index(
+                    index=src.get("_target_index", self.verdict_index),
+                    document=doc,
+                    refresh=True,
+                )
+                # 成功则从 outbox 删除
+                await self.client.delete(
+                    index=self.outbox_index, id=h["_id"], refresh=True
+                )
+                retried += 1
+            except Exception:
+                continue
+        return {"retried": retried, "remaining": max_items - retried}
 
     async def write_verdict(self, verdict: Verdict, index: str | None = None) -> dict:
         body = verdict.model_dump(mode="json")

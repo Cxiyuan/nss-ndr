@@ -234,10 +234,14 @@ class RuleEngine:
         last_ts = max((e.ts for e in events), default="")
         last_id = events[-1].event_id if events else ""
 
+        # 修复：防 prompt 暴涨 — 单 session 累积事件列表最多保留末尾 50 个，
+        # LLM 长 prompt 是导致 llama.cpp cancel + 单个会话拖死整队列的根因之一。
+        max_events_in_unit = 50
+        bounded_events = events[-max_events_in_unit:] if len(events) > max_events_in_unit else events
         return AnalysisUnit(
             session_key=sess,
-            events=[e.event_id for e in events],
-            event_count=len(events),
+            events=[e.event_id for e in bounded_events],
+            event_count=len(events),  # event_count 保留原始计数（行为溯源用）
             summary={
                 "datasets": dict(datasets),
                 "dst_ports": sorted(ports)[:20],

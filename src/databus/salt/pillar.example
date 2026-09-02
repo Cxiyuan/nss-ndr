@@ -94,16 +94,25 @@ databus:
     port: 8080
     model_path: /models/Qwen3-0.6B-Q8_0.gguf
     model_alias: Qwen3-0.6B-Q8_0
-    context_size: 32768
-    parallel: 1
-    batch_size: 2048
-    ubatch_size: 512
+    # ctx 4096 避免长 prompt 触发 llama.cpp 主动 cancel
+    context_size: 4096
+    # 并行 2 提升吞吐
+    parallel: 2
+    # 减小 batch / ubatch 让单会话推理更轻量
+    batch_size: 1024
+    ubatch_size: 256
     cache_type_k: q8_0
     cache_type_v: q8_0
-    # 空 = llama-server 自动按物理核数；高密度共享机器可显式限制避免争抢
+    # 空 = entrypoint 按宿主机 CPU 实时计算 threads + ctx
     threads: ""
     api_key: ""
     extra_args: ""
+    # ---------- 资源比例（默认 0.75 = 占宿主机 75%） ----------
+    # Docker 通过 cpus + cpu_shares 双重限制（entrypoint 自动算 LLM_THREADS_RATIO）。
+    # 换硬件环境无需修改数值，按需覆盖。
+    cpu_ratio: 0.75
+    threads_ratio: 0.75
+    context_ratio: 0.75
 
   # Salt Master + Salt API（容器化，自 2026-08-31 起替代宿主机 salt-minion RPM）
   salt_master_api:

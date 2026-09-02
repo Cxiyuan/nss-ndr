@@ -51,6 +51,8 @@ class AgentWorker:
             evt_ttl=config.evt_ttl,
             entity_ttl=config.entity_ttl,
             lock_ttl=config.lock_ttl,
+            dlq_stream=config.dlq_stream,
+            dlq_max_len=config.dlq_max_len,
         )
         es_client = None
         if config.es_hosts:
@@ -58,7 +60,15 @@ class AgentWorker:
                 config.es_hosts,
                 basic_auth=(config.es_username, config.es_password) if config.es_password else None,
             )
-        self.es = ESStore(es_client, {"verdict": config.verdict_index, "asset": config.asset_index, "alert": config.alert_index})
+        self.es = ESStore(
+            es_client,
+            {
+                "verdict": config.verdict_index,
+                "asset": config.asset_index,
+                "alert": config.alert_index,
+                "outbox": config.outbox_index,
+            },
+        )
         self.engine = RuleEngine(rules_dir=config.rules_dir)
         providers = {
             name: OpenAICompatProvider(pcfg) for name, pcfg in config.providers.items()
@@ -84,13 +94,20 @@ class AgentWorker:
         self._stop = asyncio.Event()
 
     async def start(self) -> None:
-        """校验依赖并确保消费组存在（索引/ILM 由 setup 阶段负责）。"""
+        """校验依赖、确保消费组存在，并真正初始化 ES 索引（修复 init_indices 未被调用）。"""
         if not await self.redis.ping():
             log.warning("redis unreachable, worker will retry")
         try:
             await self.redis.ensure_group()
         except Exception as e:  # noqa: BLE001
             log.warning("consumer group ensure failed", error=str(e))
+        # 修复：原本 init_indices 是死代码（只在 worker.py 定义，未被调用），
+        # 导致 .fleet-* 走动态映射 + ILM 策略未挂载。启动期真正调用一次。
+        try:
+            await self.es.init_indices()
+            log.info("es indices initialized")
+        except Exception as e:  # noqa: BLE001
+            log.warning("es init_indices failed", error=str(e))
 
     async def stop(self) -> None:
         self._stop.set()
@@ -103,6 +120,16 @@ class AgentWorker:
             return None
 
     async def _process_session(self, sess: str, events: list[EventEnvelope], entry_ids: list[str]) -> None:
+        # 修复：防御毒丸 — 单 session 累积事件上限（避免长 prompt 触发 llama.cpp cancel）
+        max_events = self.config.max_events_per_session
+        if len(events) > max_events:
+            log.warning(
+                "session event_count exceeds cap, splitting",
+                sess=sess,
+                event_count=len(events),
+                cap=max_events,
+            )
+            events = events[-max_events:]
         token = None
         for _ in range(self.config.lock_retries):
             token = await self.redis.acquire_lock(sess)
@@ -149,8 +176,8 @@ class AgentWorker:
                 self.metrics.inc("verdict.total")
                 self.metrics.inc(f"verdict.risk.{final.risk_level}")
                 self.metrics.inc("cache.miss")
-            # 处理成功后才打已处理标记 + XACK（设计文档：XACK 在写回成功后才执行）。
-            # dry_run=只读模式：消费并推进水位，但结论/告警写回仍被 nodes/alerts 跳过。
+            # 修复：ack 永远前进 — ES 写入失败不阻塞 XACK；
+            # ES 失败由 outbox 异步补偿，不让一条坏消息卡死整队列。
             if entry_ids:
                 for ev in events:
                     await self.redis.mark_event_seen(ev.event_id)
@@ -158,6 +185,17 @@ class AgentWorker:
             return True
         except Exception as e:  # noqa: BLE001
             log.exception("session processing failed", sess=sess, error=str(e))
+            self.metrics.inc("session.error")
+            # 防御毒丸：把失败事件送 DLQ + 推进水位（ack），避免一直卡 PEL
+            try:
+                if entry_ids:
+                    # 把原始 fields 投递到 DLQ（丢失一些 metadata 也比死循环好）
+                    for eid, _ in zip(entry_ids, events):
+                        await self.redis.push_dlq(eid, {"sess": sess}, reason=str(e)[:500])
+                    await self.redis.ack(entry_ids)
+            except Exception:  # noqa: BLE001
+                # 真连 DLQ 也失败（Redis 挂了？），只能不动 ack 等下次重试
+                pass
             return False
         finally:
             await self.redis.release_lock(sess, token)
@@ -177,6 +215,12 @@ class AgentWorker:
         for entry_id, fields in entries:
             ev = self._parse(entry_id, fields)
             if ev is None:
+                # 解析失败直接送 DLQ + ack，避免毒丸
+                try:
+                    await self.redis.push_dlq(entry_id, fields, reason="parse error")
+                    await self.redis.ack([entry_id])
+                except Exception:  # noqa: BLE001
+                    pass
                 continue
             sess = session_key(ev.src_ip, ev.dst_ip, ev.dst_port, ev.proto)
             groups[sess][0].append(ev)

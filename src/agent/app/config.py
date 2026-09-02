@@ -40,7 +40,9 @@ class ProviderConfig:
     # 配额 / 熔断
     quota: dict[str, Any] = field(default_factory=lambda: {"hourly_tokens": 0, "daily_tokens": 0})
     circuit_breaker: dict[str, Any] = field(
-        default_factory=lambda: {"max_consecutive_failures": 5, "cooldown_seconds": 60}
+        # 修复：原 max_consecutive_failures=5 允许连续 5 次失败才熔断，
+        # 期间 llama.cpp 占满 CPU；降到 2 次立即熔断，给其它 session 留 CPU
+        default_factory=lambda: {"max_consecutive_failures": 2, "cooldown_seconds": 30}
     )
 
 
@@ -58,8 +60,11 @@ class AgentConfig:
     consumer_group: str = "analysis-group"
     consumer_name: str = "agent-worker"
 
-    # Worker 批处理
-    batch_size: int = 1000
+    # Worker 批处理（修复：原 batch_size=1000 + model_timeout=60 在 redis 流大时
+    # 累积 1000 事件/session 致 prompt 暴涨触发 llama.cpp cancel，单会话拖死整队列；
+    # batch=50 + 单 session 50 事件 + max_tool_calls=2 + timeout=15s 避免单个会话拖垮）
+    batch_size: int = 50
+    max_events_per_session: int = 50
     batch_seconds: float = 5.0
     idle_poll_seconds: float = 1.0
     max_pending_claim: int = 200
@@ -72,17 +77,26 @@ class AgentConfig:
     lock_ttl: int = 30
     lock_retries: int = 3
 
-    # 模型
+    # 模型（修复：原 timeout=60 + max_context=32768 + max_tool_calls=5 让单推理
+    # 占用宿主 CPU 并导致 prompt 超过 ctx-size 后被 llama.cpp 主动 cancel；
+    # 减小 timeout + context + tool_calls，配合 llm-server entrypoint 的比例线程
+    # 控制单次推理负载，circuit_breaker 更激进熔断）
     default_provider: str = "edge"
     cloud_provider: str = "cloud"
-    max_tool_calls: int = 5
-    max_output_tokens: int = 512
-    model_timeout: float = 60.0
+    max_tool_calls: int = 2
+    max_output_tokens: int = 384
+    model_timeout: float = 15.0
 
     # 输出 / 索引
     verdict_index: str = "nss-ndr-agent-verdict"
     asset_index: str = "nss-ndr-agent-assets"
     alert_index: str = "nss-ndr-agent-events"
+
+    # 失效补偿 / DLQ（修复：原 ES 失败抛异常 → 不 XACK → 事件一直卡在 PEL）
+    outbox_index: str = "nss-ndr-agent-outbox"  # ES 写入失败暂存 outbox（带 TTL 与重试）
+    dlq_stream: str = "analysis:events:dlq"     # 解析失败消息的 DLQ 流
+    dlq_max_len: int = 10000
+    outbox_ttl: int = 3600                      # outbox 重试间隔秒
 
     # 资产知识库
     asset_seed_file: str = "data/assets.example.csv"

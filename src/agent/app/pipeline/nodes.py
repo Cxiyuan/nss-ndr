@@ -214,23 +214,38 @@ class Nodes:
             )
         final.watermark = unit.watermark
         final.trace_id = state["trace_id"]
-        # 原子写回 Redis（水位 + 结论）
+        # 修复：ack 永远前进 — Redis 写 verdict 在前（即使后续 ES 失败也不阻塞 ack）；
+        # ES 写入失败 → outbox 索引暂存 + 后台 retry_outbox 补偿。
         if not self.config.dry_run:
+            # 1) 原子写回 Redis（水位 + 结论）— 必成功
             await self.redis.write_verdict(state["session_key"], final.model_dump_json())
-            # 实体画像滚动更新
+            # 2) 实体画像滚动更新（try/except 容错，避免画像失败阻塞后续 ES 写）
             events = state["events"]
             if events:
                 ip = events[0].src_ip
-                await self.redis.append_entity(
-                    ip,
-                    {
-                        "ts": final.created_at,
-                        "session": state["session_key"],
-                        "verdict": final.verdict,
-                        "behavior": unit.behavior_hit_ids,
-                    },
-                )
-            await self.es.write_verdict(final)
+                try:
+                    await self.redis.append_entity(
+                        ip,
+                        {
+                            "ts": final.created_at,
+                            "session": state["session_key"],
+                            "verdict": final.verdict,
+                            "behavior": unit.behavior_hit_ids,
+                        },
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+            # 3) ES 写 verdict — 失败时 outbox 暂存（不阻塞 ack）
+            try:
+                await self.es.write_verdict(final)
+            except Exception as e:  # noqa: BLE001
+                outbox_doc = final.model_dump(mode="json")
+                outbox_doc["@timestamp"] = final.created_at
+                outbox_doc["_target_index"] = self.config.verdict_index
+                outbox_doc["_target_doc_type"] = "verdict"
+                outbox_doc["trace_id"] = final.trace_id
+                outbox_doc["error"] = f"verdict_write failed: {e!s}"[:500]
+                await self.es.write_outbox(outbox_doc)
         return {"final": final}
 
     async def alert(self, state: dict) -> dict:

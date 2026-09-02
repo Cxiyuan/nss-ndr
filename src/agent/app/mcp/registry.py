@@ -14,7 +14,9 @@ class ToolSpec:
     parameters: dict  # JSON Schema
     handler: Callable[..., Awaitable[dict]]
     group: str = "network"  # 场景分组（设计文档 §6.5：超 15 个工具按场景注入）
-    max_result_tokens: int = 512
+    # 修复：原 512 tokens 仍可能导致 prompt 过长（5 次调用 × 512 = 2560 tokens，
+    # 加 system+task+output 等易爆 ctx），收紧到 256 tokens 单结果。
+    max_result_tokens: int = 256
 
     @property
     def openai_schema(self) -> dict:
@@ -98,8 +100,9 @@ class ToolRegistry:
             return {"error": f"{name} failed: {type(e).__name__}: {e}"}
 
 
-def truncate_result(result: dict, max_tokens: int = 512) -> dict:
-    """结果截断 ≤ max_tokens（约 2 字符/token 估算），避免撑爆上下文。"""
+def truncate_result(result: dict, max_tokens: int = 256) -> None | dict:
+    """结果截断 ≤ max_tokens（约 2 字符/token 估算），避免撑爆上下文。
+    修复：默认 512→256，匹配 ToolSpec.max_result_tokens 默认收紧。"""
     text = json.dumps(result, ensure_ascii=False, default=str)
     limit = max_tokens * 2
     if len(text) <= limit:

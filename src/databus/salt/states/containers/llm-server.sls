@@ -29,6 +29,13 @@ nss-ndr-llm-server:
     - skip_translate: volumes
     # 镜像默认非特权用户 llm（uid 10001），与 agent 镜像一致
     # 模型 Qwen3-0.6B-Q8_0.gguf 已内置进镜像（/models），无需外挂模型卷
+    # ----------------------------------------------------------------------
+    # CPU 资源：按宿主机比例（默认 0.75 = 75%）限制，不写绝对值。
+    # Docker 的 cpus=0.75 是硬限（hard cap），cpu_shares=768 是相对权重。
+    # 线程数也按比例动态算（entrypoint 读取 /proc/cpuinfo）。
+    # ----------------------------------------------------------------------
+    - cpus: "{{ llm_server.get('cpu_ratio', 0.75) }}"
+    - cpu_shares: "{{ ((llm_server.get('cpu_ratio', 0.75) * 1024) | int) }}"
     - networks:
         - nss-net:
             - ipv4_address: {{ llm_server.ip }}
@@ -46,7 +53,9 @@ nss-ndr-llm-server:
         - LLM_UBATCH_SIZE={{ llm_server.ubatch_size | string }}
         - LLM_CACHE_TYPE_K={{ llm_server.cache_type_k }}
         - LLM_CACHE_TYPE_V={{ llm_server.cache_type_v }}
-        - LLM_THREADS={{ llm_server.threads | string }}
+        # entrypoint 读取 /proc/cpuinfo + LLM_THREADS_RATIO 计算实际 --threads
+        - LLM_THREADS_RATIO={{ llm_server.get('threads_ratio', 0.75) }}
+        - LLM_CONTEXT_RATIO={{ llm_server.get('context_ratio', 0.75) }}
         - LLM_EXTRA_ARGS={{ llm_server.extra_args }}
         # LLM_API_KEY 仅在 pillar 显式非空时注入（默认无鉴权，符合内网部署假设）
         {%- if llm_server.api_key %}

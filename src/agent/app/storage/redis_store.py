@@ -36,6 +36,8 @@ class RedisStore:
         evt_ttl: int = 86400,
         entity_ttl: int = 86400,
         lock_ttl: int = 30,
+        dlq_stream: str = "analysis:events:dlq",
+        dlq_max_len: int = 10000,
     ):
         self.client = client
         self.stream = stream
@@ -45,6 +47,9 @@ class RedisStore:
         self.evt_ttl = evt_ttl
         self.entity_ttl = entity_ttl
         self.lock_ttl = lock_ttl
+        # 修复：DLQ 流（毒丸消息隔离）+ outbox 补偿（ES 失败补偿在 es_store.py）
+        self.dlq_stream = dlq_stream
+        self.dlq_max_len = dlq_max_len
     async def _eval(self, source: str, keys: list[str], args: list) -> Any:
         """EVAL 直接执行 Lua（兼容 fakeredis；EVALSHA 在部分环境不支持）。"""
         return await self.client.eval(source, len(keys), *(keys + args))
@@ -82,6 +87,17 @@ class RedisStore:
     async def ack(self, entry_ids: list[str]) -> None:
         if entry_ids:
             await self.client.xack(self.stream, self.consumer_group, *entry_ids)
+
+    async def push_dlq(self, entry_id: str, raw_fields: dict, reason: str) -> None:
+        """毒丸消息隔离：把解析/处理失败的消息送到 DLQ 流，避免主 stream 卡 PEL。
+        DLQ 用独立流 + MAXLEN 上限（防止 Redis 内存爆炸）。
+        """
+        await self.client.xadd(
+            self.dlq_stream,
+            {"_entry_id": entry_id, "_reason": reason[:500], "_raw": json.dumps(raw_fields, ensure_ascii=False, default=str)[:2000]},
+            maxlen=self.dlq_max_len,
+            approximate=True,
+        )
 
     async def claim_stale(self, min_idle_ms: int = 60000, max_claims: int = 200) -> list[tuple[str, dict]]:
         """XAUTOCLAIM：崩溃 worker 遗留的滞留消息重投给本 worker（设计文档 §3）。"""
