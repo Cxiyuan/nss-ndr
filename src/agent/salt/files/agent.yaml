@@ -23,7 +23,7 @@ cloud_provider: cloud
 # 24af520 起调优：收敛单次 LLM 调用（工具步数/输出长度/超时），降低单会话长 prompt 拖垮队列
 max_tool_calls: 2
 max_output_tokens: 384
-model_timeout: 15.0
+model_timeout: 45.0
 
 # 输出索引
 verdict_index: nss-ndr-agent-verdict

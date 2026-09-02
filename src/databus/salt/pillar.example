@@ -107,9 +107,13 @@ databus:
     threads: ""
     api_key: ""
     extra_args: ""
+    # ---------- 生产调优（2026-09 线上验证） ----------
+    # Qwen3 思考模式会耗尽输出预算（content 空→“无法解析”）；长 prompt(~1550 tok) 超单 slot ctx
+    # 会被 llama-server 拒绝（cancel task）。线上 pillar 设置：
+    #   extra_args="--chat-template-kwargs {\"enable_thinking\":false}"
+    #   context_ratio: 1.0   # ctx 4096；parallel 2 → 每 slot 2048，容纳 agent prompt+输出
     # ---------- 资源比例（默认 0.75 = 占宿主机 75%） ----------
-    # Docker 通过 cpus + cpu_shares 双重限制（entrypoint 自动算 LLM_THREADS_RATIO）。
-    # 换硬件环境无需修改数值，按需覆盖。
+    # 换硬件环境无需修改数值，按需覆盖（Docker 侧硬限用动态 cpuset_cpus，见 llm-server.sls）。
     cpu_ratio: 0.75
     threads_ratio: 0.75
     context_ratio: 0.75

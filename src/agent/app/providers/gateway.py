@@ -65,10 +65,17 @@ class ModelGateway:
 
     def _check_circuit(self, name: str) -> bool:
         st = self.circuits[name]
-        if st.open:
-            return False
-        if st.consecutive_failures >= self.providers[name].config.circuit_breaker.get("max_consecutive_failures", 5):
-            st.opened_at = time.time()
+        mx = int(self.providers[name].config.circuit_breaker.get("max_consecutive_failures", 5))
+        if st.consecutive_failures >= mx:
+            if st.opened_at == 0.0:
+                # 刚达到阈值：打开熔断，进入冷却
+                st.opened_at = time.time()
+                return False
+            if time.time() - st.opened_at >= st.cooldown_seconds:
+                # 冷却结束：半开放行一次探针并复位计数（失败会重新累计再熔断）
+                st.opened_at = time.time()
+                st.consecutive_failures = 0
+                return True
             return False
         return True
 
