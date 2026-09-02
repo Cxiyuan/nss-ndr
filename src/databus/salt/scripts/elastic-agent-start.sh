@@ -10,10 +10,11 @@ set -eu
 
 if [ ! -s /usr/share/elastic-agent/state/fleet.enc ]; then
   echo "Enrolling to fleet-server..."
+  # 不用 --delay-enroll：容器内 enroll 完成后直接 run，避免 delay 语义下
+  # run 抢先以 standalone 模式启动（表现为 fleet STOPPED / managed locally）
   /usr/share/elastic-agent/elastic-agent enroll \
     --url=https://fleet-server:8220 \
     --enrollment-token="${FLEET_ENROLLMENT_TOKEN}" \
-    --delay-enroll \
     --insecure --force || echo "Enrollment may have already done, continuing"
 fi
 

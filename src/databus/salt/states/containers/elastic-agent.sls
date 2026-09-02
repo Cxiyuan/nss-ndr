@@ -39,9 +39,6 @@ nss-ndr-elastic-agent:
         - nss-ndr-elastic-agent-state:/var/lib/elastic-agent
         - nss-ndr-zeek-logs:/var/log/zeek:ro
         - /srv/salt/databus/scripts/elastic-agent-start.sh:/opt/nss-ndr/scripts/elastic-agent-start.sh:ro
-        # 干净的本地 elastic-agent.yml（无 username/password/api_key 占位符），
-        # 避免与 Fleet policy 的 monitoring output(api_key) 冲突
-        - /etc/nss-ndr/elastic-agent.yml:/usr/share/elastic-agent/elastic-agent.yml:ro
     - networks:
         - nss-net:
             - ipv4_address: {{ databus.fixed_ips.elastic_agent }}
