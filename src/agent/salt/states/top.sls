@@ -2,5 +2,4 @@
 #   salt-call --local state.apply agent  （经 /srv/salt/agent.sls -> agent.top）
 include:
   - agent.images
-  - agent.configs
   - agent.containers.agent

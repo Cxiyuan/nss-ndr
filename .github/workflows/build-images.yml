@@ -51,6 +51,15 @@ jobs:
             build_args: ''
             fixed_tags: type=raw,value=9.5.2
 
+          # 数据总线：Fleet Server 角色镜像（同 elastic-agent-zeek 基础,烘焙 fleet yml 为默认配置）
+          - image: fleet-server
+            context: images
+            dockerfile: images/Dockerfile.elastic-agent-zeek
+            platforms: linux/amd64
+            build_args: |
+              FLEET_ROLE=1
+            fixed_tags: type=raw,value=9.5.2
+
           # 数据总线：Logstash 双写镜像（上下文 src/databus/）
           - image: logstash-databus
             context: src/databus

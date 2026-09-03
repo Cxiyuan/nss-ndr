@@ -1,4 +1,4 @@
 server.name: kibana
 server.host: 0.0.0.0
 i18n.locale: zh-CN
-xpack.encryptedSavedObjects.encryptionKey: "NSS-NDR-Default-Kibana-Encryption-Key-2026!"
+# 加密 key 由容器 env XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY 注入(Vault 派生),不入镜像

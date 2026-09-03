@@ -84,6 +84,10 @@ COPY salt-master-api/patch-rsax931.py /opt/patch-rsax931.py
 RUN python3 /opt/patch-rsax931.py
 
 # 内置 minion 配置模板
+# 烘焙部署辅助脚本(gen-kibana-token/fleet-setup/vault-render-env/agent-setup)——不再 salt 下发
+COPY salt-minion/scripts/ /opt/nss-ndr/scripts/
+RUN chmod +x /opt/nss-ndr/scripts/*.sh
+
 COPY salt-minion/minion.tmpl ${SALT_CONFIG_DIR}/minion.tmpl
 COPY salt-minion/entrypoint.sh /usr/local/bin/salt-minion-entrypoint
 RUN chmod +x /usr/local/bin/salt-minion-entrypoint \

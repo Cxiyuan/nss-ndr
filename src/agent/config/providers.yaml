@@ -9,7 +9,7 @@ providers:
     max_context: 32768
     capabilities:
       tool_calling: true
-      json_schema: true
+      json_schema: false  # 开工具调用:与 tools 同传 response_format 会致 llama 把工具调用当 JSON 内容返回
       streaming: false
     weight: 1.0
     quota:
@@ -26,7 +26,7 @@ providers:
     max_context: 131072
     capabilities:
       tool_calling: true
-      json_schema: true
+      json_schema: false  # 开工具调用:与 tools 同传 response_format 会致 llama 把工具调用当 JSON 内容返回
       streaming: true
     weight: 0.0                 # 仅升级时使用
     quota:

@@ -7,17 +7,7 @@
 
 {% from "databus/map.jinja" import databus with context %}
 
-copy-vault-render-script:
-  file.managed:
-    - name: /opt/nss-ndr/scripts/vault-render-env.sh
-    - source: salt://databus/scripts/vault-render-env.sh
-    - user: root
-    - group: root
-    - mode: "700"
-    - makedirs: True
-
+# vault-render-env.sh 已烘焙进 salt-minion 镜像 /opt/nss-ndr/scripts/
 run-vault-render:
   cmd.run:
     - name: /opt/nss-ndr/scripts/vault-render-env.sh
-    - require:
-      - file: copy-vault-render-script

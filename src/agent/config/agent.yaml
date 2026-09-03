@@ -3,8 +3,8 @@ stream: analysis:events
 consumer_group: analysis-group
 consumer_name: agent-worker
 
-# Worker 批处理窗口（设计文档 §3：1000 条或 5 秒，先到先触发）
-batch_size: 1000
+# Worker 批处理窗口（24af520 起调优：batch 50 防单会话拖死队列；5 秒窗口先到先触发）
+batch_size: 50
 batch_seconds: 5.0
 idle_poll_seconds: 1.0
 max_pending_claim: 200
@@ -20,9 +20,10 @@ lock_retries: 3
 # 模型（默认本地边缘，升级走云端）
 default_provider: edge
 cloud_provider: cloud
-max_tool_calls: 5
-max_output_tokens: 512
-model_timeout: 60.0
+# 24af520 起调优：收敛单次 LLM 调用（工具步数/输出长度/超时），降低单会话长 prompt 拖垮队列
+max_tool_calls: 2
+max_output_tokens: 384
+model_timeout: 45.0
 
 # 输出索引
 verdict_index: nss-ndr-agent-verdict

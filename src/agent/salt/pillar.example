@@ -7,25 +7,9 @@
 
 agent:
   tz: Asia/Shanghai
-  images_dir: /root/nss-agent
-
   images:
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/agent:latest
-      tar: nss-ndr_agent_0.1.1.tar
 
   fixed_ip: 192.168.250.80
   network: nss-net
   container_name: nss-ndr-agent
-
-  config_dir: /etc/nss-ndr/agent
-
-  configs:
-    - src: salt://agent/files/agent.yaml
-      dst: /etc/nss-ndr/agent/agent.yaml
-      mode: "644"
-    - src: salt://agent/files/providers.yaml
-      dst: /etc/nss-ndr/agent/providers.yaml
-      mode: "644"
-    - src: salt://agent/files/rules/beh-rules.yaml
-      dst: /etc/nss-ndr/agent/rules/beh-rules.yaml
-      mode: "644"

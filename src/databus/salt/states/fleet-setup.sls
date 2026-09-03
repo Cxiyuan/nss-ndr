@@ -9,21 +9,11 @@
 
 {% from "databus/map.jinja" import databus with context %}
 
-copy-fleet-setup-script:
-  file.managed:
-    - name: /opt/nss-ndr/scripts/fleet-setup.sh
-    - source: salt://databus/scripts/fleet-setup.sh
-    - user: root
-    - group: root
-    - mode: "700"
-    - makedirs: True
-
+# fleet-setup.sh 已烘焙进 salt-minion 镜像 /opt/nss-ndr/scripts/
 run-fleet-setup:
   cmd.run:
     - name: /opt/nss-ndr/scripts/fleet-setup.sh
     - unless: test -f /etc/nss-ndr/.fleet-setup.done
-    - require:
-      - file: copy-fleet-setup-script
     - require_in:
       - file: mark-fleet-setup-done
 

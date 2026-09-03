@@ -19,21 +19,11 @@ ensure-env-dir:
     - group: root
     - mode: "755"
 
-copy-gen-kibana-token-script:
-  file.managed:
-    - name: /opt/nss-ndr/scripts/gen-kibana-token.sh
-    - source: salt://databus/scripts/gen-kibana-token.sh
-    - user: root
-    - group: root
-    - mode: "700"
-    - makedirs: True
-
+# gen-kibana-token.sh 已烘焙进 salt-minion 镜像 /opt/nss-ndr/scripts/
 generate-kibana-service-token:
   cmd.run:
     - name: /opt/nss-ndr/scripts/gen-kibana-token.sh
     - unless: test -f /etc/nss-ndr/.bootstrap.done
-    - require:
-      - file: copy-gen-kibana-token-script
     - require_in:
       - file: mark-bootstrap-done
 

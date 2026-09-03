@@ -1,7 +1,7 @@
 # ============================================================================
 # Elastic Agent（Fleet-managed，应用 Zeek Integration policy）
 # 读取 /var/log/zeek（zeek-logs 卷），enroll 到 fleet-server
-# 启动脚本 elastic-agent-start.sh 由 Salt 下发并挂载进容器：
+# 启动脚本 elastic-agent-start.sh 已烘焙进镜像 /opt/nss-ndr/scripts/：
 #   首次启动无 fleet.enc -> enroll 到 fleet-server；之后 run 应用 policy
 # ============================================================================
 
@@ -16,15 +16,7 @@ include:
 {% from "databus/map.jinja" import databus with context %}
 {% from "databus/map.jinja" import env_get with context %}
 
-deploy-elastic-agent-start-script:
-  file.managed:
-    - name: /srv/salt/databus/scripts/elastic-agent-start.sh
-    - source: salt://databus/scripts/elastic-agent-start.sh
-    - user: root
-    - group: root
-    - mode: "644"
-    - makedirs: True
-
+# elastic-agent-start.sh 已烘焙进镜像 /opt/nss-ndr/scripts/(images/elastic-agent-zeek/)
 nss-ndr-elastic-agent:
   docker_container.running:
     - image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
@@ -38,7 +30,6 @@ nss-ndr-elastic-agent:
         - nss-ndr-elastic-agent-data:/usr/share/elastic-agent/data
         - nss-ndr-elastic-agent-state:/var/lib/elastic-agent
         - nss-ndr-zeek-logs:/var/log/zeek:ro
-        - /srv/salt/databus/scripts/elastic-agent-start.sh:/opt/nss-ndr/scripts/elastic-agent-start.sh:ro
     - networks:
         - nss-net:
             - ipv4_address: {{ databus.fixed_ips.elastic_agent }}
@@ -66,4 +57,3 @@ nss-ndr-elastic-agent:
       - docker_container: nss-ndr-elasticsearch
       - docker_container: nss-ndr-kibana
       - docker_container: nss-ndr-fleet-server
-      - file: /srv/salt/databus/scripts/elastic-agent-start.sh

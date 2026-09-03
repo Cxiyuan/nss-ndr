@@ -44,6 +44,132 @@ databus:
     - name: docker.elastic.co/kibana/kibana:9.5.2
       tar: docker.elastic.co_kibana_kibana_9.5.2.tar
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/fleet-server:9.5.2
+      tar: nss-ndr_elastic-agent-zeek_9.5.2.tar
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/logstash-databus:9.5.2
+      tar: nss-ndr_logstash-databus_9.5.2.tar
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/redis-databus:8.10.1
+      tar: nss-ndr_redis-databus_8.10.1.tar
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/llm-server:latest
+      tar: nss-ndr_llm-server_latest.tar
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-master-api:latest
+      tar: nss-ndr_salt-master-api_0.1.1.tar
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-minion:latest
+      tar: nss-ndr_salt-minion_0.1.1.tar
+
+  fixed_ips:
+    elasticsearch: 192.168.250.40
+    kibana: 192.168.250.50
+    fleet_server: 192.168.250.55
+    elastic_agent: 192.168.250.20
+    logstash: 192.168.250.30
+    redis: 192.168.250.60
+    llm_server: 192.168.250.90
+    salt_master_api: 192.168.250.5
+
+  host_ports:
+    es: 9200
+    kibana: 5601
+    fleet_server: 8220
+    redis: 6379
+    salt_api: 8000
+  # 宿主机端口绑定地址（仅本机监听，外部不可达）
+  host_bind: 127.0.0.1
+
+  # AI 分析智能体（nss-ndr/agent）
+  agent:
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/agent:latest
+    ip: 192.168.250.80
+    # dry_run: 0 = 生产模式（写 verdict / entity / ES）；1 = 只读消费
+    # 上游已部署 llm-server + LLM 模型，启用 LLM 本地边缘分析时置 0；
+    # 仅做链路验证、不需要 LLM 真实调用时改回 1
+    dry_run: "0"
+    log_level: INFO
+    llm:
+      edge_base_url: "http://llm-server:8080/v1"
+      edge_api_key: ""
+      edge_model: "Qwen3-0.6B-Q8_0"
+      cloud_base_url: ""
+      cloud_api_key: ""
+      cloud_model: ""
+
+  # LLM Server（nss-ndr/llm-server）
+  llm_server:
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/llm-server:latest
+    ip: 192.168.250.90
+    port: 8080
+    model_path: /models/Qwen3-0.6B-Q8_0.gguf
+    model_alias: Qwen3-0.6B-Q8_0
+    # ctx 4096 避免长 prompt 触发 llama.cpp 主动 cancel
+    context_size: 4096
+    # 并行 2 提升吞吐
+    parallel: 2
+    # 减小 batch / ubatch 让单会话推理更轻量
+    batch_size: 1024
+    ubatch_size: 256
+    cache_type_k: q8_0
+    cache_type_v: q8_0
+    # 空 = entrypoint 按宿主机 CPU 实时计算 threads + ctx
+    threads: ""
+    api_key: ""
+    extra_args: ""
+    # ---------- 生产调优（2026-09 线上验证） ----------
+    # Qwen3 思考模式会耗尽输出预算（content 空→“无法解析”）；长 prompt(~1550 tok) 超单 slot ctx
+    # 会被 llama-server 拒绝（cancel task）。线上 pillar 设置：
+    #   extra_args="--chat-template-kwargs {\"enable_thinking\":false}"
+    #   context_ratio: 1.0   # ctx 4096；parallel 2 → 每 slot 2048，容纳 agent prompt+输出
+    # ---------- 资源比例（默认 0.75 = 占宿主机 75%） ----------
+    # 换硬件环境无需修改数值，按需覆盖（Docker 侧硬限用动态 cpuset_cpus，见 llm-server.sls）。
+    cpu_ratio: 0.75
+    threads_ratio: 0.75
+    context_ratio: 0.75
+
+  # Salt Master + Salt API（容器化，自 2026-08-31 起替代宿主机 salt-minion RPM）
+  salt_master_api:
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-master-api:latest
+    ip: 192.168.250.5
+    api_port: 8000
+    api_user: saltapi
+    # 与 create-saltapi.py 内置的 OS 用户密码一致（salt-api PAM external_auth 使用）
+    api_password: saltapi-pass
+
+  # Salt Minion（容器化，host network + bind /var/run/docker.sock）
+  salt_minion:
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-minion:latest
+    # minion id 与 master minion_key 绑定；改名后需重新 enroll
+    id: nss-ai-agent-minion
+    # minion 固定 IP（nss-net 内）
+    ip: 192.168.250.2
+
+  # 运行期配置文件已全部烘焙进镜像,此处留空;仅 .env(动态 token)由 vault-seed/bootstrap 生成
+  configs: []
+  zeek_interface: ens192
+
+  # Vault 只读凭据（nss-ndr/* kv-v2）——基础密码唯一来源,经 vault-seed 派生 .env
+  vault:
+    addr: http://vault:8200
+    token: ""   # 运维创建: vault token create -policy=nss-ndr-ro -ttl=87600h -field token
+
+  network:
+    name: nss-net
+    subnet: 192.168.250.0/24
+    gateway: 192.168.250.1
+
+  creds:
+    elastic_username: elastic
+    elastic_password: ChangeMe_Elastic_2026!
+    redis_password: ChangeMe_Redis_2026!
+    kibana_encryption_key: NSS-NDR-Default-Kibana-Encryption-Key-2026!
+
+  images:
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/zeek-databus:8.2.2
+      tar: nss-ndr_zeek_8.2.2.tar
+    - name: docker.elastic.co/elasticsearch/elasticsearch:9.5.2
+      tar: docker.elastic.co_elasticsearch_elasticsearch_9.5.2.tar
+    - name: docker.elastic.co/kibana/kibana:9.5.2
+      tar: docker.elastic.co_kibana_kibana_9.5.2.tar
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/fleet-server:9.5.2
       tar: nss-ndr_elastic-agent-zeek_9.5.2.tar
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/logstash-databus:9.5.2
       tar: nss-ndr_logstash-databus_9.5.2.tar

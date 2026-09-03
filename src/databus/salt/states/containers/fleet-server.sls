@@ -5,14 +5,13 @@
 # FLEET_SERVER_SERVICE_TOKEN），与线上验证通过的容器定义一致：
 #   - data 目录 /usr/share/fleet-server/data（卷）
 #   - state 目录 /var/lib/fleet-server（卷，含 fleet.enc）
-#   - elastic-agent.yml 外挂（/etc/nss-ndr/elastic-agent-fleet-server.yml）
+#   - elastic-agent.yml 烘焙进独立 fleet-server 镜像(默认 /etc/elastic-agent/elastic-agent.yml)
 # ============================================================================
 
 include:
   - databus.network
   - databus.volumes
   - databus.images
-  - databus.configs
   - databus.containers.elasticsearch
   - databus.containers.kibana
 
@@ -21,15 +20,14 @@ include:
 
 nss-ndr-fleet-server:
   docker_container.running:
-    - image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
+    - image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/fleet-server:9.5.2
     - restart_policy: unless-stopped
     - network_mode: nss-net
     - detach: True
     - skip_translate: volumes
-    # 保持镜像默认用户 elastic-agent（与线上验证通过的容器一致）
+    # 保持镜像默认用户 elastic-agent;fleet 配置已烘焙,仅数据/状态卷
     - binds:
         - nss-ndr-fleet-server-state:/var/lib/fleet-server
-        - /etc/nss-ndr/elastic-agent-fleet-server.yml:/etc/elastic-agent/elastic-agent.yml:ro
         - nss-ndr-fleet-server-data:/usr/share/fleet-server/data
     - port_bindings:
         - "{{ databus.host_bind }}:{{ databus.host_ports.fleet_server }}:8220"
@@ -55,7 +53,6 @@ nss-ndr-fleet-server:
       - docker_network: ensure-nss-net-present
       - docker_volume: nss-ndr-fleet-server-data
       - docker_volume: nss-ndr-fleet-server-state
-      - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
+      - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/fleet-server:9.5.2
       - docker_container: nss-ndr-elasticsearch
       - docker_container: nss-ndr-kibana
-      - file: /etc/nss-ndr/elastic-agent-fleet-server.yml

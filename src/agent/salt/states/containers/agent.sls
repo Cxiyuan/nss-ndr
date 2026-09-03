@@ -1,8 +1,9 @@
 # 智能体容器：消费 analysis:events，固定 IP 192.168.250.80
+# 配置(agent.yaml/providers.yaml/rules)已烘焙进镜像 /opt/nss-ndr-agent/config,
+# 不再宿主挂载;动态凭据(redis/es/llm key)仍经容器 env 注入
 
 include:
   - agent.images
-  - agent.configs
 
 {% from "agent/map.jinja" import agent with context %}
 {% from "agent/map.jinja" import env_get with context %}
@@ -18,8 +19,6 @@ nss-ndr-agent:
     - user: agent
     - entrypoint: ["python", "-m", "app"]
     - command: ["worker"]
-    - binds:
-        - {{ agent.config_dir }}:/opt/nss-ndr-agent/config:ro
     - networks:
         - {{ agent.network }}:
             - ipv4_address: {{ agent.fixed_ip }}
@@ -39,7 +38,6 @@ nss-ndr-agent:
         - CLOUD_LLM_API_KEY={{ env_get('CLOUD_LLM_API_KEY') }}
         - CLOUD_LLM_MODEL={{ env_get('CLOUD_LLM_MODEL') }}
         # AGENT_DRY_RUN: 0=生产模式（写 verdict/entity/ES/Redis Lua）；1=只读消费
-        # 上游 agent-setup.sh 已默认写入 0；此处兜底 '0' 防止 .env 未及时刷新
         - AGENT_DRY_RUN={{ env_get('AGENT_DRY_RUN') or '0' }}
         - AGENT_LOG_LEVEL=INFO
     - log_driver: json-file
@@ -51,6 +49,3 @@ nss-ndr-agent:
         - start_period: 30000000000
     - require:
       - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/agent:latest
-      - file: /etc/nss-ndr/agent/agent.yaml
-      - file: /etc/nss-ndr/agent/providers.yaml
-      - file: /etc/nss-ndr/agent/rules/beh-rules.yaml

@@ -2,6 +2,9 @@
 # 配置全部外挂（Salt 通过环境变量/挂载下发），镜像层无改动
 FROM docker.elastic.co/kibana/kibana:9.5.2
 
+# 烘焙 kibana.yml(不包含加密 key,key 由 env 注入)——不再宿主挂载
+COPY salt/files/kibana.yml /usr/share/kibana/config/kibana.yml
+
 LABEL org.opencontainers.image.title="nss-ndr/kibana" \
       org.opencontainers.image.description="Kibana 9.5.2 (official, databus)" \
       org.opencontainers.image.version="9.5.2"
