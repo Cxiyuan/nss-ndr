@@ -35,7 +35,9 @@ nss-ndr-elastic-agent:
             - ipv4_address: {{ databus.fixed_ips.elastic_agent }}
             - aliases:
                 - elastic-agent
-    - command: /opt/nss-ndr/scripts/elastic-agent-start.sh
+    # 官方 docker-entrypoint 会把非子命令参数当作 container 模式,吞掉我们的启动脚本;
+    # 故直接以烘焙脚本为 ENTRYPOINT(脚本内 enroll 加固 + exec elastic-agent run)
+    - entrypoint: ["/opt/nss-ndr/scripts/elastic-agent-start.sh"]
     - environment:
         - TZ={{ databus.tz }}
         - FLEET_URL=https://fleet-server:8220
