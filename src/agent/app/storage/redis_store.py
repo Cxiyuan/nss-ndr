@@ -115,6 +115,21 @@ class RedisStore:
         """事件级水位：evt:{event_id} SETNX TTL。返回 True=首次（需处理）。"""
         return bool(await self._eval(SEEN_EVENT_LUA, [evt_key(event_id)], [self.evt_ttl]))
 
+    async def seen_event_ids(self, event_ids: list[str]) -> set[str]:
+        """批量查出"已成功处理过"的事件 id(evt:{id} 存在)。
+        用于消费前置幂等:重复 XADD / 丢失 ack 后重投的同一事件,
+        若此前已成功分析(标记已写),直接跳过不再重复分析。
+        注意:崩溃且未 ack 的场景,标记未写 → 仍会被重新分析(at-least-once 保持)。
+        """
+        if not event_ids:
+            return set()
+        pipe = self.client.pipeline()
+        for eid in event_ids:
+            pipe.exists(evt_key(eid))
+        exists = await pipe.execute()
+        return {eid for eid, hit in zip(event_ids, exists) if hit}
+
+
     async def acquire_lock(self, sess: str) -> str | None:
         token = uuid.uuid4().hex
         ok = await self._eval(ACQUIRE_LOCK_LUA, [lock_key(sess)], [token, self.lock_ttl])

@@ -211,7 +211,10 @@ class AgentWorker:
             return 0
         if not entries:
             return 0
-        groups: dict[str, tuple[list[EventEnvelope], list[str]]] = defaultdict(lambda: ([], []))
+        # 事件级幂等前置过滤：已成功处理过(evt:{id} 存在)的重复事件直接 ack 跳过，
+        # 不重复分析（重复 XADD / 丢失 ack 后重投场景）。崩溃未标记的事件仍会重投重算。
+        parsed: list[tuple[str, EventEnvelope]] = []
+        skip_ack: list[str] = []
         for entry_id, fields in entries:
             ev = self._parse(entry_id, fields)
             if ev is None:
@@ -222,10 +225,30 @@ class AgentWorker:
                 except Exception:  # noqa: BLE001
                     pass
                 continue
+            parsed.append((entry_id, ev))
+        if parsed:
+            seen = await self.redis.seen_event_ids([ev.event_id for _, ev in parsed])
+            # 按 seen 划分:已见 → 直接 ack 跳过;未见 → 进入分组分析
+            keep: list[tuple[str, EventEnvelope]] = []
+            for entry_id, ev in parsed:
+                if ev.event_id in seen:
+                    skip_ack.append(entry_id)
+                else:
+                    keep.append((entry_id, ev))
+            if skip_ack:
+                try:
+                    await self.redis.ack(skip_ack)
+                except Exception:  # noqa: BLE001
+                    log.warning("dedup ack failed", error=str(skip_ack)[:100])
+            self.metrics.inc("events.dedup", len(skip_ack))
+            parsed = keep
+        groups: dict[str, tuple[list[EventEnvelope], list[str]]] = defaultdict(lambda: ([], []))
+        for entry_id, ev in parsed:
             sess = session_key(ev.src_ip, ev.dst_ip, ev.dst_port, ev.proto)
             groups[sess][0].append(ev)
             groups[sess][1].append(entry_id)
         self.metrics.inc("events.received", len(entries))
+        self.metrics.inc("events.unique", len(parsed))
         self.metrics.inc("sessions.batch", len(groups))
         if self.config.dry_run:
             log.info("dry_run batch", sessions=len(groups), events=len(entries))
