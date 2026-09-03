@@ -20,6 +20,11 @@ databus:
   tz: Asia/Shanghai
   zeek_interface: ens192
 
+  # Vault 只读凭据（nss-ndr/* kv-v2）——基础密码唯一来源,经 vault-seed 派生 .env
+  vault:
+    addr: http://vault:8200
+    token: ""   # 运维创建: vault token create -policy=nss-ndr-ro -ttl=87600h -field token
+
   network:
     name: nss-net
     subnet: 192.168.250.0/24

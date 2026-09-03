@@ -55,6 +55,9 @@ nss-ndr-salt-minion:
         - SALT_MASTER_HOST=salt-master-api        # nss-net 内 alias（与 master 同网段）
         - SALT_MINION_ID={{ salt_minion.id }}
         - PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+        # Vault 只读凭据(kv: nss-ndr/*)供 vault-render-env.sh 派生 .env
+        - VAULT_ADDR={{ databus.get('vault', {}).get('addr', 'http://vault:8200') }}
+        - VAULT_TOKEN={{ databus.get('vault', {}).get('token', '') }}
     - log_driver: json-file
     - require:
       - docker_image: {{ salt_minion.image }}

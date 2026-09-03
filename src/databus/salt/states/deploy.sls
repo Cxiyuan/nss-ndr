@@ -43,6 +43,13 @@ deploy-configs:
     - require:
       - salt: deploy-images
 
+deploy-vault-seed:
+  salt.state:
+    - tgt: {{ databus.get('target', 'databus') }}
+    - sls: databus.vault-seed
+    - require:
+      - salt: deploy-configs
+
 deploy-salt-master-api:
   salt.state:
     - tgt: {{ databus.get('target', 'databus') }}
@@ -88,6 +95,7 @@ deploy-bootstrap-tokens:
     - sls: databus.bootstrap
     - require:
       - http: wait-es-healthy
+      - salt: deploy-vault-seed
 
 deploy-kibana:
   salt.state:

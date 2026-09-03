@@ -34,6 +34,8 @@ nss-ndr-kibana:
         - TZ={{ databus.tz }}
         - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
         - ELASTICSEARCH_SERVICEACCOUNTTOKEN={{ env_get('KIBANA_SERVICE_TOKEN') }}
+        # 加密 key 由 Vault 派生(.env),不再依赖 kibana.yml 硬编码默认值
+        - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY={{ env_get('KIBANA_ENCRYPTION_KEY') }}
     - log_driver: json-file
     - require:
       - docker_network: ensure-nss-net-present
