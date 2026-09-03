@@ -8,10 +8,22 @@
 # ============================================================
 set -eu
 
-if [ ! -s /usr/share/elastic-agent/state/fleet.enc ]; then
+ENC=/usr/share/elastic-agent/state/fleet.enc
+# 官方 docker-entrypoint 容器初始化在存在 FLEET_ENROLLMENT_TOKEN 时会先写一个
+# delay 半成品 fleet.enc(~274B),run 会因它而走 standalone(managed locally)。
+# 故 enc 缺失或过小(<500B,视为无效 delay 桩)都重新完整 enroll。
+NEED=""
+if [ ! -s "$ENC" ]; then NEED=1; fi
+if [ -n "$NEED" ]; then
+  rm -f "$ENC" "$ENC.lock"
   echo "Enrolling to fleet-server..."
-  # 不用 --delay-enroll：容器内 enroll 完成后直接 run，避免 delay 语义下
-  # run 抢先以 standalone 模式启动（表现为 fleet STOPPED / managed locally）
+  /usr/share/elastic-agent/elastic-agent enroll \
+    --url=https://fleet-server:8220 \
+    --enrollment-token="${FLEET_ENROLLMENT_TOKEN}" \
+    --insecure --force || echo "Enrollment may have already done, continuing"
+elif [ "$(stat -c%s "$ENC" 2>/dev/null || echo 0)" -lt 500 ]; then
+  rm -f "$ENC" "$ENC.lock"
+  echo "Re-enrolling (invalid fleet.enc)..."
   /usr/share/elastic-agent/elastic-agent enroll \
     --url=https://fleet-server:8220 \
     --enrollment-token="${FLEET_ENROLLMENT_TOKEN}" \
