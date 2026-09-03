@@ -22,15 +22,17 @@ LABEL org.opencontainers.image.title="nss-ndr-elastic-agent-zeek" \
       org.opencontainers.image.licenses="Elastic License 2.0"
 
 # 烘焙数据角色启动脚本(不再宿主挂载 /srv/salt)
-COPY elastic-agent-zeek/elastic-agent-start.sh /opt/nss-ndr/scripts/elastic-agent-start.sh
-RUN chmod +x /opt/nss-ndr/scripts/elastic-agent-start.sh
+# 注意: 官方镜像默认非 root 用户,COPY 后再 chmod 会 Operation not permitted,
+#       因此用 COPY --chmod=755 直接带执行位
+COPY --chmod=755 elastic-agent-zeek/elastic-agent-start.sh /opt/nss-ndr/scripts/elastic-agent-start.sh
 
 # 角色化构建: FLEET_ROLE=1 时烘焙 fleet-server 用 elastic-agent.yml 为默认配置
 # (数据角色用同一镜像, 启动脚本 enroll 后自行改写 elastic-agent.yml, 故无冲突)
 ARG FLEET_ROLE=0
-RUN mkdir -p /etc/elastic-agent
 COPY elastic-agent-zeek/fleet-elastic-agent.yml /opt/nss-ndr/elastic-agent-fleet-server.yml
-RUN if [ "$FLEET_ROLE" = "1" ]; then cp /opt/nss-ndr/elastic-agent-fleet-server.yml /etc/elastic-agent/elastic-agent.yml; fi
+USER root
+RUN if [ "$FLEET_ROLE" = "1" ]; then mkdir -p /etc/elastic-agent && cp /opt/nss-ndr/elastic-agent-fleet-server.yml /etc/elastic-agent/elastic-agent.yml; fi
+USER elastic-agent
 
 # 3. 健康检查（复用官方）
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
