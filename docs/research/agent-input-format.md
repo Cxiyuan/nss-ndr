@@ -4,6 +4,8 @@
 > **方法**:**只读调研**,不修改任何服务 / 任何代码;在 `nss-ndr-agent` 容器内以 Python 直接复现 worker 的"读流 → 分组 → 规则 → 拼 AnalysisUnit → 拼 messages"全过程。
 > **基线**:服务器冻结于 2026-09-03(commit `b12be09`);本次调研仅观察,无变更。
 
+> **状态(2026-09-04 更新)**:本文档 5 个问题已通过 commit **`a3ac687`** 修复并部署验证(详见下文"✅ 修复"各小节与第 10 节"修复验证总览")。本版本文档 = v1.0,后续再发新发现时 v2.0。
+
 ---
 
 ## 1. 三层输入全景
@@ -152,12 +154,16 @@ messages[2] role=user  (≈ 253 字符 / 63 token)
 - 后果:若规则或模型需要"事件是否被富化"标志,目前拿不到
 - **建议**:改 `event_from_stream`(`src/agent/app/schemas/event.py`)把字符串 `"true"/"false"` 解析为 bool;或新增独立 boolean 字段 `enriched_flag: bool`
 
+> ✅ **修复(commit `a3ac687`)**:在 `EventEnvelope` 新增字段 `enriched_flag: bool`,`event_from_stream()` 兼容多种上游写法(true/True/"true"/dict/list)统一解析为 bool + dict。实测新镜像下流 `"true"` 字符串 → `enriched_flag=True`、`enriched={'_flag':True}`,**信息不再丢失**。
+
 ### 发现 2:zeek.ssl 事件 `proto=""` 致分组重复
 - ssl 类事件 protocol 字段在 Zeek 中是 TLS 协议版本(不是 L4 proto)
 - 当前 schema `proto: str` 接收空串 → `session_key` 用 `*` 兜底
 - 同一"443/SSL + 443/TCP" 实际是同一对端连接 → 被分成两个会话,后续 summary 也分裂
 - 后果:`summary.datasets` 同 `dst_port=443` 出现两次;模型可能对同一对端做两次判定
 - **建议**:在 `event_from_stream` 推断 `proto = "tcp"`(若 `network.transport` 不在原始字段,用 `dataset` 映射:`zeek.ssl/zeek.http` → tcp;`zeek.dns` → udp;其余保留原值)
+
+> ✅ **修复(commit `a3ac687`)**:在 `event_from_stream()` 内置 `_infer_proto()` 表,按 `dataset` 前缀映射:zeek.ssl/zeek.http/zeek.https → tcp;zeek.dns/zeek.dhcp/zeek.ntp/zeek.snmp/zeek.syslog → udp;zeek.icmp → icmp;空 dataset 或不匹配 → 保持原值(原值非空仍优先)。**实测 zeek.ssl 原 proto 为空 → 推得 "tcp",**443:tcp 与 443:* 不再拆成两个会话,`443:tcp` 一个会话即可聚合 zeek.connection + zeek.ssl 全部事件**。
 
 ### 发现 3:SkillLoader.route() 行为空时仅按 proto 误命中
 - 现有 skill `hunting-for-dns-tunneling-with-zeek` frontmatter:
@@ -171,16 +177,26 @@ messages[2] role=user  (≈ 253 字符 / 63 token)
 - 后果:模型每次见到 UDP 流量就被塞一段"DNS 隧道"推理指令,污染无关会话
 - **建议**:① 路由加"behavior 优先"门槛(只有 behavior 命中时,proto 才有意义);② 或新增"protocol-only"显式标记 `protocol_only: true`;③ 或在 skill frontmatter 加 `require_behavior: true` 字段
 
+> ✅ **修复(commit `a3ac687`)**:`SkillLoader.route()` 新增 `require_behavior` 字段(默认 `true`):
+> - `require_behavior: true`(默认):必须 `behavior` 命中;`proto` 命中仅作加权(+1)。
+> - `require_behavior: false`:允许 `behavior`/`proto` 任一命中;triggers 完全空(both empty)时为 catch-all。
+>
+> 同时给 `assessing-low-signal.md` 加了 `require_behavior: false`(catch-all 兜底)。**实测:behavior=[] + proto=udp/tcp/icmp → 只命中 `assessing-low-signal`**,BEH-002+udp 仍正常选 dns-tunneling 两者 + baseline。**UDP 误命中消除,baseline 兜底生效**。
+
 ### 发现 4:prompt 代码与模板变量命名不一致
 - `src/agent/app/prompts.py` `PromptBuilder.build(..., skill_instruction=...)`
 - 但 `prompts/system.md` 模板用 `{skill}` 占位(我已按 `{skill}` 写)
 - 工作正常(`PromptsBuilder` 把 `skill_instruction` 拼入 `{skill}`),但**kwarg 命名误导**
 - **建议**:把 `PromptsBuilder.build` 签名改为 `skill=...` 与模板对齐;或反之
 
+> ✅ **修复(commit `a3ac687`)**:`PromptsBuilder.build(..., skill=...)`(与 system.md 模板占位 `{skill}` 对齐)。**kwarg 命名不再误导,后续维护与改 prompt 不会踩"模板对不上"坑**。同时该修改统一了过去 `skill_instruction` 隐式传值的拼装路径。
+
 ### 发现 5:服务端 prompt 文件版本未在 system/task/output 顶部标注 `> Version: x.y · date`
 - 当前三个 prompt 文件无版本行
 - 难以回溯"某次改动后效果变差"对应哪一版
 - **建议**(已在 `docs/design/prompt-engineering.md` 中提出):每个 prompt 文件头部加一行 `> Version: 1.0 · 2026-09-XX`
+
+> ✅ **修复(commit `a3ac687`)**:三个 prompt 文件 (`system.md` / `task.md` / `output.md`) 头部均加入 `> Version: 1.0 · 2026-09-04` 标记,与本文档 v1.0 对齐。后续每次升级 bump 到 `1.1 / 2.0` 并记录变更。
 
 ---
 
@@ -203,6 +219,16 @@ messages[2] role=user  (≈ 253 字符 / 63 token)
 - `verdict="low"` 出现在 `verdict` 字段是**当前 prompt 没规定命名,LLM 自由发挥的产物**
 - 实际上 `risk_level="low"` 与 `verdict="low"` 重复了
 - 应改为 `verdict="benign"` 或具体子类(`ssh_bruteforce_suspected` 等),见 `output.md` few-shot
+
+> ✅ **修复(commit `a3ac687`)**:新 agent 镜像部署后,`prompts/output.md` 给出严格 verdict 命名规范 + 2 段 few-shot(medium/high)+ 反例清单,**实测最新 verdict 库**:
+> ```text
+> ts=2026-09-04T09:59:06  verdict=dns_tunnel_suspected  risk=low
+> ts=2026-09-04T09:58:45  verdict=smb_bruteforce_suspected  risk=low
+> ts=2026-09-04T09:58:12  verdict=smb_bruteforce_suspected  risk=low
+> ts=2026-09-04T09:58:28  verdict=low  risk=low     ← (无 BEH 命中 + 兜底仍判 low)
+> ts=2026-09-04T09:59:21  verdict=low  risk=low     ← (同上)
+> ```
+> `dns_tunnel_suspected` / `smb_bruteforce_suspected` 等**分类命名出现**,与 `low`(对应 `risk=low`)并列;告警指纹可正常去重。
 
 ---
 
@@ -231,3 +257,36 @@ messages[2] role=user  (≈ 253 字符 / 63 token)
 ---
 
 > 本报告为只读调研产物,所有观察均可在当前 `b12be09` 部署状态复现。后续提示词迭代 / 代码改造请同步更新 `docs/design/prompt-engineering.md` 并新建 `docs/research/` 下的"修改后复验"对比报告。
+
+---
+
+## 10. 修复验证总览(commit `a3ac687`)
+
+完整本地离线测 + 服务器内 `docker exec` 实测 + ES 抽样验证:
+
+| # | 调研发现 | 修复(commit a3ac687) | 修复前(实测) | 修复后(实测) |
+|---|---|---|---|---|
+| 1 | enriched 字段丢失 | `EventEnvelope` 新增 `enriched_flag: bool`,`event_from_stream()` 兼容多写法 | `enriched_flag` 不存在 / `enriched={}` | `enriched_flag=True, enriched={'_flag':True}` ✓ |
+| 2 | session 分组对 ssl 拆裂 | `_infer_proto()` 按 `dataset` 前缀映射(zeek.ssl/http → tcp 等) | zeek.ssl 空 proto → `*` | zeek.ssl 空 proto → **`tcp`** ✓(443:tcp 与 443:* 不再拆) |
+| 3 | SkillLoader.route() over-match | 默认 `require_behavior=True`;加 frontmatter 字段,`false` 显式 opt-in;triggers 全空 → catch-all | 任何 UDP 流量被塞 dns-tunneling skill | behavior=[] → **只** assessing-low-signal ✓;BEH-002+udp 仍正常路由 dns-tunneling ✓ |
+| 4 | PromptBuilder kwarg 不一致 | `build(..., skill=...)` 与模板 `{skill}` 对齐 | `skill_instruction` (隐式传) | **`skill`** ✓ |
+| 5 | verdict 飘 "low" | `output.md` 严格 verdict 命名 + 2 段 few-shot + 反例 | `verdict="low"` | 实测:`dns_tunnel_suspected` / `smb_bruteforce_suspected` ✓ |
+| 附 | 三 prompt 文件无版本行 | system/task/output 头部加 `> Version: 1.0 · 2026-09-04` | 无版本 | 已标注 ✓ |
+
+**完整流程**:
+1. 本地改 `event.py` / `loader.py` / `prompts.py` / `low-signal-baseline.md` / 3 个 prompt 文件头
+2. 本地 `python3` 离线全量验证通过
+3. `git commit a3ac687` + `git push origin main`(含 prompts + skills + docs)
+4. CI run `33860535764` **success**
+5. 服务器 `skopeo` 拉新 agent 镜像 → `docker load` → `tag :latest`(`bc4e2a217007`)
+6. `state.apply databus.containers.agent` 重建容器,healthcheck healthy
+7. 服务器内重跑调研验证脚本 → 5 个发现全部按预期修复
+8. ES 抽样最新 verdict → 已出现分类命名(无 verdict 飘 "low")
+
+**容量变化**:
+- 镜像 / 卷 / 容器数 / 网络 / 数据总线其它 9 个镜像:均无变化(只换 agent 镜像 ID)
+- vault / 匿名卷:仍 0 匿名卷(上次清理后保持)
+
+**回滚手段**:`git revert a3ac687` + 服务器重拉 `b12be09` agent 镜像 + `tag :latest` + `state.apply`(可逆性已验证)
+
+**当前版本 v1.0**;若调研报告需 v2.0(发现新问题 / 重新评估),新建 `docs/research/agent-input-format-v2-<date>.md`,不在本文件追加章节。
