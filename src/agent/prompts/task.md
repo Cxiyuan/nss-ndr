@@ -5,7 +5,7 @@
 ## 输入字段说明
 | 字段 | 含义 | 用途 |
 |---|---|---|
-| `session_key` | 会话唯一标识 `sess:{src}:{dst}:{port}:{proto}` | 检索缓存/去重 |
+| `session_key` | 会话唯一标识 `sess:<src>:<dst>:<port>:<proto>` | 检索缓存/去重 |
 | `aggregation_level` | SESSION / FLOW / HOST | 当前都按 SESSION 处理 |
 | `window_seconds` | 聚合时间窗(秒) | 用于判定"短时间内" |
 | `event_count` | 本案事件条数 | 强度指标 |

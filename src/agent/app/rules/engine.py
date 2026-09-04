@@ -17,6 +17,123 @@ from app.schemas.keys import session_key
 
 RISK_ORDER = {"low": 0, "medium": 1, "high": 2}
 
+# ---- Phase A: summary.features 压缩(真实 Zeek 特征,供 LLM 研判) ----
+_MAX_FEATURE_ITEMS = 10
+_MAX_STR = 80
+
+
+def _clip(s: str) -> str:
+    s = str(s)
+    return s if len(s) <= _MAX_STR else s[:_MAX_STR - 3] + "..."
+
+
+def _freq(items: Iterable[Any], top: int = _MAX_FEATURE_ITEMS) -> dict:
+    d: dict[str, int] = defaultdict(int)
+    for it in items:
+        if it is None or it == "":
+            continue
+        d[str(it)] += 1
+    return dict(sorted(d.items(), key=lambda kv: -kv[1])[:top])
+
+
+def _entropy(s: str) -> float:
+    if not s:
+        return 0.0
+    from collections import Counter
+    n = len(s)
+    counts = Counter(s)
+    return -sum((cnt / n) * math.log2(cnt / n) for cnt in counts.values())
+
+
+def _top(seq: Iterable[Any], key=None, top: int = _MAX_FEATURE_ITEMS) -> list[str]:
+    out: list[str] = []
+    for it in seq:
+        if it is None or it == "":
+            continue
+        item = str(it)
+        if item not in out:
+            out.append(item)
+        if len(out) >= top:
+            break
+    return out
+
+
+def _summarize_dns(rows: list[dict]) -> dict:
+    queries = [r.get("query") for r in rows]
+    top_q = _top(queries)
+    return {
+        "top_queries": top_q,
+        "unique_domains": len({q for q in queries if q}),
+        "qtype_dist": _freq(r.get("qtype_name") for r in rows),
+        "avg_entropy": round(sum(_entropy(q or "") for q in top_q) / len(top_q), 2) if top_q else 0.0,
+    }
+
+
+def _summarize_http(rows: list[dict]) -> dict:
+    uris = _top(r.get("uri") for r in rows)
+    return {
+        "methods_dist": _freq(r.get("method") for r in rows),
+        "status_codes_dist": _freq(r.get("status_code") for r in rows),
+        "top_uris": uris,
+        "hosts": _top(r.get("host") for r in rows),
+    }
+
+
+def _summarize_conn(rows: list[dict]) -> dict:
+    bytes_sum = sum(float(r.get("orig_bytes") or 0) + float(r.get("resp_bytes") or 0) for r in rows)
+    dur_sum = sum(float(r.get("duration") or 0) for r in rows)
+    return {
+        "services_dist": _freq(r.get("service") for r in rows),
+        "conn_states_dist": _freq(r.get("conn_state") for r in rows),
+        "bytes_sum": round(bytes_sum, 1),
+        "duration_sum": round(dur_sum, 1),
+    }
+
+
+def _summarize_ssl(rows: list[dict]) -> dict:
+    return {
+        "sni_set": _top(r.get("server_name") for r in rows),
+        "ja3_cnt": len({r.get("ja3") for r in rows if r.get("ja3")}),
+        "cipher_set": _top((r.get("cipher") for r in rows), top=5),
+        "validation_status": _freq(r.get("validation_status") for r in rows),
+    }
+
+
+def _summarize_files(rows: list[dict]) -> dict:
+    return {
+        "filenames": _top(r.get("filename") for r in rows),
+        "mime_dist": _freq(r.get("mime_type") for r in rows),
+    }
+
+
+def _summarize_notice(rows: list[dict]) -> dict:
+    return {"msgs": _top(r.get("msg") for r in rows)}
+
+
+_DATASET_SUMMARIZERS = {
+    "zeek.dns": _summarize_dns,
+    "zeek.http": _summarize_http,
+    "zeek.connection": _summarize_conn,
+    "zeek.ssl": _summarize_ssl,
+    "zeek.files": _summarize_files,
+    "zeek.notice": _summarize_notice,
+}
+
+
+def summarize_features(events: list[EventEnvelope]) -> dict:
+    """按 dataset 聚合每事件 zeek 信号字段 → 压缩特征(仅当有 zeek 详情时输出)。"""
+    by_ds: dict[str, list[dict]] = defaultdict(list)
+    for e in events:
+        if e.zeek:
+            by_ds[e.dataset].append(e.zeek)
+    features: dict[str, dict] = {}
+    for ds, rows in by_ds.items():
+        fn = _DATASET_SUMMARIZERS.get(ds)
+        if fn:
+            features[ds] = fn(rows)
+    return features
+
+
 
 @dataclass
 class Rule:
@@ -238,15 +355,22 @@ class RuleEngine:
         # LLM 长 prompt 是导致 llama.cpp cancel + 单个会话拖死整队列的根因之一。
         max_events_in_unit = 50
         bounded_events = events[-max_events_in_unit:] if len(events) > max_events_in_unit else events
+
+        # Phase A: 按 event.zeek(透传信号字段)聚合真实 Zeek 特征,供 LLM 研判
+        summary: dict[str, Any] = {
+            "datasets": dict(datasets),
+            "dst_ports": sorted(ports)[:20],
+            "behavior_hits": [h.behavior_id for h in hits],
+        }
+        feats = summarize_features(bounded_events)
+        if feats:
+            summary["features"] = feats
+
         return AnalysisUnit(
             session_key=sess,
             events=[e.event_id for e in bounded_events],
             event_count=len(events),  # event_count 保留原始计数（行为溯源用）
-            summary={
-                "datasets": dict(datasets),
-                "dst_ports": sorted(ports)[:20],
-                "behavior_hits": [h.behavior_id for h in hits],
-            },
+            summary=summary,
             behavior_hits=hits,
             initial_risk=risk,
             estimated_tool_calls=min(est_tools, 9),

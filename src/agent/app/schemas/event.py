@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from pydantic import BaseModel, Field
 
 
@@ -49,6 +51,8 @@ class EventEnvelope(BaseModel):
     enriched: dict = Field(default_factory=dict, description="富化标签(IOC 命中等)")
     enriched_flag: bool = Field(False, description="上游是否富化过(从 enriched=='true' 解析)")
     trace_id: str = Field("", description="链路追踪 ID")
+    # Phase A: logstash 透传的 Zeek 信号字段(raw zeek 字段名,如 query/uri/conn_state)
+    zeek: dict = Field(default_factory=dict, description="Zeek 原始高信号字段(透传,压缩用)")
 
     @property
     def five_tuple(self) -> tuple[str, str, str, str, str]:
@@ -69,6 +73,8 @@ def event_from_stream(fields: dict) -> EventEnvelope:
         enriched_flag(bool,上游是否富化过) + enriched(dict,标签等明细)
     - #2 proto 字段:流里 zeek.ssl/http/dns 等 L7 协议不携带 L4 字段,
         在原 proto 为空时按 dataset 推断默认 L4 协议
+    - Phase A: 流里 "zeek" 字段(logstash JSON 序列化的信号字段)→ 解析为 dict,
+        供规则引擎做 summary.features 压缩
     """
     raw_proto = (fields.get("proto") or "").strip()
     dataset = fields.get("dataset", "zeek.connection") or "zeek.connection"
@@ -94,6 +100,19 @@ def event_from_stream(fields: dict) -> EventEnvelope:
         enriched_dict = {"labels": list(raw_enriched)}
         enriched_flag = bool(raw_enriched)
 
+    # Phase A: zeek 信号字段(logstash 用 JSON 字符串,也可能直接是 dict)
+    raw_zeek = fields.get("zeek")
+    zeek_dict: dict = {}
+    if isinstance(raw_zeek, dict):
+        zeek_dict = dict(raw_zeek)
+    elif isinstance(raw_zeek, str) and raw_zeek.strip():
+        try:
+            parsed = json.loads(raw_zeek)
+            if isinstance(parsed, dict):
+                zeek_dict = parsed
+        except (json.JSONDecodeError, ValueError):
+            zeek_dict = {}
+
     return EventEnvelope(
         event_id=fields.get("event_id", ""),
         ts=fields.get("ts", ""),
@@ -105,4 +124,5 @@ def event_from_stream(fields: dict) -> EventEnvelope:
         dataset=dataset,
         enriched=enriched_dict,
         enriched_flag=enriched_flag,
+        zeek=zeek_dict,
     )
