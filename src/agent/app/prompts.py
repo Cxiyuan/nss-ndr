@@ -23,10 +23,10 @@ class PromptBuilder:
         unit: AnalysisUnit,
         asset_context: str = "",
         tool_directory: str = "",
-        skill_instruction: str = "",
+        skill: str = "",
     ) -> list[dict]:
         system = self._template("system") or "你是深瞳安全分析智能体。"
-        system = system.format(asset_context=asset_context, tool_directory=tool_directory, skill=skill_instruction)
+        system = system.format(asset_context=asset_context, tool_directory=tool_directory, skill=skill)
         task = self._template("task") or "分析任务：{task_json}"
         task = task.format(task_json=json.dumps(unit.model_dump(mode="json"), ensure_ascii=False, default=str))
         output = self._template("output") or "只输出 JSON，字段：risk_level/verdict/evidence/iocs/suggest_action。"

@@ -64,16 +64,43 @@ class SkillLoader:
         return "可用 Skills：\n" + "\n".join(s.discovery_line for s in self.skills)
 
     def route(self, behavior_ids: list[str], proto: str = "") -> list[Skill]:
-        """按 triggers（proto/behavior）选 Top-1~Top-3（设计文档 §7.1 意图路由）。"""
-        scored = []
+        """按 triggers 选 Top-1~Top-3。
+
+        修复#3:以前行为空时仍会因 proto 命中被拉入 prompt(每条 UDP 普通 DNS 都被塞入
+        dns-tunneling skill,污染判定并加大 token)。
+        现在默认 require_behavior=True:必须 behavior 命中才入候选;只有
+        frontmatter 显式 `require_behavior: false` 才允许仅 proto 命中;
+        triggers 完全为空(无 behavior / 无 proto)且 require_behavior: false → 兜底 catch-all。
+        """
+        scored: list[tuple[int, Skill]] = []
         for s in self.skills:
-            beh = s.triggers.get("behavior", [])
-            protos = s.triggers.get("proto", [])
-            score = 0
-            if beh and any(b in beh for b in behavior_ids):
-                score += 2
-            if protos and proto in protos:
-                score += 1
+            triggers = s.triggers or {}
+            beh: list[str] = list(triggers.get("behavior", []) or [])
+            protos: list[str] = list(triggers.get("proto", []) or [])
+            require_behavior_raw = triggers.get("require_behavior")
+            # 缺省:必须 behavior 命中;显式 false 才允许 protocol-only 或 catch-all
+            require_behavior = True if require_behavior_raw is None else bool(require_behavior_raw)
+
+            beh_hit = bool(beh) and any(b in beh for b in behavior_ids)
+            proto_hit = bool(protos) and proto in protos
+
+            if require_behavior:
+                if not beh_hit:
+                    continue
+                score = 2
+                if proto_hit:
+                    score += 1
+            else:
+                # require_behavior: false 的两类:protocol-only 或 全空 catch-all
+                is_catchall = (not beh) and (not protos)
+                if is_catchall:
+                    score = 1
+                else:
+                    if not (beh_hit or proto_hit):
+                        continue
+                    score = 1
+                    if beh_hit:
+                        score += 1
             if score:
                 scored.append((score, s))
         scored.sort(key=lambda x: -x[0])
