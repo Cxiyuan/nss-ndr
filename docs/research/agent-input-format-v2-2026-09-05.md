@@ -64,7 +64,13 @@
    _summarize_weird(names/notice_count);task/system 特征表与 evidence_guard 键词表同步。
    验证:流内 weird zeek 载荷 = {"name":"active_connection_reuse","notice":false,"source":"TCP"} ✓
 3. **P2-A 已修**:ssh SIGNAL_FIELDS attempts → auth_attempts(zeek 实际字段名)✓
-4. P2-B(proto 空拆分)/P2-C(上游列覆盖)/P3(批内会话语义):记录不修,es_search 兜底
+4. **P2-B 已修(commit f915e6b,输入重心轮)**:app/pipeline/grouping.py 批内 proto 回填
+   (conn 行优先,同 (src,dst,dst_port) 兄弟事件回填 ssh/weird 空 proto)+ group_by_session;
+   worker.run_once 接入。真实数据回放:SSH 流 ':22:*'(58)+':22:tcp'(17)→ 单 ':22:tcp'(75,
+   weird44+ssh14+conn17);443 流同效。线上验证:重启后 ':22:*' 碎片判定 0 例。
+   同时新增 zeek.ssh 特征汇总(attempts_sum/auth_success_cnt/clients),task/system 特征表
+   与 evidence_guard 键词表同步。
+5. P2-C(上游列覆盖:ssl SNI/JA3、http method/uri、dns qtype_name)/P3(批内会话语义):记录待处理
 
 ## 3b. 修复后的输出侧观察(重要)
 输入修复后 agent(守卫版)在低信号流量上 evidence 高频以"引用本会话 features.zeek.dns 的
