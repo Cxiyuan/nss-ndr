@@ -111,6 +111,15 @@ def _summarize_notice(rows: list[dict]) -> dict:
     return {"msgs": _top(r.get("msg") for r in rows)}
 
 
+def _summarize_weird(rows: list[dict]) -> dict:
+    """2026-09-05 输入复核 P1-B:weird.log 的 name(异常类型)是高价值信号,如
+    possible_SPF_DoS / TCP_ack_underflow 等;notice 标记是否已达告警级。"""
+    return {
+        "names": _top(r.get("name") for r in rows),
+        "notice_count": sum(1 for r in rows if r.get("notice")),
+    }
+
+
 _DATASET_SUMMARIZERS = {
     "zeek.dns": _summarize_dns,
     "zeek.http": _summarize_http,
@@ -118,6 +127,7 @@ _DATASET_SUMMARIZERS = {
     "zeek.ssl": _summarize_ssl,
     "zeek.files": _summarize_files,
     "zeek.notice": _summarize_notice,
+    "zeek.weird": _summarize_weird,
 }
 
 

@@ -48,6 +48,9 @@ _FEATURE_KEY_TO_DATASET: dict[str, str] = {
     "mime_dist": "zeek.files",
     # zeek.notice
     "msgs": "zeek.notice",
+    # zeek.weird(2026-09-05 输入复核 P1-B)
+    "names": "zeek.weird",
+    "notice_count": "zeek.weird",
 }
 
 # 指令性/示例性文字(模型把 prompt 指令或示例骨架抄进 evidence 的典型痕迹)

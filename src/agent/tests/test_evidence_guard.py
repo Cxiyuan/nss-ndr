@@ -16,6 +16,8 @@ def _unit_with_features(datasets: list[str]) -> "AnalysisUnit":
             zeek = {"query": f"q{i}.example.com", "qtype_name": "A"}
         elif ds == "zeek.connection":
             zeek = {"conn_state": "S0", "service": "smb"}
+        elif ds == "zeek.weird":
+            zeek = {"name": "TCP_ack_underflow", "notice": False}
         events.append(
             EventEnvelope(
                 event_id=f"g{i}",
@@ -77,3 +79,15 @@ def test_downgrade_evidence_message():
     ev = downgrade_evidence("evidence 引用 features.zeek.dns,但本会话无该数据流", "features.zeek.dns: x")
     assert ev.startswith("evidence 未通过落地点校验:")
     assert "features.zeek.dns" in ev
+
+
+def test_weird_feature_keys_validated():
+    """zeek.weird 特征键(names/notice_count)绑定 dataset 校验。"""
+    unit = _unit_with_features(["zeek.connection"])
+    ok, issue = validate(unit, "依据 names 含 possible_SPF_DoS")
+    assert not ok
+    assert "names" in issue
+    # 有 weird 特征的会话允许引用
+    unit_w = _unit_with_features(["zeek.connection", "zeek.weird"])
+    ok, issue = validate(unit_w, "依据 zeek.weird:names 含 TCP_ack_underflow")
+    assert ok, issue

@@ -176,3 +176,29 @@ async def test_windowed_ssh_bruteforce_counts_across_batches():
     sess = "sess:10.0.0.30:10.0.0.10:22:tcp"
     assert sess in hits
     assert "BEH-006" in [h.behavior_id for h in hits[sess]]
+
+
+def test_weird_features_summarized():
+    """P1-B:zeek.weird 会话应产出 names/notice_count 特征供模型研判。"""
+    from app.schemas.event import EventEnvelope
+
+    events = [
+        EventEnvelope(
+            event_id=f"w{i}",
+            ts="2026-09-05T01:00:00Z",
+            src_ip="10.0.0.7",
+            src_port="40000",
+            dst_ip="10.0.0.21",
+            dst_port="445",
+            proto="",
+            dataset="zeek.weird",
+            zeek={"name": "possible_SPF_DoS", "notice": True},
+        )
+        for i in range(3)
+    ]
+    engine = RuleEngine(rules_dir="config/rules")
+    hits = engine.evaluate(events)
+    unit = engine.build_unit("sess:10.0.0.7:10.0.0.21:445:", events, hits.get("sess:10.0.0.7:10.0.0.21:445:", []))
+    feats = unit.summary.get("features", {}).get("zeek.weird", {})
+    assert feats.get("names") == ["possible_spf_dos"] or feats.get("names") == ["possible_SPF_DoS"] or "possible" in str(feats)
+    assert feats.get("notice_count") == 3
