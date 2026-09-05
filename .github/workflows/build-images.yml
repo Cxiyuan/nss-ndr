@@ -98,7 +98,14 @@ jobs:
               BASE_IMAGE=zeek/zeek:8.2.2
             fixed_tags: type=raw,value=8.2.2
 
-          # 注:llm-server 自 2026-09-05 起移出本项目 CI(智能体推理侧非本项目范围)
+          # 边缘 LLM：llama.cpp 编译较慢，建议手动触发或按 tag 推送（保留:推理服务非 agent 代码）
+          - image: llm-server
+            context: images
+            dockerfile: images/Dockerfile.llm-server
+            platforms: linux/amd64
+            build_args: ''
+            versioned: 'true'
+            smoke: 'true'
 
           # Salt Master + Salt API（Alpine + Python 3.12 + Salt 3007.14）
           - image: salt-master-api
@@ -167,7 +174,9 @@ jobs:
         env:
           IMAGE: ${{ steps.ns.outputs.namespace }}/${{ matrix.image }}:latest
         run: |
-          if [[ "${{ matrix.image }}" == "salt-master-api" ]]; then
+          if [[ "${{ matrix.image }}" == "llm-server" ]]; then
+            docker run --rm --entrypoint /usr/local/bin/llama-server "$IMAGE" --version
+          elif [[ "${{ matrix.image }}" == "salt-master-api" ]]; then
             docker run --rm --entrypoint salt-master "$IMAGE" --version
           elif [[ "${{ matrix.image }}" == "salt-minion" ]]; then
             docker run --rm --entrypoint salt-minion "$IMAGE" --version
