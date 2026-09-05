@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
 
 import redis.asyncio as aioredis
 import structlog
@@ -17,13 +16,13 @@ from app.mcp import MCPClient
 from app.mcp.tools import build_tools
 from app.observability import Metrics, TraceContext
 from app.pipeline.graph import build_graph
+from app.pipeline.grouping import group_by_session
 from app.pipeline.nodes import Nodes
 from app.prompts import PromptBuilder
 from app.providers import ModelGateway, OpenAICompatProvider
 from app.rules import RuleEngine
 from app.rules.window_store import RuleWindowStore
 from app.schemas.event import EventEnvelope, event_from_stream
-from app.schemas.keys import session_key
 from app.skills import SkillLoader
 from app.storage.es_store import ESStore
 from app.storage.redis_store import RedisStore
@@ -245,11 +244,9 @@ class AgentWorker:
                     log.warning("dedup ack failed", error=str(skip_ack)[:100])
             self.metrics.inc("events.dedup", len(skip_ack))
             parsed = keep
-        groups: dict[str, tuple[list[EventEnvelope], list[str]]] = defaultdict(lambda: ([], []))
-        for entry_id, ev in parsed:
-            sess = session_key(ev.src_ip, ev.dst_ip, ev.dst_port, ev.proto)
-            groups[sess][0].append(ev)
-            groups[sess][1].append(entry_id)
+        groups: dict[str, tuple[list[EventEnvelope], list[str]]] = group_by_session(
+            [ev for _, ev in parsed], [eid for eid, _ in parsed]
+        )
         self.metrics.inc("events.received", len(entries))
         self.metrics.inc("events.unique", len(parsed))
         self.metrics.inc("sessions.batch", len(groups))

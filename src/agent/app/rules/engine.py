@@ -120,6 +120,27 @@ def _summarize_weird(rows: list[dict]) -> dict:
     }
 
 
+def _summarize_ssh(rows: list[dict]) -> dict:
+    """2026-09-05 输入重心:ssh.log 的 auth_attempts/auth_success 是爆破成败判定关键。
+    注意 auth_attempts 为字符串数字(透传自 zeek json,数值可能带小数点或科学计数)。"""
+    attempts: list[int] = []
+    for r in rows:
+        try:
+            attempts.append(int(float(str(r.get("auth_attempts") or 0))))
+        except (TypeError, ValueError):
+            continue
+    succ = sum(
+        1
+        for r in rows
+        if str(r.get("auth_success")).strip().lower() in ("true", "t", "1", "yes")
+    )
+    return {
+        "attempts_sum": sum(attempts),
+        "auth_success_cnt": succ,
+        "clients": _top(r.get("client") for r in rows),
+    }
+
+
 _DATASET_SUMMARIZERS = {
     "zeek.dns": _summarize_dns,
     "zeek.http": _summarize_http,
@@ -128,6 +149,7 @@ _DATASET_SUMMARIZERS = {
     "zeek.files": _summarize_files,
     "zeek.notice": _summarize_notice,
     "zeek.weird": _summarize_weird,
+    "zeek.ssh": _summarize_ssh,
 }
 
 

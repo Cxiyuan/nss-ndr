@@ -18,6 +18,8 @@ def _unit_with_features(datasets: list[str]) -> "AnalysisUnit":
             zeek = {"conn_state": "S0", "service": "smb"}
         elif ds == "zeek.weird":
             zeek = {"name": "TCP_ack_underflow", "notice": False}
+        elif ds == "zeek.ssh":
+            zeek = {"auth_attempts": "2", "auth_success": False, "client": "SSH-2.0-OpenSSH"}
         events.append(
             EventEnvelope(
                 event_id=f"g{i}",
@@ -90,4 +92,14 @@ def test_weird_feature_keys_validated():
     # 有 weird 特征的会话允许引用
     unit_w = _unit_with_features(["zeek.connection", "zeek.weird"])
     ok, issue = validate(unit_w, "依据 zeek.weird:names 含 TCP_ack_underflow")
+    assert ok, issue
+
+
+def test_ssh_feature_keys_validated():
+    unit = _unit_with_features(["zeek.connection"])
+    ok, issue = validate(unit, "依据 attempts_sum=20 判定爆破")
+    assert not ok
+    assert "attempts_sum" in issue
+    unit_s = _unit_with_features(["zeek.connection", "zeek.ssh"])
+    ok, issue = validate(unit_s, "依据 zeek.ssh:attempts_sum=20、auth_success_cnt=0")
     assert ok, issue

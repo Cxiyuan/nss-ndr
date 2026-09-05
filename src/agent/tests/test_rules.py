@@ -202,3 +202,30 @@ def test_weird_features_summarized():
     feats = unit.summary.get("features", {}).get("zeek.weird", {})
     assert feats.get("names") == ["possible_spf_dos"] or feats.get("names") == ["possible_SPF_DoS"] or "possible" in str(feats)
     assert feats.get("notice_count") == 3
+
+
+def test_ssh_features_summarized():
+    """输入重心:zeek.ssh 会话产出 attempts_sum/auth_success_cnt/clients。"""
+    from app.schemas.event import EventEnvelope
+
+    events = [
+        EventEnvelope(
+            event_id=f"sshf{i}",
+            ts="2026-09-05T01:00:00Z",
+            src_ip="10.0.0.30",
+            src_port="41000",
+            dst_ip="10.0.0.10",
+            dst_port="22",
+            proto="tcp",
+            dataset="zeek.ssh",
+            zeek={"auth_attempts": "3", "auth_success": False, "client": "SSH-2.0-OpenSSH"},
+        )
+        for i in range(2)
+    ]
+    engine = RuleEngine(rules_dir="config/rules")
+    hits = engine.evaluate(events)
+    unit = engine.build_unit("sess:10.0.0.30:10.0.0.10:22:tcp", events, hits.get("sess:10.0.0.30:10.0.0.10:22:tcp", []))
+    feats = unit.summary.get("features", {}).get("zeek.ssh", {})
+    assert feats.get("attempts_sum") == 6
+    assert feats.get("auth_success_cnt") == 0
+    assert feats.get("clients") == ["SSH-2.0-OpenSSH"]

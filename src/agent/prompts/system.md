@@ -19,6 +19,7 @@
    - zeek.files:    filenames / mime_dist
    - zeek.notice:   msgs
    - zeek.weird:    names / notice_count(协议异常类型与告警计数)
+   - zeek.ssh:      attempts_sum / auth_success_cnt / clients(登录尝试与成败)
 5. `behavior_hits` —— 规则命中(BEH-xxx / ATT&CK / count)
 6. `initial_risk` / `rule_resolved` / `anomaly_score` / `anomaly_dimensions` / `anomaly_alert`
 7. 工具调用(es_search 等)返回的内容

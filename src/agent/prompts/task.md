@@ -18,6 +18,7 @@
 | `summary.features.zeek.files` | filenames / mime_dist | **文件研判依据** |
 | `summary.features.zeek.notice` | msgs | **告警消息依据** |
 | `summary.features.zeek.weird` | names / notice_count | **协议异常研判依据**(weird=Zeek 协议异常记录) |
+| `summary.features.zeek.ssh` | attempts_sum / auth_success_cnt / clients | **SSH 登录成败依据** |
 | `behavior_hits` | 已命中规则(BEH-xxx/ATT&CK/count) | 必须复核,不要忽略 |
 | `initial_risk` | 规则初判 low/medium/high | 你的起点 |
 | `rule_resolved` | true=规则可直接判定,做确认/证据 | 避免过度推理 |
