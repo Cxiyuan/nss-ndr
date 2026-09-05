@@ -142,9 +142,19 @@ class Nodes:
                 else self._default_messages(unit)
             )
         tools = self.mcp.registry.openai_tools()
-        resp = await self.gateway.generate(
-            provider, messages, tools=tools, response_schema=verdict_schema(), max_tokens=self.config.max_output_tokens
-        )
+        # D2 校准:llama 偶发 cancel 产生空输出(命中会话 prompt eval 慢 + 超时),重试一次兜底
+        resp = None
+        for attempt in (1, 2):
+            resp = await self.gateway.generate(
+                provider,
+                messages,
+                tools=tools,
+                response_schema=verdict_schema(),
+                max_tokens=self.config.max_output_tokens,
+            )
+            if resp.text or resp.tool_calls:
+                break
+            log.warning("model_empty_output_retry", trace_id=state["trace_id"], attempt=attempt, provider=provider)
         messages.append({"role": "assistant", "content": resp.text, "tool_calls": [_tc_dict(t) for t in resp.tool_calls]})
         out: dict = {"messages": messages, "provider": provider}
         if resp.tool_calls:

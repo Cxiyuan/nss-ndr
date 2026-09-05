@@ -33,6 +33,8 @@
 
 ## 禁止
 - 不编造任何 features/工具结果之外的 IP/域名/URI/端口/计数/字节。
+- **features 键存在性硬约束**:evidence 里出现的 `features.zeek.*` 键必须逐字存在于 task_json 的 `summary.features` 中;task_json 没有 zeek.dns / zeek.http / zeek.ssl 等键时,evidence 一律不得写出这些键(哪怕用 es_search 也不行——工具结果要单列说明来源)。
+- 会话特征极简(如 event_count≤2、只有 zeek.connection 且 conn_state=S0/单条)且无 behavior_hits/anomaly 时:只做 benign/uncertain,不得给 high 或数据外传类结论,除非 es_search 返回了真实多事件证据并注明「es_search:」。
 - 不确定 → uncertain + 写明缺什么,禁止用 low 逃避。
 - 不复读 output.md 示例内容。
 - 不输出多余文字或代码块。

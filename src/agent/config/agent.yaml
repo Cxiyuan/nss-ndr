@@ -23,7 +23,9 @@ cloud_provider: cloud
 # 24af520 起调优：收敛单次 LLM 调用（工具步数/输出长度/超时），降低单会话长 prompt 拖垮队列
 max_tool_calls: 2
 max_output_tokens: 384
-model_timeout: 45.0
+# D2 校准:命中会话(带 skill)prompt 的 LCP 命中率低(~0.3),双槽满载时 prompt eval
+# 可低至 ~40 tok/s → 45s 超时被客户端掐断(llama cancel → 空输出"无法解析")。放宽到 150s。
+model_timeout: 150.0
 
 # 输出索引
 verdict_index: nss-ndr-agent-verdict
