@@ -3,7 +3,7 @@
 > **定位**:把智能体从"8 字段信封 + 3 键 summary 的裸判断器"升级为"能看到真实 Zeek 特征、遵守强约束、零幻觉的纯后端安全分析引擎"。
 > **本蓝图 = 系统提示词 v2 提案 + 输入侧(logstash/引擎)与智能体侧的配套改造**。
 > **前置调研**:`docs/research/agent-input-format.md`;本轮补充确认 logstash 丢弃了除 8 字段外全部 Zeek 详情。
-> 版本:1.2 — Phase A(输入侧富化)与 Phase B(系统提示词 v2)均已落地并部署验证;Phase C(调优观测)已完成首轮,报告见 `docs/research/phase-c-observation-2026-09-05.md`(核心发现:规则 window 未跨批生效、检测 100% 由模型承担、v2 输出质量达标;遗留 D1 规则滚动窗口为 Phase D 候选)。
+> 版本:1.3 — Phase A(输入侧富化)与 Phase B(系统提示词 v2)已落地并部署验证;Phase C(调优观测)首轮完成(报告 `docs/research/phase-c-observation-2026-09-05.md`);Phase D1(规则滚动窗口状态化,commit 1a110e8)已实施并上线验证,详见同报告 §D1。
 
 ---
 
@@ -235,6 +235,12 @@ es_search 工具能查 ES `.ds-logs-zeek.*`(ECS 归一化字段)。system prompt
   10. 校准严重度锚点:**未改**——high 集中由测试流量真实 SMB 爆破造成,非锚点失真;规则阈值/容量维持现状
   11. 结构性发现:规则 `window` 未跨批实现 → behavior_hits 全空 → 检测 100% 由模型(es_search 跨会话取证)承担;LCP 前缀缓存 ~100%,吞吐瓶颈为单请求 decode ~9s
   12. 遗留:es_search 调用率缺实测计数(D2);D1(规则滚动窗口状态化,Redis ZSET/ES 侧)为 Phase D 首选
+
+- **Phase D1(规则滚动窗口状态化)— 已实施并验证(2026-09-05,commit 1a110e8)**:
+  13. 新增 `app/rules/window_store.py`(Redis ZSET score=到达ms + payload EX=window+margin,每分组≤500 条,惰性剪枝);`RuleEngine.evaluate_windowed()` 只对本批新增事件所在分组做"写窗口→取窗口全集→重评",命中只挂当前批会话;无 store 回退纯批
+  14. `_event_dict` 把 zeek 信号字段拍平到顶层(信封字段优先)——修复规则 match/conditions 引用 zeek 子字段(conn_state/query/method)在生产流量取不到的隐性失效;规则字段与透传字段对齐(BEH-002/007 query_name→query;logstash http 透传 request_len→request_body_len)
+  15. 验证:合成 3×SMB-445 跨批事件 → 第 3 会话命中 BEH-001,verdict `lateral_movement_suspected/high`,behavior_hits 落库;仅 1 例瞬时 llama cancel 致"无法解析"(约 90 判定中 1 例)
+  16. 遗留→D2:命中会话 evidence 引用了非本会话 summary 的数字(features.zeek.dns unique_domains=39),来源需工具调用日志才能判定;非 SMB 环境流量 uncertain 占比 ~50%,评估 D3
 
 ---
 

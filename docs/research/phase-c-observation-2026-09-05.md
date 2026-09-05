@@ -88,3 +88,26 @@
 ## 6. 下一步建议
 
 保持当前部署(无任何回滚必要)继续跑,优先评估 D1;D1 落地后再做一轮 Phase C' 复测(重点看 behavior_hits 命中率回升后 es_search 用量与 verdict 分布变化)。
+
+---
+
+## D1 实施与验证记录(2026-09-05,commit 1a110e8)
+
+### 实施内容
+- `app/rules/window_store.py`(新):Redis 滚动窗口——`rw:z:{rule}:{group}` ZSET(member=event_id,score=到达ms)+ `rw:ev:{eid}` payload(EX=window+600s);每分组上限 500 条;取窗口时惰性剪枝过期成员。
+- `RuleEngine.evaluate_windowed()`(engine.py):window>0 规则先写本批命中事件进窗口,再取窗口全集重评;只处理"本批新增事件所在分组";命中只挂当前批会话;无 window_store 时回退旧纯批求值(语义不变,evaluate() 保留)。
+- `_event_dict` 修复:zeek 信号字段(conn_state/query/method/uri…)拍平到顶层(信封字段优先)。旧实现只拍平信封字段,规则 match/conditions 引用的 zeek 子字段在生产流量中永远取不到——多数规则(BEH-002/003/006/007/008/010)实际上从不可触发。
+- 字段对齐:beh-rules.yaml BEH-002/007 `query_name`→`query`(zeek dns.log 实际字段);zeek-pipeline.conf http 透传 `request_len/response_len`→`request_body_len/response_body_len`(zeek http.log 实际字段,修复 BEH-004 输入缺失)。
+- 测试:+4 窗口化用例(跨批 SMB 命中、窗口过期剪枝、无 store 回退等价、SSH 跨批计数),本地全量 45 过。
+- 部署:agent + logstash-databus 两镜像(sha-1a110e8)经 CI→skopeo tar→scp→load→retag→salt 上线。
+
+### 线上验证(合成 SMB 445 跨批 ×2 轮)
+- 规则窗口真实累积(Redis 见 `rw:z:BEH-*`,如 SSH 会话窗口曾到 15/20)。
+- 第 1 轮合成(src 10.7.7.7→3 dst):第 3 会话命中 BEH-001 且 verdict 文档 `behavior_hits=["BEH-001"]`;但该次模型输出为空(1 例 llama task cancel,`stop: cancel task` 于启动 22s 后,约 90 判定中仅此 1 例"无法解析",判定为瞬时)。
+- 第 2 轮(src 10.7.9.9→3 dst):第 3 会话 4 次 llm 调用(含 es_search 工具链)→ verdict `lateral_movement_suspected / high`,`behavior_hits=["BEH-001"]`,evidence 含数字;前两会话(2 dst 未达阈值)benign/uncertain,行为正确。
+- 合成数据(6 verdict + 6 events)已 delete_by_query 清理。
+
+### 遗留/新发现(供下一轮)
+1. **evidence 溯源存疑(→D2)**:命中会话 evidence 引用了 `features.zeek.dns unique_domains=39`——合成会话只有 conn 特征,数字来源(es_search 结果 or 模型编造)需工具调用+结果日志才能判定;规则命中时模型应优先引用 BEH-xxx 命中而非硬凑 features 数字。
+2. **瞬时空输出**:1 例 task cancel 导致"模型输出无法解析"(约 1/90),需继续观察频率。
+3. **环境流量 uncertain 占比偏高(~50%)**:SMB 爆破停止后,非 SMB 环境流量(单事件 DNS/纯 conn)半数被判 uncertain("缺 zeek.dns/zeek.ssl 特征")——低信号会话的拒判语义(D3 候选,需区分"无特征属正常"与"真缺关键特征")。
