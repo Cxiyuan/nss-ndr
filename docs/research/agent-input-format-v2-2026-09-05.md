@@ -70,7 +70,14 @@
    weird44+ssh14+conn17);443 流同效。线上验证:重启后 ':22:*' 碎片判定 0 例。
    同时新增 zeek.ssh 特征汇总(attempts_sum/auth_success_cnt/clients),task/system 特征表
    与 evidence_guard 键词表同步。
-5. P2-C(上游列覆盖:ssl SNI/JA3、http method/uri、dns qtype_name)/P3(批内会话语义):记录待处理
+5. **P3 已修(commit 80053ca,输入重心轮)**:EpisodeAccumulator 跨批累积同
+   (src,dst,dst_port) 事件为情节(空闲 12s/事件 200/存活 300s/情节数 300 任一即 flush),
+   worker.run_once 改造(先累积后整段判定,flush 前不 ack/不打 evt 标记,崩溃由
+   XAUTOCLAIM 重投重建);flush 时 proto 回填 + session_key 分组。真实流模拟:500 事件
+   → 154 情节(dns-53 流 56 事件整段);线上验证:判定文档 event_count 出现 10-20 的
+   整段情节(此前被切成 2-4 个批内片段),PEL/DLQ 正常。测试 +5,全量 63 过。
+6. P2-C(上游列覆盖:ssl SNI/JA3、http method/uri、dns qtype_name):记录待上游/流量侧确认
+7. DHCP 富化(当前跳过)与 rdp/kerberos/smb_cmd/ntlm summarize:可选后续项
 
 ## 3b. 修复后的输出侧观察(重要)
 输入修复后 agent(守卫版)在低信号流量上 evidence 高频以"引用本会话 features.zeek.dns 的
