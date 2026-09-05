@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Any
+
+import structlog
 
 from app.alerting import AlertStore
 from app.config import AgentConfig
@@ -17,6 +20,22 @@ from app.schemas.keys import alert_fingerprint
 from app.schemas.verdict import Verdict
 from app.storage.es_store import ESStore
 from app.storage.redis_store import RedisStore, timestamp_now
+
+log = structlog.get_logger("agent.nodes")
+
+
+def _clip_tool(s: str, limit: int = 600) -> str:
+    """工具调用日志限长:保留参数/结果摘要即可溯源,防日志撑爆。"""
+    return s if len(s) <= limit else s[:limit] + f"...(+{len(s) - limit})"
+
+
+def _result_str(result: Any) -> str:
+    if isinstance(result, str):
+        return result
+    try:
+        return json.dumps(result, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return str(result)
 
 
 def parse_verdict_text(text: str) -> dict | None:
@@ -165,13 +184,34 @@ class Nodes:
         last = messages[-1] if messages else {}
         tool_calls = last.get("tool_calls") or []
         results = []
+        trace_id = state.get("trace_id", "")
+        # D2: 工具调用可观测性 —— 参数/结果摘要随 trace_id 落日志,
+        # 供 evidence 溯源判定(模型引用的是 es_search 真结果还是编造数字)
         for tc in tool_calls:
-            result = await self.mcp.call(tc["name"], tc.get("arguments") or {})
+            name = tc.get("name", "")
+            args = tc.get("arguments") or {}
+            t0 = time.monotonic()
+            try:
+                result = await self.mcp.call(name, args)
+                ok = True
+            except Exception as e:  # noqa: BLE001
+                ok = False
+                result = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+            ms = round((time.monotonic() - t0) * 1000)
+            log.info(
+                "tool_call",
+                trace_id=trace_id,
+                name=name,
+                args=_clip_tool(json.dumps(args, ensure_ascii=False, default=str)),
+                result=_clip_tool(_result_str(result)),
+                ms=ms,
+                ok=ok,
+            )
             results.append(
                 {
                     "role": "tool",
                     "tool_call_id": tc.get("id", ""),
-                    "name": tc["name"],
+                    "name": name,
                     "content": json.dumps(result, ensure_ascii=False, default=str),
                 }
             )

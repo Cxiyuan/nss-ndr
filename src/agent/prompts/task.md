@@ -29,6 +29,7 @@
 2. 用 behavior_hits 复核:特征是否支持该行为?rule_resolved=true 且支持 → 直接给结论。
 3. 特征不足 → es_search(≤2 次)补细节。
 4. 输出 JSON;evidence **必须引用本会话 features/工具结果中真实出现的字段与数值**,不得使用示例数值。
+5. **规则命中(behavior_hits 非空)时**:evidence 第一依据 = 该命中本身——引用 behavior_id/名称与窗口内统计(如「BEH-001 内网横向移动-SMB爆破:窗口内 src 向 3 个不同 445 目标发起会话」),再允许用 features/es_search 佐证;禁止引用 task_json 中**不存在**的 features 键(如本会话无 zeek.dns 就不得写 features.zeek.dns.*),禁止编造窗口/计数数字。
 
 ## 禁止
 - 不编造任何 features/工具结果之外的 IP/域名/URI/端口/计数/字节。
