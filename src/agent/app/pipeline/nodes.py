@@ -92,7 +92,7 @@ class Nodes:
 
     async def aggregate(self, state: dict) -> dict:
         events = state["events"]
-        hits = self.engine.evaluate(events)
+        hits = await self.engine.evaluate_windowed(events)
         sess = state["session_key"]
         unit = self.engine.build_unit(sess, events, hits.get(sess, []))
         # 基线/异常检测并入 aggregate（设计文档 §14.7）：High 时段跳过学习（抗污染）

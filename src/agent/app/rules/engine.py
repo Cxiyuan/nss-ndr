@@ -14,6 +14,7 @@ import yaml
 from app.schemas.analysis import AnalysisUnit, BehaviorHit
 from app.schemas.event import EventEnvelope
 from app.schemas.keys import session_key
+from .window_store import RuleWindowStore, group_key_str
 
 RISK_ORDER = {"low": 0, "medium": 1, "high": 2}
 
@@ -164,12 +165,18 @@ def _norm(v: Any) -> str:
 
 
 def _event_dict(event: EventEnvelope, detail: dict | None = None) -> dict:
-    """事件扁平化：信封字段 + 富化标签 + ES 回查详情（detail 优先级最高）。"""
+    """事件扁平化：信封字段 + zeek 信号字段拍平 + 富化标签 + ES 回查详情（detail 优先级最高）。"""
     base = event.model_dump(mode="json")
     base.pop("enriched", None)
     base.pop("trace_id", None)
+    # D1: zeek 信号字段(conn_state/query/method/uri/…)拍平到顶层。
+    # 旧版只拍平信封,规则 match/conditions 引用的 zeek 子字段在生产流量里永远取不到
+    # (如 BEH-002 的 query、BEH-006 的 conn_state),导致规则实际不可触发。
+    zeek = base.pop("zeek", None) or {}
     out: dict[str, Any] = {}
     out.update(base)
+    for k, v in zeek.items():
+        out.setdefault(k, v)  # 信封字段优先,zeek 同名不覆盖
     for k, v in (event.enriched or {}).items():
         out[k] = v
     if detail:
@@ -256,7 +263,7 @@ def _stat_value(stat: str, rows: list[dict], cond: dict) -> float:
 class RuleEngine:
     """加载 config/rules/*.yaml 并按批次评估命中行为。"""
 
-    def __init__(self, rules: Iterable[Rule] | None = None, rules_dir: str | Path | None = None):
+    def __init__(self, rules: Iterable[Rule] | None = None, rules_dir: str | Path | None = None, window_store: RuleWindowStore | None = None):
         self.rules: list[Rule] = []
         if rules_dir is not None:
             for path in sorted(Path(rules_dir).glob("*.yaml")):
@@ -264,6 +271,8 @@ class RuleEngine:
         if rules is not None:
             self.rules.extend(rules)
         self.rules = [r for r in self.rules if r.enabled]
+        # D1: 跨批滚动窗口存储(可选)。为 None 时 evaluate_windowed 回退纯批求值。
+        self.window_store = window_store
 
     # ---- 事件过滤 ----
     def _matches(self, rule: Rule, ev: dict) -> bool:
@@ -282,6 +291,7 @@ class RuleEngine:
         events: list[EventEnvelope],
         details: dict[str, dict] | None = None,
     ) -> dict[str, list[BehaviorHit]]:
+        """纯批求值(旧语义):仅用本批事件。测试/无窗口回退路径保持此行为。"""
         rows = {e.event_id: _event_dict(e, (details or {}).get(e.event_id)) for e in events}
         session_of: dict[str, str] = {}
         for e in events:
@@ -295,27 +305,85 @@ class RuleEngine:
             groups: dict[tuple, list[dict]] = defaultdict(list)
             for ev in matched:
                 groups[self._group_key(rule, ev)].append(ev)
-            for _gkey, group in groups.items():
-                stats = [_stat_value(c.get("stat", "count"), group, c) for c in rule.conditions]
-                conds = [
-                    _op_ok(c.get("op", "ge"), stats[i], c.get("value"))
-                    for i, c in enumerate(rule.conditions)
-                ]
-                if not all(conds):
+            for sess, hit in self._score_groups(rule, groups, session_of):
+                hits_by_session[sess].append(hit)
+        return dict(hits_by_session)
+
+    # ---- D1: 跨批滚动窗口求值 ----
+    async def evaluate_windowed(
+        self,
+        events: list[EventEnvelope],
+        details: dict[str, dict] | None = None,
+        now_ms: int | None = None,
+    ) -> dict[str, list[BehaviorHit]]:
+        """窗口化求值:window>0 的规则先把本批命中事件写入 Redis 滚动窗口,
+        再取窗口内全部事件重评 —— 分布式低频行为(如 BEH-001 src→≥3 dst:445/300s)
+        跨批累积后即可命中。未配置 window_store 时回退纯批求值,语义与旧版一致。
+        """
+        store = self.window_store
+        if store is None:
+            return self.evaluate(events, details)
+        rows = {e.event_id: _event_dict(e, (details or {}).get(e.event_id)) for e in events}
+        session_of: dict[str, str] = {}
+        for e in events:
+            session_of[e.event_id] = session_key(e.src_ip, e.dst_ip, e.dst_port, e.proto)
+
+        hits_by_session: dict[str, list[BehaviorHit]] = defaultdict(list)
+        for rule in self.rules:
+            matched = [ev for ev in rows.values() if self._matches(rule, ev)]
+            if not matched:
+                continue
+            # 无窗口规则(window<=0):仅本批求值
+            if rule.window <= 0:
+                groups: dict[tuple, list[dict]] = defaultdict(list)
+                for ev in matched:
+                    groups[self._group_key(rule, ev)].append(ev)
+                for sess, hit in self._score_groups(rule, groups, session_of):
+                    hits_by_session[sess].append(hit)
+                continue
+            # 只对"本批新增事件所在的分组"累积 + 重评(无更新分组不重复触发)
+            per_key: dict[tuple, list[dict]] = defaultdict(list)
+            for ev in matched:
+                per_key[self._group_key(rule, ev)].append(ev)
+            for gkey, evs in per_key.items():
+                gk = group_key_str(gkey)
+                await store.add(rule.id, gk, evs, window_seconds=rule.window, now_ms=now_ms)
+                window_rows = await store.window_rows(rule.id, gk, window_seconds=rule.window, now_ms=now_ms)
+                if not window_rows:
                     continue
-                hit = BehaviorHit(
-                    behavior_id=rule.id,
-                    name=rule.name,
-                    attck=rule.attck,
-                    initial_risk=rule.initial_risk,
-                    count=len(group),
-                    matched=True,
-                )
-                # 把命中挂到该组内事件所属的所有会话
-                touched_sessions = {session_of[ev["event_id"]] for ev in group if ev.get("event_id") in session_of}
-                for sess in touched_sessions:
+                for sess, hit in self._score_groups(rule, {gkey: window_rows}, session_of):
                     hits_by_session[sess].append(hit)
         return dict(hits_by_session)
+
+    # ---- 分组评分:统计 + 条件 + 挂到组内事件所属会话 ----
+    def _score_groups(
+        self,
+        rule: Rule,
+        groups: dict[tuple, list[dict]],
+        session_of: dict[str, str],
+    ) -> list[tuple[str, BehaviorHit]]:
+        pairs: list[tuple[str, BehaviorHit]] = []
+        for _gkey, group in groups.items():
+            stats = [_stat_value(c.get("stat", "count"), group, c) for c in rule.conditions]
+            conds = [
+                _op_ok(c.get("op", "ge"), stats[i], c.get("value"))
+                for i, c in enumerate(rule.conditions)
+            ]
+            if not all(conds):
+                continue
+            hit = BehaviorHit(
+                behavior_id=rule.id,
+                name=rule.name,
+                attck=rule.attck,
+                initial_risk=rule.initial_risk,
+                count=len(group),
+                matched=True,
+            )
+            # 只把命中挂到"当前批事件"所属的会话(窗口内旧事件不产生新会话文档)
+            touched = {session_of[ev["event_id"]] for ev in group if ev.get("event_id") in session_of}
+            for sess in touched:
+                pairs.append((sess, hit))
+        return pairs
 
     # ---- 组装 analysis_unit（含升级标志）----
     def build_unit(

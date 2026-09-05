@@ -21,6 +21,7 @@ from app.pipeline.nodes import Nodes
 from app.prompts import PromptBuilder
 from app.providers import ModelGateway, OpenAICompatProvider
 from app.rules import RuleEngine
+from app.rules.window_store import RuleWindowStore
 from app.schemas.event import EventEnvelope, event_from_stream
 from app.schemas.keys import session_key
 from app.skills import SkillLoader
@@ -70,6 +71,8 @@ class AgentWorker:
             },
         )
         self.engine = RuleEngine(rules_dir=config.rules_dir)
+        # D1: 规则滚动窗口(Redis ZSET 累积,rule.window 跨批生效)
+        self.engine.window_store = RuleWindowStore(self.redis_client)
         providers = {
             name: OpenAICompatProvider(pcfg) for name, pcfg in config.providers.items()
         }
@@ -142,7 +145,7 @@ class AgentWorker:
         try:
             trace_id = TraceContext.set()
             unit_proto = events[0].proto if events else ""
-            pre_hits = self.engine.evaluate(events)
+            pre_hits = await self.engine.evaluate_windowed(events)
             behavior_hint = [h.behavior_id for h in pre_hits.get(sess, [])]
             skill_text = self.skills.load_for(behavior_hint, unit_proto)
             asset_context = self.assets.context_for([events[0].src_ip, events[0].dst_ip] if events else [])
