@@ -21,4 +21,4 @@ outputs: [risk_level, verdict, evidence, iocs, suggest_action]
 - 多次 LFI 读取敏感文件 / 大量 .ssh / kube secret 抓取 → high
 - 出向传输到罕见目的 → 至少 medium,叠加后 high
 ## 示例
-{"risk_level":"high","verdict":"credential_theft_suspected","evidence":"源 10.0.0.5 触发 17 次 zeek.files 命中 /etc/passwd、/etc/shadow、/root/.ssh/id_rsa;源主机为 git 服务器","iocs":[{"type":"ip","value":"10.0.0.5"},{"type":"filepath","value":"/etc/shadow"}],"suggest_action":"立即断网取证源主机;轮换所有 git/k8s 凭据;检查 /var/log/auth.log 与 auditd 排查横向"}
+{"risk_level": "high", "verdict": "credential_theft_suspected", "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)", "iocs": [], "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"}

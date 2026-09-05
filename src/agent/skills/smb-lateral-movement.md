@@ -25,4 +25,4 @@ outputs: [risk_level, verdict, evidence, iocs, suggest_action]
 - 单次/极少数目的、失败率 < 0.4 → low 记录
 
 ## 示例
-{"risk_level":"medium","verdict":"smb_bruteforce_suspected","evidence":"5min 内 10.0.0.7 向 4 个 445 目的发起 47 次 SMB 会话,失败率 0.83,无前期类似行为","iocs":[{"type":"ip","value":"10.0.0.7"}],"suggest_action":"10.0.0.21 段 ACL 临时封禁源 10.0.0.7 24h;调取 10.0.0.7 近 1h 全量连接确认账号爆破进展"}
+{"risk_level": "medium", "verdict": "smb_bruteforce_suspected", "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)", "iocs": [], "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"}

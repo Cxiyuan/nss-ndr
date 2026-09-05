@@ -21,4 +21,4 @@ outputs: [risk_level, verdict, evidence, iocs, suggest_action]
 - 唯一端口 6-50 或 持续 ≥ 5min → medium
 - 唯一端口 > 50 或 持续 ≥ 30min 或 含敏感端口(22/3389/445/3306/1433) → high
 ## 示例
-{"risk_level":"medium","verdict":"port_scan_suspected","evidence":"10.0.0.7 在 3min 内对 10.0.0.0/24 发起 142 次连接,涉及 18 个目的 67 个端口,含 22/445/3389/3306","iocs":[{"type":"ip","value":"10.0.0.7"}],"suggest_action":"边界 ACL 封禁源 10.0.0.7 24h;调取源主机最近 24h 登录与进程行为(是否已被控)"}
+{"risk_level": "medium", "verdict": "port_scan_suspected", "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)", "iocs": [], "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"}

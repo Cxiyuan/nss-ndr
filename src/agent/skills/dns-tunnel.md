@@ -26,4 +26,4 @@ outputs: [risk_level, verdict, evidence, iocs]
 - 单次长域名、无其它异常 → Low（不告警，仅记录）
 
 ## 输出示例
-{"risk_level": "High", "verdict": "dns_tunnel_suspected", "evidence": "entropy=4.1 len=58 qtype=TXT->10.0.0.5", "iocs": [{"type": "domain", "value": "xxxx.example.com"}]}
+{"risk_level": "high", "verdict": "dns_tunnel_suspected", "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)", "iocs": [], "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"}

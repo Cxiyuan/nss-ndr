@@ -21,4 +21,4 @@ outputs: [risk_level, verdict, evidence, iocs, suggest_action]
 - 失败率 > 0.9 + 跨多 dst / 长时间 → high
 - 偶发失败率 < 0.5 → low
 ## 示例
-{"risk_level":"medium","verdict":"web_login_bruteforce_suspected","evidence":"5min 内源 10.0.0.7 对 /login 发起 38 次 POST,401 比例 0.71;近 24h 源首次出现","iocs":[{"type":"ip","value":"10.0.0.7"},{"type":"url","value":"https://10.0.0.21/login"}],"suggest_action":"WAF/登录限流 + 账号锁定策略;复盘是否已有账号被攻破;同步威胁情报"}
+{"risk_level": "medium", "verdict": "web_login_bruteforce_suspected", "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)", "iocs": [], "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"}

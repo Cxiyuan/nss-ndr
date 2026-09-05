@@ -22,4 +22,4 @@ outputs: [risk_level, verdict, evidence, iocs, suggest_action]
 - 罕见目的 / 长连接 / 定期往返(beacon)→ medium
 - 已知 C2 指标 / 反向 shell 特征 / 加密 + 高字节交互 → high
 ## 示例
-{"risk_level":"high","verdict":"anomalous_outbound_suspected","evidence":"源 10.0.0.5 对 185.220.101.7:443 持续 3h 单连接交互式流量 orig 12KB resp 380KB,与已知 Tor 出口列表命中","iocs":[{"type":"ip","value":"10.0.0.5"},{"type":"ip","value":"185.220.101.7"}],"suggest_action":"立即隔离源主机取证;ACL 封禁目的 IP;转云端威胁情报;取样 pcap 留存反向 shell 行为"}
+{"risk_level": "high", "verdict": "anomalous_outbound_suspected", "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)", "iocs": [], "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"}

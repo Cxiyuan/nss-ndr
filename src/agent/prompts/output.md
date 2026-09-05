@@ -28,9 +28,9 @@
 {
   "risk_level": "medium",
   "verdict": "smb_bruteforce_suspected",
-  "evidence": "依据 features.zeek.connection:conn_states_dist 中 S0 占比 0.83、目标唯一数 4;window_seconds=300 内 event_count=47",
+  "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)",
   "iocs": [],
-  "suggest_action": "封禁源 IP 24h 并取证"
+  "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"
 }
 ```
 

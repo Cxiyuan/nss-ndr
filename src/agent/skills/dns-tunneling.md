@@ -23,4 +23,4 @@ outputs: [risk_level, verdict, evidence, iocs, suggest_action]
 - 高频 TXT + 罕见 TLD → medium
 - 偶发长名,无其它异常 → low 记录
 ## 示例
-{"risk_level":"high","verdict":"dns_tunnel_suspected","evidence":"5min 内 10.0.0.5 发起 87 次 DNS 查询 query_name 平均熵 4.1 长度 58 TXT 78% 异常分 0.82;近 24h 已有 3 次同类会话","iocs":[{"type":"ip","value":"10.0.0.5"}],"suggest_action":"内部 DNS 阻断源 53/tcp+udp 出向 10min;抓包留存并转云端复核"}
+{"risk_level": "high", "verdict": "dns_tunnel_suspected", "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)", "iocs": [], "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"}

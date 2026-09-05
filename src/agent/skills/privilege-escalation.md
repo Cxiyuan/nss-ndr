@@ -21,4 +21,4 @@ outputs: [risk_level, verdict, evidence, iocs, suggest_action]
 - 多次提权 / 容器逃逸 / 内核 OOB 访问 → high
 - 与凭据窃取或横向移动叠加 → 升级 high
 ## 示例
-{"risk_level":"high","verdict":"privilege_escalation_suspected","evidence":"主机 10.0.0.5 zeek.notice 在 2min 内触发 5 次 ContainerEscape(Linux capabilities 探测),1 次 SUIDProbe(/usr/bin/su)","iocs":[{"type":"ip","value":"10.0.0.5"}],"suggest_action":"立即冻结该主机容器/进程取证;审计最近 24h sudo/auth.log;横向排查是否已获 root"}
+{"risk_level": "high", "verdict": "privilege_escalation_suspected", "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)", "iocs": [], "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"}

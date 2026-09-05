@@ -21,4 +21,4 @@ outputs: [risk_level, verdict, evidence, iocs, suggest_action]
 - 双向都为已知资产 + 业务端口 → benign
 - 任一 IP 首次出现 / 端口罕见 / 协议异常 → low 记录(给资产档案积累,不再 uncertain)
 ## 示例
-{"risk_level":"low","verdict":"benign","evidence":"10.0.0.5 首次访问 10.0.0.21:5432,源为研发,目的为 Postgres;1 次握手无异常","iocs":[],"suggest_action":"已纳入资产档案;无"}
+{"risk_level": "low", "verdict": "benign", "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)", "iocs": [], "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"}

@@ -22,4 +22,4 @@ outputs: [risk_level, verdict, evidence, iocs, suggest_action]
 - 出向罕见目的 / 持续 ≥ 10min / 加密且体积大 → medium
 - 持续 ≥ 30min / 多源同目的 / 已知 C2 / 数据类型敏感 → high
 ## 示例
-{"risk_level":"high","verdict":"data_exfiltration_suspected","evidence":"源 10.0.0.5 持续 42min 向 51.91.211.23:443 上传 2.3GB,TLS 加密、目的 IP 罕见,源主机为研发数据库","iocs":[{"type":"ip","value":"10.0.0.5"},{"type":"ip","value":"51.91.211.23"},{"type":"ja3","value":"<会话 ja3>"}],"suggest_action":"立即 ACL 封禁 10.0.0.5 出向 443;隔离主机镜像取证;转云端威胁情报 + SOC 高优工单"}
+{"risk_level": "high", "verdict": "data_exfiltration_suspected", "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)", "iocs": [], "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"}

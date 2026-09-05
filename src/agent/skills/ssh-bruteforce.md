@@ -25,4 +25,4 @@ outputs: [risk_level, verdict, evidence, iocs, suggest_action]
 - 单次/低频,失败率 < 0.4 → low 记录
 
 ## 示例
-{"risk_level":"medium","verdict":"ssh_bruteforce_suspected","evidence":"5min 内 10.0.0.7 向 3 个 22 目的发起 28 次 SSH 失败率 0.86,源 24h 内首次出现","iocs":[{"type":"ip","value":"10.0.0.7"}],"suggest_action":"堡垒机自动封禁源 30min;堡垒机/WAF 同步该 IP;取样抓包留存爆破用户名字典"}
+{"risk_level": "medium", "verdict": "ssh_bruteforce_suspected", "evidence": "引用本会话 BEH-xxx/features 的真实字段与数值(命中规则时以 BEH-xxx 窗口统计为第一依据)", "iocs": [], "suggest_action": "按本会话真实情况给出可执行处置(不得照抄示例)"}
