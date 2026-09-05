@@ -36,7 +36,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 注:agent / llm-server 镜像自 2026-09-05 起移出本项目 CI(智能体侧非本项目范围)
+          # 注:agent 镜像自 2026-09-05 起移出本项目 CI(智能体代码侧非本项目范围);
+          # llm-server(推理服务)保留构建
 
           # 数据总线：Elastic Agent + Zeek Integration
           - image: elastic-agent-zeek
