@@ -162,19 +162,42 @@ class Nodes:
             return out
         parsed = parse_verdict_text(resp.text)
         if parsed:
-            local = Verdict(
-                risk_level=str(parsed.get("risk_level", "low")).lower(),
-                verdict=str(parsed.get("verdict", "benign")),
-                evidence=str(parsed.get("evidence", "")),
-                iocs=parsed.get("iocs", []),
-                suggest_action=str(parsed.get("suggest_action", "")),
-                model=f"{provider}:{self.gateway.providers[provider].config.model}",
-                behavior_hits=unit.behavior_hit_ids,
-                truncated=bool(parsed.get("truncated")),
-                trace_id=state["trace_id"],
-                created_at=timestamp_now(),
-                watermark=unit.watermark,
-            )
+            # D2 结构性守卫:evidence 落地点校验(引用不存在的 features 键/照抄指令 → 降级)
+            from app.evidence_guard import downgrade_evidence, validate
+
+            evidence = str(parsed.get("evidence", ""))
+            ok, issue = validate(unit, evidence)
+            if not ok:
+                log.warning(
+                    "evidence_grounding_rejected",
+                    trace_id=state["trace_id"],
+                    issue=issue,
+                    evidence=evidence[:200],
+                )
+                local = Verdict(
+                    verdict="uncertain",
+                    risk_level="uncertain",
+                    evidence=downgrade_evidence(issue, evidence),
+                    model=f"{provider}:{self.gateway.providers[provider].config.model}",
+                    behavior_hits=unit.behavior_hit_ids,
+                    trace_id=state["trace_id"],
+                    created_at=timestamp_now(),
+                    watermark=unit.watermark,
+                )
+            else:
+                local = Verdict(
+                    risk_level=str(parsed.get("risk_level", "low")).lower(),
+                    verdict=str(parsed.get("verdict", "benign")),
+                    evidence=evidence,
+                    iocs=parsed.get("iocs", []),
+                    suggest_action=str(parsed.get("suggest_action", "")),
+                    model=f"{provider}:{self.gateway.providers[provider].config.model}",
+                    behavior_hits=unit.behavior_hit_ids,
+                    truncated=bool(parsed.get("truncated")),
+                    trace_id=state["trace_id"],
+                    created_at=timestamp_now(),
+                    watermark=unit.watermark,
+                )
         else:
             local = Verdict(
                 verdict="uncertain",
