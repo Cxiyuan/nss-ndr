@@ -4,7 +4,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/**'
+      # 范围(2026-09-05 起):本项目只负责数据总线 + 喂给智能体的数据输入,
+      # agent/llm-server 等智能体侧镜像不再由本项目 CI 构建
+      - 'src/databus/**'
       - 'images/**'
       - '.github/workflows/build-images.yml'
     tags:
@@ -12,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 给 agent / llm-server 附加版本标签（如 0.2.0）
+        description: 附加版本标签（如 0.2.0）
         required: false
         type: string
 
@@ -34,14 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 智能体：上下文 src/agent/
-          - image: agent
-            context: src/agent
-            dockerfile: images/Dockerfile.agent
-            platforms: linux/amd64
-            build_args: ''
-            versioned: 'true'
-            smoke: 'true'
+          # 注:agent / llm-server 镜像自 2026-09-05 起移出本项目 CI(智能体侧非本项目范围)
 
           # 数据总线：Elastic Agent + Zeek Integration
           - image: elastic-agent-zeek
@@ -103,14 +98,7 @@ jobs:
               BASE_IMAGE=zeek/zeek:8.2.2
             fixed_tags: type=raw,value=8.2.2
 
-          # 边缘 LLM：llama.cpp 编译较慢，建议手动触发或按 tag 推送
-          - image: llm-server
-            context: images
-            dockerfile: images/Dockerfile.llm-server
-            platforms: linux/amd64
-            build_args: ''
-            versioned: 'true'
-            smoke: 'true'
+          # 注:llm-server 自 2026-09-05 起移出本项目 CI(智能体推理侧非本项目范围)
 
           # Salt Master + Salt API（Alpine + Python 3.12 + Salt 3007.14）
           - image: salt-master-api
@@ -179,9 +167,7 @@ jobs:
         env:
           IMAGE: ${{ steps.ns.outputs.namespace }}/${{ matrix.image }}:latest
         run: |
-          if [[ "${{ matrix.image }}" == "llm-server" ]]; then
-            docker run --rm --entrypoint /usr/local/bin/llama-server "$IMAGE" --version
-          elif [[ "${{ matrix.image }}" == "salt-master-api" ]]; then
+          if [[ "${{ matrix.image }}" == "salt-master-api" ]]; then
             docker run --rm --entrypoint salt-master "$IMAGE" --version
           elif [[ "${{ matrix.image }}" == "salt-minion" ]]; then
             docker run --rm --entrypoint salt-minion "$IMAGE" --version
