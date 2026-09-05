@@ -3,7 +3,7 @@
 > **定位**:把智能体从"8 字段信封 + 3 键 summary 的裸判断器"升级为"能看到真实 Zeek 特征、遵守强约束、零幻觉的纯后端安全分析引擎"。
 > **本蓝图 = 系统提示词 v2 提案 + 输入侧(logstash/引擎)与智能体侧的配套改造**。
 > **前置调研**:`docs/research/agent-input-format.md`;本轮补充确认 logstash 丢弃了除 8 字段外全部 Zeek 详情。
-> 版本:1.1 — Phase A(输入侧富化)与 Phase B(系统提示词 v2)均已落地(commit 821e225 / <phaseB>)并部署验证;Phase C 观测待做。
+> 版本:1.2 — Phase A(输入侧富化)与 Phase B(系统提示词 v2)均已落地并部署验证;Phase C(调优观测)已完成首轮,报告见 `docs/research/phase-c-observation-2026-09-05.md`(核心发现:规则 window 未跨批生效、检测 100% 由模型承担、v2 输出质量达标;遗留 D1 规则滚动窗口为 Phase D 候选)。
 
 ---
 
@@ -230,9 +230,11 @@ es_search 工具能查 ES `.ds-logs-zeek.*`(ECS 归一化字段)。system prompt
   7. 重建 agent 镜像 → CI → 部署
   8. 验证:对真实会话抽 verdict,evidence 里应出现可追溯到 summary.features 的字段与数字
 
-- **Phase C(调优观测)**:
-  9. 统计:verdict 分布、uncertain 占比、es_search 调用率、evidence 含数字率
-  10. 校准严重度锚点(若 low 太多/误报多)
+- **Phase C(调优观测)— 首轮完成(2026-09-05,报告 `docs/research/phase-c-observation-2026-09-05.md`)**:
+  9. 统计:verdict 分布(smb_bruteforce 83.6% / benign 10.0% / uncertain 6.4%)、uncertain 占比(达标 <10%)、evidence 含数字率(benign/smb 均 100%,uncertain 0 且如实说明缺哪些 features)
+  10. 校准严重度锚点:**未改**——high 集中由测试流量真实 SMB 爆破造成,非锚点失真;规则阈值/容量维持现状
+  11. 结构性发现:规则 `window` 未跨批实现 → behavior_hits 全空 → 检测 100% 由模型(es_search 跨会话取证)承担;LCP 前缀缓存 ~100%,吞吐瓶颈为单请求 decode ~9s
+  12. 遗留:es_search 调用率缺实测计数(D2);D1(规则滚动窗口状态化,Redis ZSET/ES 侧)为 Phase D 首选
 
 ---
 
