@@ -111,3 +111,24 @@
 1. **evidence 溯源存疑(→D2)**:命中会话 evidence 引用了 `features.zeek.dns unique_domains=39`——合成会话只有 conn 特征,数字来源(es_search 结果 or 模型编造)需工具调用+结果日志才能判定;规则命中时模型应优先引用 BEH-xxx 命中而非硬凑 features 数字。
 2. **瞬时空输出**:1 例 task cancel 导致"模型输出无法解析"(约 1/90),需继续观察频率。
 3. **环境流量 uncertain 占比偏高(~50%)**:SMB 爆破停止后,非 SMB 环境流量(单事件 DNS/纯 conn)半数被判 uncertain("缺 zeek.dns/zeek.ssl 特征")——低信号会话的拒判语义(D3 候选,需区分"无特征属正常"与"真缺关键特征")。
+
+---
+
+## D2 校准记录(2026-09-05,commit 299f4a7 → 9f13337 → c4e9515 → 8637c44)
+
+目标:命中会话 evidence 可溯源(工具日志)+ 消除编造特征(硬约束)。
+
+| commit | 改动 | 线上验证结果 |
+|---|---|---|
+| 299f4a7 | nodes.tools 工具调用日志(trace/args/result);task.md 加"features 键存在性"约束 | 工具日志生效;dst2(单条 S0 连接)被误判 data_exfiltration_suspected/high,evidence 引用不存在的 features.zeek.dns——**无工具的编造特征**;dst3(命中)出现"模型输出无法解析" |
+| 9f13337 | model_timeout 45→150s;空输出重试 1 次;task.md 禁止引用 task_json 不存在的 features 键;极简会话禁 high | 无解析失败(超时根因:命中会话 prompt LCP 命中率 ~0.3,双槽满载 prompt eval ~38 tok/s → 超 45s 被掐断);dst2 恢复 benign;**dst3 无视 BEH-001 命中,因"缺 zeek.dns"拒判 uncertain** |
+| c4e9515 | system/task v2.1:规则→数据流映射;命中优先于"缺特征→uncertain";risk ≥ 规则 initial_risk | dst3 → lateral_movement_suspected/high(空输出重试生效);但 evidence **整段照抄 output.md 格式示例**(0.83/目标数 4/event_count=47,与真实 event_count=1 矛盾) |
+| 8637c44 | 中和 output.md 与 12 个 skill 示例中的具体数值(不可照抄) | dst3 → lateral_movement_suspected/medium(BEH-001 initial_risk 锚点正确);但 evidence **照抄示例指令文字**:"引用本会话 BEH-002 的 avg_entropy 与 39 个 DNS 查询"(BEH-002/39 均为编造) |
+
+### 结构性结论(重要)
+Qwen3-0.6B 对提示词约束的遵循有上限:消除了"照抄示例数值",模型就改"照抄示例指令文字 + 编造细节"。
+**纯 prompt 约束无法根治 0.6B 的 evidence 编造**——需要代码侧确定性守卫(下一候选):
+对模型输出做**证据落地点校验**:解析 evidence 中出现的 `features.zeek.X`/`summary.*` 引用,
+逐一核对 task_json.summary.features 是否真有该键;检测指令性文字照抄(如"引用本会话""BEH-xxx");
+违规 → 结果降级为 uncertain + 注明"evidence 未通过落地点校验(引用不存在字段/照抄指令)"。
+行为侧(D1 窗口规则命中、risk 锚点、超时/重试)均已达标,当前线上版本(8637c44)可保持运行观察。
