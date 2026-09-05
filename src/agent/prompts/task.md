@@ -1,30 +1,37 @@
 # 分析任务
+> Version: 2.0 · 2026-09-04
 对下列 **AnalysisUnit(同一会话聚合单元)** 给出最终安全判定。
-会话按 `(src_ip, dst_ip, dst_port, proto)` 四元组聚合,窗口内多事件压缩为统一摘要。
+会话按 `<src>:<dst>:<port>:<proto>` 聚合,窗口内事件已压缩为摘要与特征。
 
-## 输入字段说明
+## 输入字段
 | 字段 | 含义 | 用途 |
 |---|---|---|
-| `session_key` | 会话唯一标识 `sess:<src>:<dst>:<port>:<proto>` | 检索缓存/去重 |
-| `aggregation_level` | SESSION / FLOW / HOST | 当前都按 SESSION 处理 |
-| `window_seconds` | 聚合时间窗(秒) | 用于判定"短时间内" |
-| `event_count` | 本案事件条数 | 强度指标 |
-| `summary` | 规则引擎三层压缩摘要(services / durations / bytes / queries / status_codes / top_talkers 等) | 你的主要数据源 |
-| `behavior_hits` | 已命中的规则清单(`behavior_id` / `name` / `attck` / `initial_risk` / `count`) | 必须**基于这些继续研判**,不要忽略 |
-| `initial_risk` | low / medium / high(由规则初判) | 你的起点 |
-| `rule_resolved` | true 表示规则已能直接下结论,你要做的是确认 / 微调 / 给证据,不必做更多研判 |  |
-| `estimated_tool_calls` | 建议调用的工具数(0/1/2) | 别超过这个数 |
-| `requires_chain_analysis` | true 表示需要跨 IP 时序分析 → 调 `detect_chain_sequence` |  |
-| `anomaly_*` | 基线异常评分/置信/维度/告警 | 综合判定风险等级的强信号 |
-| `events[ids]` | 关联的原始事件 ID 列表(你读不到原始 Zeek 字段,需用 `es_search` 工具) |  |
+| `session_key` | 会话唯一标识 | 检索/去重 |
+| `window_seconds` | 聚合时间窗(秒) | 短时判定 |
+| `event_count` | 本案总事件数 | 强度 |
+| `summary.datasets` | 各 zeek 数据流计数(如 {{"zeek.dns":39}}) | 协议画像 |
+| `summary.dst_ports` | 目的端口 | 服务画像 |
+| `summary.features.zeek.dns` | top_queries / unique_domains / qtype_dist / avg_entropy | **DNS 研判依据** |
+| `summary.features.zeek.connection` | services_dist / conn_states_dist / bytes_sum / duration_sum | **连接/流量研判依据** |
+| `summary.features.zeek.http` | methods_dist / status_codes_dist / top_uris / hosts | **HTTP 研判依据** |
+| `summary.features.zeek.ssl` | sni_set / ja3_cnt / cipher_set / validation_status | **TLS 研判依据** |
+| `summary.features.zeek.files` | filenames / mime_dist | **文件研判依据** |
+| `summary.features.zeek.notice` | msgs | **告警消息依据** |
+| `behavior_hits` | 已命中规则(BEH-xxx/ATT&CK/count) | 必须复核,不要忽略 |
+| `initial_risk` | 规则初判 low/medium/high | 你的起点 |
+| `rule_resolved` | true=规则可直接判定,做确认/证据 | 避免过度推理 |
+| `anomaly_*` | 基线异常分/维度/告警 | 强信号 |
 
-## 你要做的事
-1. 读 `behavior_hits` 与 `summary` → 理解这案在做什么
-2. 如果 `initial_risk=high` 或 `requires_chain_analysis=true` 或 `estimated_tool_calls>=1` → 考虑调工具补充信息
-3. 综合规则命中 + 基线异常 + 工具结果 → 给出最终 verdict / risk_level / evidence / iocs / suggest_action
+> features 缺失某键 = 该数据流无透传特征,不代表正常;需要细节优先 es_search。
 
-## 注意
-- 本会话内已有 1 小时内的缓存 verdict → 你可能收到 `reused=true` 的同单元,**不要重复推理**,直接复用结果
-- 不要去查**无关的**行为或资产,聚焦本会话四元组
-- `summary` 中各字段缺失表示规则未聚合到,不是"零"
-- 同一会话有 `multiple events` 时,evidence 里要给出**时间窗 + 速率**而非只给累计
+## 你要做的
+1. 从 datasets + dst_ports + features 判断本会话"是什么流量"。
+2. 用 behavior_hits 复核:特征是否支持该行为?rule_resolved=true 且支持 → 直接给结论。
+3. 特征不足 → es_search(≤2 次)补细节。
+4. 输出 JSON;evidence **必须引用本会话 features/工具结果中真实出现的字段与数值**,不得使用示例数值。
+
+## 禁止
+- 不编造任何 features/工具结果之外的 IP/域名/URI/端口/计数/字节。
+- 不确定 → uncertain + 写明缺什么,禁止用 low 逃避。
+- 不复读 output.md 示例内容。
+- 不输出多余文字或代码块。
