@@ -9,6 +9,13 @@ batch_seconds: 5.0
 idle_poll_seconds: 1.0
 max_pending_claim: 200
 
+# P3 跨批会话累积(2026-09-05 输入重心)：同 (src,dst,port) 事件跨批累积成情节,
+# 空闲 12s/超 200 事件/存活 300s 任一满足即整段判定——长连接与爆破序列获得完整上下文
+episode_flush_idle: 12.0
+episode_max_events: 200
+episode_max_age: 300.0
+episode_max_sessions: 300
+
 # 缓存 / TTL（设计文档 §4.3、§13.4）
 result_ttl: 3600
 entity_ttl: 86400

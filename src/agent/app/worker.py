@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import redis.asyncio as aioredis
 import structlog
@@ -15,6 +16,7 @@ from app.config import AgentConfig, load_config
 from app.mcp import MCPClient
 from app.mcp.tools import build_tools
 from app.observability import Metrics, TraceContext
+from app.pipeline.accumulator import EpisodeAccumulator, EpisodeKey
 from app.pipeline.graph import build_graph
 from app.pipeline.grouping import group_by_session
 from app.pipeline.nodes import Nodes
@@ -93,6 +95,13 @@ class AgentWorker:
         # v1 不启用图 Checkpoint：崩溃恢复由 XAUTOCLAIM 事件级重投保证；
         # 图级 Checkpoint（Redis 持久化）作为后续演进项（TODO M2.5）。
         self.graph = build_graph(self.nodes)
+        # P3 跨批会话累积:同 (src,dst,port) 事件跨批累积成情节,flush 后整段判定
+        self.episodes = EpisodeAccumulator(
+            flush_idle=config.episode_flush_idle,
+            max_events=config.episode_max_events,
+            max_age=config.episode_max_age,
+            max_sessions=config.episode_max_sessions,
+        )
         self._stop = asyncio.Event()
 
     async def start(self) -> None:
@@ -203,57 +212,85 @@ class AgentWorker:
             await self.redis.release_lock(sess, token)
             TraceContext.reset()
 
+    # ---- P3:情节 flush(跨批累积的会话整段判定)----
+    async def _flush_episodes(self, keys: list[EpisodeKey]) -> None:
+        for key in keys:
+            events, entry_ids = self.episodes.pop(key)
+            if not events:
+                continue
+            self.metrics.inc("episodes.flush")
+            self.metrics.inc("episodes.events", len(events))
+            # flush 时才做 proto 回填并按 session_key 分组:整情节内 conn 行可回填
+            # ssh/weird 的空 proto,同流各数据流并入同一会话,上下文完整
+            groups = group_by_session(events, entry_ids)
+            for sess, (evs, ids) in groups.items():
+                if not evs:
+                    continue
+                try:
+                    await self._process_session(sess, evs, ids)
+                except Exception as e:  # noqa: BLE001
+                    # _process_session 内部已吞异常并 DLQ/ack,这里兜底防止单个情节拖死循环
+                    log.exception("episode session processing failed", sess=sess, error=str(e))
+
+    async def _flush_ripe(self, now: float) -> None:
+        """把当前满足 flush 条件的情节交给会话分析(每轮/空闲时调用)。"""
+        keys = self.episodes.ripe_keys(now)
+        if keys:
+            await self._flush_episodes(keys)
+
     async def run_once(self) -> int:
         """拉取一批并处理，返回处理条数（测试/一次性模式用）。"""
+        now = time.monotonic()
         try:
             stale = await self.redis.claim_stale(60000, self.config.max_pending_claim)
             entries = stale + await self.redis.read_batch(self.config.batch_size, block_ms=2000)
         except Exception as e:  # noqa: BLE001
             log.warning("redis unavailable", error=str(e))
             return 0
-        if not entries:
-            return 0
-        # 事件级幂等前置过滤：已成功处理过(evt:{id} 存在)的重复事件直接 ack 跳过，
-        # 不重复分析（重复 XADD / 丢失 ack 后重投场景）。崩溃未标记的事件仍会重投重算。
-        parsed: list[tuple[str, EventEnvelope]] = []
-        skip_ack: list[str] = []
-        for entry_id, fields in entries:
-            ev = self._parse(entry_id, fields)
-            if ev is None:
-                # 解析失败直接送 DLQ + ack，避免毒丸
-                try:
-                    await self.redis.push_dlq(entry_id, fields, reason="parse error")
-                    await self.redis.ack([entry_id])
-                except Exception:  # noqa: BLE001
-                    pass
-                continue
-            parsed.append((entry_id, ev))
-        if parsed:
-            seen = await self.redis.seen_event_ids([ev.event_id for _, ev in parsed])
-            # 按 seen 划分:已见 → 直接 ack 跳过;未见 → 进入分组分析
-            keep: list[tuple[str, EventEnvelope]] = []
+        if entries:
+            # 事件级幂等前置过滤：已成功处理过(evt:{id} 存在)的重复事件直接 ack 跳过，
+            # 不重复分析（重复 XADD / 丢失 ack 后重投场景）。崩溃未标记的事件仍会重投重算。
+            parsed: list[tuple[str, EventEnvelope]] = []
+            skip_ack: list[str] = []
+            for entry_id, fields in entries:
+                ev = self._parse(entry_id, fields)
+                if ev is None:
+                    # 解析失败直接送 DLQ + ack，避免毒丸
+                    try:
+                        await self.redis.push_dlq(entry_id, fields, reason="parse error")
+                        await self.redis.ack([entry_id])
+                    except Exception:  # noqa: BLE001
+                        pass
+                    continue
+                parsed.append((entry_id, ev))
+            if parsed:
+                seen = await self.redis.seen_event_ids([ev.event_id for _, ev in parsed])
+                keep: list[tuple[str, EventEnvelope]] = []
+                for entry_id, ev in parsed:
+                    if ev.event_id in seen:
+                        skip_ack.append(entry_id)
+                    else:
+                        keep.append((entry_id, ev))
+                if skip_ack:
+                    try:
+                        await self.redis.ack(skip_ack)
+                    except Exception:  # noqa: BLE001
+                        log.warning("dedup ack failed", error=str(skip_ack)[:100])
+                self.metrics.inc("events.dedup", len(skip_ack))
+                parsed = keep
+            self.metrics.inc("events.received", len(entries))
+            self.metrics.inc("events.unique", len(parsed))
+            # P3:不再按批直接处理,而是跨批累积成情节;flush 条件满足的立即整段判定
+            flushed: list[EpisodeKey] = []
             for entry_id, ev in parsed:
-                if ev.event_id in seen:
-                    skip_ack.append(entry_id)
-                else:
-                    keep.append((entry_id, ev))
-            if skip_ack:
-                try:
-                    await self.redis.ack(skip_ack)
-                except Exception:  # noqa: BLE001
-                    log.warning("dedup ack failed", error=str(skip_ack)[:100])
-            self.metrics.inc("events.dedup", len(skip_ack))
-            parsed = keep
-        groups: dict[str, tuple[list[EventEnvelope], list[str]]] = group_by_session(
-            [ev for _, ev in parsed], [eid for eid, _ in parsed]
-        )
-        self.metrics.inc("events.received", len(entries))
-        self.metrics.inc("events.unique", len(parsed))
-        self.metrics.inc("sessions.batch", len(groups))
-        if self.config.dry_run:
-            log.info("dry_run batch", sessions=len(groups), events=len(entries))
-        for sess, (events, ids) in groups.items():
-            await self._process_session(sess, events, ids)
+                self.episodes.add(ev.src_ip, ev.dst_ip, ev.dst_port, ev, entry_id, now)
+            flushed += self.episodes.ripe_keys(now)
+            if flushed:
+                await self._flush_episodes(flushed)
+            if self.config.dry_run:
+                log.info("dry_run batch", pending=len(self.episodes), events=len(entries))
+        # 每轮也清理一下空闲情节(不依赖新事件到达;真实时钟,含本批处理耗时)
+        await self._flush_ripe(time.monotonic())
         return len(entries)
 
     async def run_forever(self) -> None:
@@ -273,6 +310,11 @@ class AgentWorker:
             except Exception as e:  # noqa: BLE001
                 log.exception("worker loop error", error=str(e) or type(e).__name__)
                 await asyncio.sleep(self.config.idle_poll_seconds)
+        # 退出前把内存中的未 flush 情节全部处理(尽量不丢;真的失败由 XAUTOCLAIM 兜底)
+        try:
+            await self._flush_ripe(time.monotonic())
+        except Exception:  # noqa: BLE001
+            pass
         await self.redis_client.aclose()
 
     async def close(self) -> None:

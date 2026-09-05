@@ -69,6 +69,13 @@ class AgentConfig:
     idle_poll_seconds: float = 1.0
     max_pending_claim: int = 200
 
+    # P3 跨批会话累积(2026-09-05 输入重心)：同 (src,dst,port) 事件跨批累积为情节，
+    # 满足 flush 条件(空闲/事件数/存活时长)才整段判定，长连接与爆破序列获得完整上下文。
+    episode_flush_idle: float = 12.0      # 距最后事件多少秒视为情节结束
+    episode_max_events: int = 200         # 单情节事件上限(毒丸防护,超出即 flush)
+    episode_max_age: float = 300.0        # 情节最长存活(慢速流兜底)
+    episode_max_sessions: int = 300       # 并发累积情节上限(内存兜底,超出 flush 最旧)
+
     # 缓存 / TTL
     result_ttl: int = 3600
     entity_ttl: int = 86400
