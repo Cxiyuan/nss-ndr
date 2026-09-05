@@ -132,3 +132,21 @@ Qwen3-0.6B 对提示词约束的遵循有上限:消除了"照抄示例数值",�
 逐一核对 task_json.summary.features 是否真有该键;检测指令性文字照抄(如"引用本会话""BEH-xxx");
 违规 → 结果降级为 uncertain + 注明"evidence 未通过落地点校验(引用不存在字段/照抄指令)"。
 行为侧(D1 窗口规则命中、risk 锚点、超时/重试)均已达标,当前线上版本(8637c44)可保持运行观察。
+
+---
+
+## 证据落地点校验守卫(2026-09-05,commit 10e6997)—— 上线验证结果
+
+- 实现:`app/evidence_guard.py` + nodes.model 解析成功路径接入。
+  校验:①指令性文字照抄(引用本会话/BEH-xxx/不得照抄等)②`features.zeek.<ds>`
+  dataset 必须存在于 summary.features ③裸特征键词(avg_entropy 等)对应 dataset 必须在场
+  (es_search/工具标注放行)。违规 → verdict/risk 降级 uncertain,
+  evidence = `evidence 未通过落地点校验:<原因>(原始: …)`,写 evidence_grounding_rejected 日志。
+- 验证(合成 SMB 突发):dst1/dst2/dst3 的模型输出全部含指令照抄+编造
+  ("引用本会话 BEH-002 的 avg_entropy 与 39 个 DNS 查询"、"引用本会话 features.zeek.dns
+  的 avg_entropy 值与窗口统计") → **全部被守卫拦截降级**,12 分钟内 44 例
+  evidence_grounding_rejected 落日志,编造内容不再进入最终文档。BEH-001 命中仍随
+  文档落库(behavior_hits 保留)。
+- 效果/代价:系统进入"宁可 uncertain(带明确原因),绝不编造"的安全下限;
+  低信号会话 uncertain 占比上升(0.6B 高频编造→守卫拦截所致),属预期且诚实。
+  后续提升 benign 检出率需更强模型或更多透传特征,而非放松守卫。
