@@ -57,12 +57,21 @@
 - 无跨批会话累积(除 D1 规则窗口),长连接被按批切成多个 event_count 1-N 的小会话;
   model 需 es_search 自行跨会话关联(D2 日志已证实命中场景走该路径)
 
-## 3. 建议修复(按价值排序,均走 CI→部署)
-1. **logstash:DHCP 空五元组处理** —— 不具分析价值的空元组事件不进 analysis:events
-   (或透传 dhcp 信号字段 + 伪五元组做"DHCP 服务异常"专门分析;当前建议先跳过,防 sess::: 污染)
-2. **logstash:SIGNAL_FIELDS 补 zeek.weird**(name/notice/source)+ engine summarize 加 weird
-   (name 集合/notice 标记)→ 模型能看见具体异常类型
-3. **logstash:ssh 字段 attempts → auth_attempts**
+## 3. 修复状态(commit 057a668,已上线验证 2026-09-05)
+1. **P1-A 已修**:logstash 对 zeek.dhcp 不再 XADD(unless dataset=="zeek.dhcp")。
+   验证:最新 150 条流 dhcp 仅剩重启残留 1 条,后续写入为 0;sess::: 判定 8 分钟 0 例 ✓
+2. **P1-B 已修**:SIGNAL_FIELDS 补 zeek.weird[name notice source];engine 新增
+   _summarize_weird(names/notice_count);task/system 特征表与 evidence_guard 键词表同步。
+   验证:流内 weird zeek 载荷 = {"name":"active_connection_reuse","notice":false,"source":"TCP"} ✓
+3. **P2-A 已修**:ssh SIGNAL_FIELDS attempts → auth_attempts(zeek 实际字段名)✓
+4. P2-B(proto 空拆分)/P2-C(上游列覆盖)/P3(批内会话语义):记录不修,es_search 兜底
+
+## 3b. 修复后的输出侧观察(重要)
+输入修复后 agent(守卫版)在低信号流量上 evidence 高频以"引用本会话 features.zeek.dns 的
+avg_entropy 值与窗口统计"开头(0.6B 照抄 sanitized 示例开头词)→ 守卫全部拦截降级 uncertain,
+近期判定 ~100% uncertain(安全但无区分度)。结论:输入侧问题已清,输出侧 0.6B 的
+grounded-evidence 生成需换强模型(cloud 升级路径已就绪)或结构化 evidence schema 改造,
+属下一阶段课题,与守卫"绝不编造"方针一致。
 4. **(记录,不修)ssl/http 方向性缺字段、dns qtype_name** —— 上游/流量特性,现有 es_search 兜底
 5. **(记录)proto 空拆分** —— 可接受;后续可在 logstash 侧用同 uid 的 conn 事件回填 proto
 
