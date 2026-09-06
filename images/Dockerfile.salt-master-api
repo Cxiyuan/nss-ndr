@@ -1,5 +1,5 @@
 # ============================================================================
-# 深瞳安全分析智能体 · Salt Master + Salt API 容器镜像
+# 数据总线 · Salt Master + Salt API 容器镜像
 # ----------------------------------------------------------------------------
 # 镜像名：nss-ndr/salt-master-api:<版本>
 # 用途：
@@ -47,7 +47,7 @@ RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.aliyun.com/alpine#g; s#alpine/alpin
 
 # 镜像元数据
 LABEL org.opencontainers.image.title="nss-ndr/salt-master-api" \
-      org.opencontainers.image.description="深瞳安全分析智能体 Salt Master + Salt API 容器（Python 3.10 + Salt 3007.14）" \
+      org.opencontainers.image.description="数据总线 Salt Master + Salt API 容器（Python 3.10 + Salt 3007.14）" \
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.source="https://github.com/Cxiyuan/nss-ndr"
 

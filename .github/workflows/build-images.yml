@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      # 范围(2026-09-05 起):本项目只负责数据总线 + 喂给智能体的数据输入,
-      # agent/llm-server 等智能体侧镜像不再由本项目 CI 构建
+      # 范围(2026-09-05 起):本项目只负责数据总线 + 喂给智能体的数据输入 +
+      # 本地 LLM 推理服务(llm-server);agent 智能体镜像不再由本项目 CI 构建
       - 'src/databus/**'
       - 'images/**'
       - '.github/workflows/build-images.yml'

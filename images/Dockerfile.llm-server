@@ -1,5 +1,5 @@
 # ============================================================================
-# 深瞳安全分析智能体 - LLM Server 镜像（llama.cpp / llama-server）
+# 数据总线 - LLM Server 镜像（llama.cpp / llama-server）
 # ----------------------------------------------------------------------------
 # 镜像名：nss-ndr/llm-server:<版本>（构建脚本：scripts/build-llm-server.sh）
 # 构建上下文：images/（本文件位于 images/）
@@ -93,12 +93,12 @@ ENV LLM_HOST=0.0.0.0 \
     LLM_THREADS= \
     LLM_EXTRA_ARGS=
 
-# LLM_API_KEY 不在默认 ENV 中：默认无鉴权（部署在内网 nss-net，仅 agent alias
+# LLM_API_KEY 不在默认 ENV 中：默认无鉴权（部署在内网 nss-net，仅 nss-net 内
 # 可达）。如需开启鉴权，部署时通过 docker run -e LLM_API_KEY=xxx 或 Salt pillar
 # llm_server.api_key 注入，Hadolint 规则 DL3059 友好。
 # 说明：entrypoint.sh 对空 LLM_API_KEY 不传 --api-key 参数，与"无鉴权"等价。
 
-# 非特权运行（与 agent 镜像 uid 10001 一致）
+# 非特权运行（uid 10001，与下游消费方容器约定一致）
 RUN adduser -D -u 10001 -H -s /sbin/nologin llm \
     && mkdir -p /models \
     && chown llm:llm /models
@@ -131,6 +131,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
 ENTRYPOINT ["/usr/local/bin/llm-entrypoint"]
 
 LABEL org.opencontainers.image.title="nss-ndr/llm-server" \
-      org.opencontainers.image.description="深瞳安全分析智能体本地边缘 LLM：llama.cpp llama-server（纯 CPU / AVX512，内置 Qwen3-0.6B-Q8_0）" \
+      org.opencontainers.image.description="数据总线本地边缘 LLM：llama.cpp llama-server（纯 CPU / AVX512，内置 Qwen3-0.6B-Q8_0）" \
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.source="https://github.com/ggml-org/llama.cpp"

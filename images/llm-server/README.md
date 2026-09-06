@@ -1,9 +1,9 @@
 # LLM Server 容器镜像（llama.cpp / llama-server）
 
-深瞳安全分析智能体的本地边缘 LLM 服务镜像。采用 [llama.cpp](https://github.com/ggml-org/llama.cpp)
+数据总线提供的本地边缘 LLM 推理服务镜像。采用 [llama.cpp](https://github.com/ggml-org/llama.cpp)
 的 `llama-server`，在**纯 CPU**（x86_64）环境以 OpenAI 兼容 API
-（`/v1/chat/completions`）对外提供推理，供智能体 `providers.yaml` 的 edge Provider 对接
-（设计文档 §2 / §8 / §15）。
+（`/v1/chat/completions`）对外提供推理，供下游智能体/分析方消费
+（本项目只输出数据源与推理服务，智能体本身不在本项目范围内）。
 
 ## 设计要点
 
@@ -19,11 +19,10 @@
 - **内置模型**：`Qwen3-0.6B-Q8_0.gguf`（约 624MB，Apache-2.0）已打包进镜像，
   构建时从官方 `Qwen/Qwen3-0.6B-GGUF` 仓库下载并做 SHA-256 校验；无需外挂模型目录即可运行。
   更换模型可挂载 `/models` 覆盖或改 `LLM_MODEL` 指向其他 GGUF。
-- **现阶段线上默认选型**：`Qwen3-0.6B-Q8_0` 是当前 NSS-NDR 项目线上默认的本地边缘 LLM
-  （与 agent `EDGE_LLM_MODEL=Qwen3-0.6B-Q8_0`、salt pillar `llm_server.model_alias` 一致）。
-  设计文档 §8 把它定位为"预筛 + 初判 + 结构化输出"的快速执行器，复杂任务由 agent 网关升级云端，
-  选型理由：Apache-2.0、工具调用能力可接受、模型与 KV 缓存合计约 1.1GB，
-  在 6C/12G 预算内仍能给 baseline / MCP 工具留足余地。
+- **现阶段线上默认选型**：`Qwen3-0.6B-Q8_0` 是当前数据总线线上默认的本地边缘 LLM
+  （与 salt pillar `llm_server.model_alias` 一致），定位为"预筛 + 初判 + 结构化输出"
+  的快速执行器，选型理由：Apache-2.0、工具调用能力可接受、模型与 KV 缓存合计约 1.1GB，
+  在 6C/12G 预算内仍有余量。
 
 ## 文件清单
 
@@ -77,36 +76,37 @@ curl http://127.0.0.1:8080/v1/chat/completions \
 |---|---|---|
 | `LLM_MODEL` | `/models/Qwen3-0.6B-Q8_0.gguf` | GGUF 模型路径（内置） |
 | `LLM_HOST` / `LLM_PORT` | `0.0.0.0` / `8080` | 监听地址 / 端口 |
-| `LLM_ALIAS` | `Qwen3-0.6B-Q8_0` | API 返回的 model 名（与 agent `EDGE_LLM_MODEL` 保持一致） |
-| `LLM_CONTEXT_SIZE` | `32768` | 上下文窗口（设计文档 §4 预算：32K） |
+| `LLM_ALIAS` | `Qwen3-0.6B-Q8_0` | API 返回的 model 名（与下游消费方约定保持一致） |
+| `LLM_CONTEXT_SIZE` | `32768` | 上下文窗口（32K） |
 | `LLM_PARALLEL` | `1` | 并发 slot（6C/12G 预算建议保持 1） |
 | `LLM_BATCH_SIZE` / `LLM_UBATCH_SIZE` | `2048` / `512` | 批处理大小 |
 | `LLM_CACHE_TYPE_K/V` | `q8_0` | KV 缓存量化：32K 上下文下省约一半缓存内存；追求精度可改 `f16` |
 | `LLM_THREADS` | 空（自动） | 推理线程数，建议 ≤ 分配核数，如 `6` |
-| `LLM_API_KEY` | 空 | 开启 API Key 鉴权（与 agent `EDGE_LLM_API_KEY` 对应） |
+| `LLM_API_KEY` | 空 | 开启 API Key 鉴权（与下游消费方 API Key 对应） |
 | `LLM_EXTRA_ARGS` | 空 | 追加任意 llama-server 参数（如 `--mlock --numa distribute`） |
 
-## 与智能体对接
+## 与下游消费方对接
 
-在 `/etc/nss-ndr/.env`（Salt 环境）填入并重建 agent 容器：
+下游智能体/分析方通过 nss-net 内 alias `llm-server`（`http://llm-server:8080/v1`）
+调用本服务。约定如下：
 
 ```bash
+# 下游消费方（智能体侧）配置示例——不属本项目，由消费方自行维护
 EDGE_LLM_BASE_URL=http://llm-server:8080/v1
 EDGE_LLM_API_KEY=            # 与 LLM_API_KEY 一致；未开启鉴权可留空
 EDGE_LLM_MODEL=Qwen3-0.6B-Q8_0
-AGENT_DRY_RUN=0
 ```
 
-llama-server 不校验请求里的 `model` 字段，agent 侧模型名只需与 `LLM_ALIAS` 对应便于日志审计。
+llama-server 不校验请求里的 `model` 字段，下游消费方模型名只需与 `LLM_ALIAS` 对应便于日志审计。
 
-## 内存预算参考（6C/12G 专属环境，设计文档 §8）
+## 内存预算参考（6C/12G 专属环境）
 
 - 模型权重（Qwen3-0.6B Q8_0）：约 0.6GB
 - KV 缓存（32K 上下文，q8_0）：约 0.5GB
 - 计算缓冲 / 运行开销：约 1~2GB
 - 合计约 2~3GB 量级，12G 预算内可再加 `LLM_CONTEXT_SIZE` 或并发 slot
 
-## 模型备选（设计文档 §8.5，仅换 GGUF + 重启）
+## 模型备选（仅换 GGUF + 重启）
 
 > 现状：**`Qwen3-0.6B-Q8_0` 是线上默认选型**（已内置）。本节给出后续如需升级/替换的备选清单。
 
@@ -118,15 +118,14 @@ llama-server 不校验请求里的 `model` 字段，agent 侧模型名只需与 
 images/llm-server/scripts/fetch-model.sh xLAM-2-3B-fc-r-Q4_K_M.gguf
 ```
 
-> **重要**：切换备选模型时务必同步修改以下三处，否则 agent 无法正确路由：
+> **重要**：切换备选模型时务必同步修改以下两处，否则下游消费方无法正确路由：
 > 1. `llm-server` 启动环境变量 `LLM_ALIAS`（决定 `/v1/models` 返回的 model 字段）
-> 2. agent `providers.yaml` 的 `edge.model`（通过 `.env` 的 `EDGE_LLM_MODEL` 注入）
-> 3. salt pillar `databus.llm_server.model_alias`（保持同步）
+> 2. salt pillar `databus.llm_server.model_alias`（保持同步）
 
 ## 说明与限制
 
 - 纯 CPU 0.6B 模型（**当前线上默认 `Qwen3-0.6B-Q8_0`**）推理速度有限，
-  设计文档定位其为"预筛 + 初判 + 结构化输出"的快速执行器，
-  复杂任务由 agent 网关升级云端（`needs_cloud`），不依赖本服务做深度分析。
+  定位为"预筛 + 初判 + 结构化输出"的快速执行器，
+  复杂任务由下游消费方自行升级云端，不依赖本服务做深度分析。
 - 模型已内置镜像（`/models/Qwen3-0.6B-Q8_0.gguf`，约 624MB），
   构建时从 HF 官方仓库下载并校验 SHA-256；挂载 `/models` 仍可覆盖或补充其他 GGUF。

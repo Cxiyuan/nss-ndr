@@ -1,16 +1,14 @@
 # ============================================================================
 # LLM Server（nss-ndr/llm-server，llama.cpp + Qwen3-0.6B-Q8_0，OpenAI 兼容 API）
 # ----------------------------------------------------------------------------
-# 容器为安全分析智能体提供本地边缘 LLM 推理：
+# 本项目仅提供本地边缘 LLM 推理服务（数据源输出侧），供下游智能体/分析方消费：
 #   - 监听 0.0.0.0:8080，对外暴露 /v1/chat/completions 等 OpenAI 兼容端点
-#   - alias `llm-server`（agent.containers.agent 容器通过该别名访问）
-#   - 启动期 1B 模型首次加载可能 30~60s，healthcheck start_period=120s 兜底
+#   - alias `llm-server`（下游消费方通过 nss-net 内该别名访问）
+#   - 启动期模型首次加载可能 30~60s，healthcheck start_period=120s 兜底
 # ----------------------------------------------------------------------------
 # 上下游依赖：
 #   - 仅依赖 databus.network（IP 固定 192.168.250.90）+ databus.images
 #   - 不依赖 ES / Redis / Fleet / zeek —— 任何时刻启动都不会阻塞数据总线
-#   - 但必须先于 agent.containers.agent 启动，否则 agent 在 circuit_breaker
-#     冷却期（默认 60s）内持续 503；好在 agent 重启后会自动重连
 # ============================================================================
 
 include:
@@ -27,7 +25,7 @@ nss-ndr-llm-server:
     - network_mode: nss-net
     - detach: True
     - skip_translate: volumes
-    # 镜像默认非特权用户 llm（uid 10001），与 agent 镜像一致
+    # 镜像默认非特权用户 llm（uid 10001）
     # 模型 Qwen3-0.6B-Q8_0.gguf 已内置进镜像（/models），无需外挂模型卷
     # ----------------------------------------------------------------------
     # CPU 资源：按宿主机比例（默认 0.75 = 75%）限制，不写绝对值。

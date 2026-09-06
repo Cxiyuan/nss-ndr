@@ -1,6 +1,6 @@
 # 用 SaltStack 管理数据总线（容器 + 配置文件）· 正式实现
 
-> 适用范围：数据总线 7 容器（zeek / elasticsearch / kibana / fleet-server / elastic-agent / logstash / redis）及全部配置文件。
+> 适用范围：数据总线容器（zeek / elasticsearch / kibana / fleet-server / elastic-agent / logstash / redis / llm-server）及全部配置文件。
 > 目标服务器：`172.16.199.235`（与其他业务 zabbix / grafana / postgres 共存，**不得影响**）。
 > **状态：数据总线容器管理与配置管理已正式改为 Salt 管理**（本目录即实现）。原 `data-bus.yaml` 已删除，本目录是唯一实现。
 
@@ -27,7 +27,7 @@ Salt 自带一整套 docker 状态模块，覆盖数据总线需要的全部能�
 社区有 [saltstack-formulas/docker-formula](https://github.com/saltstack-formulas/docker-formula)，它封装了 docker 安装 + compose 管理，但：
 
 - 版本老旧、封装偏重（pillar 结构复杂，compose-ng 只覆盖 compose 子集）；
-- 数据总线场景是"单机 + 7 容器 + 少量外挂配置"，用**原生 docker_container 状态**更直接、可控、可审计。
+- 数据总线场景是"单机 + 少量容器 + 少量外挂配置"，用**原生 docker_container 状态**更直接、可控、可审计。
 
 **结论：不引入 docker-formula，直接用原生 docker 状态模块。**
 
@@ -91,8 +91,7 @@ src/databus/salt/
 ├── files/                           # 需要下发的配置文件（从 src/databus 对应目录拷贝）
 │   ├── kibana.yml
 │   ├── elastic-agent-fleet-server.yml
-│   ├── jvm.options
-│   └── agent/                       # agent 容器配置（agent.yaml / providers.yaml / rules/）
+│   └── jvm.options
 ├── scripts/                         # 初始化脚本（Salt 调用，落到容器内置路径或宿主机 /opt/nss-ndr/scripts/）
 │   ├── gen-kibana-token.sh          # Kibana 启动前：生成 KIBANA_SERVICE_TOKEN（仅需 ES）
 │   ├── fleet-setup.sh               # Fleet output/policy/enrollment keys/Zeek Integration 43 streams
@@ -118,8 +117,7 @@ src/databus/salt/
     │   ├── fleet-server.sls
     │   ├── elastic-agent.sls
     │   ├── logstash.sls
-    │   ├── llm-server.sls
-    │   └── agent.sls
+    │   └── llm-server.sls
     ├── verify.sls                   # 部署后验证（数据流 / ECS 字段）
     ├── teardown.sls                 # 一键清理本项目（容器/网络/卷），保留其他业务
     └── deploy.sls                   # 编排：salt-master → salt-minion → ES → ... → fleet-setup → apps → verify
@@ -179,7 +177,7 @@ databus:
     - name: nss-ndr/elastic-agent-zeek:9.5.2
     - name: nss-ndr/logstash-databus:9.5.2
     - name: nss-ndr/redis-databus:8.10.1
-    - name: nss-ndr/llm-server:0.1.0    # 本地边缘 LLM（llama.cpp + 内置 Qwen3-0.6B-Q8_0），为 agent.containers.agent 的 edge provider 提供 OpenAI 兼容推理
+    - name: nss-ndr/llm-server:0.1.0    # 本地边缘 LLM（llama.cpp + 内置 Qwen3-0.6B-Q8_0），OpenAI 兼容推理，供下游智能体/分析方消费
   fixed_ips:
     elasticsearch: 192.168.250.40
     kibana: 192.168.250.50
@@ -544,7 +542,7 @@ Docker 的 restart_policy **不会**因为 unhealthy 而重启。两种方案：
    ```bash
    docker exec -it nss-ndr-salt-master-api salt-run state.orchestrate databus.deploy
    ```
-5. 验证：`verify.sls` 检查 agent online、`.ds-logs-zeek.*` 数据流、ECS 字段归一化。
+5. 验证：`verify.sls` 检查 `.ds-logs-zeek.*` 数据流、ECS 字段归一化。
 6. 开启周期自愈：master 容器内置 `schedule` 每小时 `state.apply databus`。
 7. 回滚：Salt 一键 `docker_container.absent` 只清本项目容器，保留其他业务。
 
@@ -557,8 +555,8 @@ docker exec -it nss-ndr-salt-master-api sh
 salt-run state.orchestrate databus.deploy
 salt 'nss-ai-agent-minion' state.apply databus
 
-# 单容器
-salt 'nss-ai-agent-minion' docker_container.running name=nss-ndr-agent action=restart
+# 单容器（以重启 zeek 为例）
+salt 'nss-ai-agent-minion' docker_container.running name=nss-ndr-zeek action=restart
 
 # 高阶
 salt 'nss-ai-agent-minion' docker.ps

@@ -1,5 +1,5 @@
 # ============================================================================
-# 深瞳安全分析智能体 · Salt Minion 容器镜像
+# 数据总线 · Salt Minion 容器镜像
 # ----------------------------------------------------------------------------
 # 镜像名：nss-ndr/salt-minion:<版本>
 # 用途：
@@ -37,7 +37,7 @@ RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.aliyun.com/alpine#g; s#alpine/alpin
     && ln -sf /usr/lib/libssl.so.3 /usr/lib/libssl.so
 
 LABEL org.opencontainers.image.title="nss-ndr/salt-minion" \
-      org.opencontainers.image.description="深瞳安全分析智能体 Salt Minion 容器（Python 3.10 + Salt 3007.14 + docker-py）" \
+      org.opencontainers.image.description="数据总线 Salt Minion 容器（Python 3.10 + Salt 3007.14 + docker-py）" \
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.source="https://github.com/Cxiyuan/nss-ndr"
 
@@ -84,7 +84,7 @@ COPY salt-master-api/patch-rsax931.py /opt/patch-rsax931.py
 RUN python3 /opt/patch-rsax931.py
 
 # 内置 minion 配置模板
-# 烘焙部署辅助脚本(gen-kibana-token/fleet-setup/vault-render-env/agent-setup)——不再 salt 下发
+# 烘焙部署辅助脚本(gen-kibana-token/fleet-setup/vault-render-env)——不再 salt 下发
 COPY salt-minion/scripts/ /opt/nss-ndr/scripts/
 RUN chmod +x /opt/nss-ndr/scripts/*.sh
 

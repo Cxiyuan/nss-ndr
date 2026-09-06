@@ -12,7 +12,7 @@
 #   -> es/redis -> 等 ES
 #   -> 生成 KIBANA_SERVICE_TOKEN -> kibana -> 等 Kibana
 #   -> 创建 Fleet output/policy/enrollment keys/Zeek Integration
-#   -> fleet-server / elastic-agent / logstash / zeek / llm-server / agent -> 验证
+#   -> fleet-server / elastic-agent / logstash / zeek / llm-server -> 验证
 # ============================================================================
 
 {% from "databus/map.jinja" import databus with context %}
@@ -137,7 +137,6 @@ deploy-apps:
         - databus.containers.elastic-agent
         - databus.containers.logstash
         - databus.containers.zeek
-        - databus.containers.agent
     - require:
       - salt: deploy-llm-server
 

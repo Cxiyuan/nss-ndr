@@ -1,7 +1,7 @@
 # ============================================================================
 # 数据总线一键清理（只清理本项目，不影响 zabbix/grafana/postgres 等业务）
 # ----------------------------------------------------------------------------
-# 清理范围：nss-ndr-* 容器（7 个）+ nss-net + nss-ndr-* 卷（10 个）
+# 清理范围：nss-ndr-* 容器 + nss-net + nss-ndr-* 卷
 # 保留范围：镜像 tar / 镜像 / /opt/nss-ndr 配置（便于快速重装）
 # 如需同时删除镜像：跑 salt-call --local state.apply databus.teardown.images
 # ============================================================================
@@ -35,7 +35,7 @@ nss-ndr-redis:
   docker_container.absent:
     - force: True
 
-nss-ndr-agent:
+nss-ndr-llm-server:
   docker_container.absent:
     - force: True
 
@@ -50,7 +50,7 @@ nss-net:
       - docker_container: nss-ndr-elastic-agent
       - docker_container: nss-ndr-logstash
       - docker_container: nss-ndr-redis
-      - docker_container: nss-ndr-agent
+      - docker_container: nss-ndr-llm-server
 
 # ---- 数据卷（网络删除后）----
 nss-ndr-zeek-logs:
