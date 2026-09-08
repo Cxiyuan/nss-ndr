@@ -18,7 +18,7 @@ databus:
   base_dir: /opt/nss-ndr
   images_dir: /root/nss-ndr/images
   tz: Asia/Shanghai
-  zeek_interface: ens192
+  zeek_interface: ens224
 
   # Vault 只读凭据（nss-ndr/* kv-v2）——基础密码唯一来源,经 vault-seed 派生 .env
   vault:
