@@ -1,0 +1,18 @@
+{
+    "@timestamp": "2026-09-08T11:00:00.000Z",
+    "agent": {"name": "zeek-host", "type": "filebeat", "version": "8.17.0"},
+    "data_stream": {"dataset": "zeek.quic", "namespace": "default", "type": "logs"},
+    "ecs": {"version": "8.17.0"},
+    "event": {"category": ["network"], "created": "2026-09-08T11:00:00.000Z", "dataset": "zeek.quic", "id": "CJPOtc4v4POHijA9u9", "kind": "event"},
+    "host": {"name": "zeek-host"},
+    "log": {"file": {"path": "/var/log/zeek/quic.log"}},
+    "network": {"transport": "udp"},
+    "related": {"ip": ["172.16.196.62", "223.5.5.5"]},
+    "source": {"address": "172.16.196.62", "ip": "172.16.196.62", "port": 62417},
+    "destination": {"address": "223.5.5.5", "ip": "223.5.5.5", "port": 443},
+    "tags": ["forwarded", "zeek-quic"],
+    "zeek": {
+        "quic": {"version": "1", "client_initial_dcid": "e52f42cdd85e1121", "client_scid": "", "server_scid": "a5b4e150", "server_name": "dns.alidns.com", "client_protocol": "h3", "history": "ISIZZZZishihhohohhoHHHOHOOoO", "proto": "udp"},
+        "session_id": "CJPOtc4v4POHijA9u9"
+    }
+}

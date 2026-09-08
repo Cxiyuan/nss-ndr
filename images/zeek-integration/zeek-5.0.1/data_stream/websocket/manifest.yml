@@ -1,0 +1,39 @@
+type: logs
+title: Zeek WebSocket logs
+streams:
+  - input: logfile
+    template_path: log.yml.hbs
+    title: Zeek websocket.log
+    description: Collect Zeek websocket logs (zeek 8.x new protocol)
+    vars:
+      - name: filenames
+        type: text
+        title: Filenames
+        multi: true
+        required: true
+        show_user: true
+        default:
+          - websocket.log
+      - name: tags
+        type: text
+        title: Tags
+        multi: true
+        required: true
+        show_user: false
+        default:
+          - forwarded
+          - zeek-websocket
+      - name: preserve_original_event
+        required: true
+        show_user: true
+        title: Preserve original event
+        description: Preserves a raw copy of the original event.
+        type: bool
+        default: false
+      - name: processors
+        type: yaml
+        title: Processors
+        multi: false
+        required: false
+        show_user: false
+        description: Processors execute in the agent before parsing.

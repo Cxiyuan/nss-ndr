@@ -1,0 +1,23 @@
+- name: zeek.postgresql
+  type: group
+  fields:
+    - name: user
+      type: keyword
+      description: |
+        Username.
+    - name: database
+      type: keyword
+      description: |
+        Database name.
+    - name: success
+      type: boolean
+      description: |
+        Auth succeeded.
+    - name: rows
+      type: long
+      description: |
+        Rows returned.
+    - name: query_length
+      type: long
+      description: |
+        Query length in bytes.

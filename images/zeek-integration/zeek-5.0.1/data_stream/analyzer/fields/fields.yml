@@ -1,0 +1,19 @@
+- name: zeek.analyzer
+  type: group
+  fields:
+    - name: analyzer_kind
+      type: keyword
+      description: |
+        Kind of analyzer.
+    - name: analyzer_name
+      type: keyword
+      description: |
+        Name of the analyzer.
+    - name: failure_reason
+      type: keyword
+      description: |
+        Reason for failure.
+    - name: proto
+      type: keyword
+      description: |
+        Transport protocol.

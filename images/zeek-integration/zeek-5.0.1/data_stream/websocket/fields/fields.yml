@@ -1,0 +1,23 @@
+- name: zeek.websocket
+  type: group
+  fields:
+    - name: host
+      type: keyword
+      description: |
+        WebSocket host.
+    - name: uri
+      type: keyword
+      description: |
+        Request URI.
+    - name: user_agent
+      type: keyword
+      description: |
+        User-Agent.
+    - name: close_code
+      type: long
+      description: |
+        Close code.
+    - name: close_reason
+      type: keyword
+      description: |
+        Close reason.

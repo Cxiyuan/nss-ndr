@@ -1,0 +1,18 @@
+{
+    "@timestamp": "2026-09-08T11:00:00.000Z",
+    "agent": {"name": "zeek-host", "type": "filebeat", "version": "8.17.0"},
+    "data_stream": {"dataset": "zeek.analyzer", "namespace": "default", "type": "logs"},
+    "ecs": {"version": "8.17.0"},
+    "event": {"category": ["network"], "created": "2026-09-08T11:00:00.000Z", "dataset": "zeek.analyzer", "id": "CTsoWV3CTgX3c7bb8k", "kind": "event"},
+    "host": {"name": "zeek-host"},
+    "log": {"file": {"path": "/var/log/zeek/analyzer.log"}},
+    "network": {"transport": "tcp"},
+    "related": {"ip": ["10.92.192.5", "172.16.199.20"]},
+    "source": {"address": "10.92.192.5", "ip": "10.92.192.5", "port": 42266},
+    "destination": {"address": "172.16.199.20", "ip": "172.16.199.20", "port": 8080},
+    "tags": ["forwarded", "zeek-analyzer"],
+    "zeek": {
+        "analyzer": {"analyzer_kind": "protocol", "analyzer_name": "HTTP", "failure_reason": "not a http reply line", "proto": "tcp"},
+        "session_id": "CTsoWV3CTgX3c7bb8k"
+    }
+}

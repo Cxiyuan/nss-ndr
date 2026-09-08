@@ -1,0 +1,17 @@
+{
+    "@timestamp": "2026-09-08T11:00:00.000Z",
+    "agent": {"name": "zeek-host", "type": "filebeat", "version": "8.17.0"},
+    "data_stream": {"dataset": "zeek.websocket", "namespace": "default", "type": "logs"},
+    "ecs": {"version": "8.17.0"},
+    "event": {"category": ["network"], "created": "2026-09-08T11:00:00.000Z", "dataset": "zeek.websocket", "id": "CKaoW52OEcKn1WI253", "kind": "event"},
+    "host": {"name": "zeek-host"},
+    "log": {"file": {"path": "/var/log/zeek/websocket.log"}},
+    "related": {"ip": ["10.94.10.63", "172.16.199.55"]},
+    "source": {"address": "10.94.10.63", "ip": "10.94.10.63", "port": 47222},
+    "destination": {"address": "172.16.199.55", "ip": "172.16.199.55", "port": 8081},
+    "tags": ["forwarded", "zeek-websocket"],
+    "zeek": {
+        "websocket": {"host": "172.16.199.55:8081", "uri": "/dcms/screen/websocket", "proto": "tcp"},
+        "session_id": "CKaoW52OEcKn1WI253"
+    }
+}

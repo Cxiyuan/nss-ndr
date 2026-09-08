@@ -1,0 +1,31 @@
+- name: zeek.quic
+  type: group
+  fields:
+    - name: version
+      type: keyword
+      description: |
+        QUIC version.
+    - name: client_initial_dcid
+      type: keyword
+      description: |
+        Client DCID.
+    - name: client_scid
+      type: keyword
+      description: |
+        Client SCID.
+    - name: server_scid
+      type: keyword
+      description: |
+        Server SCID.
+    - name: server_name
+      type: keyword
+      description: |
+        SNI.
+    - name: client_protocol
+      type: keyword
+      description: |
+        App protocol.
+    - name: history
+      type: keyword
+      description: |
+        State history.
