@@ -2,3 +2,12 @@
 api.http.host: 0.0.0.0
 api.http.port: 9600
 xpack.monitoring.enabled: false
+
+# 2026-09-08 智能体联调适配（v1）
+# 推送连续性优化：解决“30s 内 +3 / +39 跳动”分钟空洞问题
+# - batch.size 减小：单批事件更少，降低 ruby filter 同步 XADD 阻塞导致的攒批
+# - batch.delay 减小：批次间等待缩短，事件更快出 pipeline
+# - workers 显式设 4：避免 ruby 单线程串行化（Redis XADD 同步阻塞）
+pipeline.batch.size: 64
+pipeline.batch.delay: 10
+pipeline.workers: 4

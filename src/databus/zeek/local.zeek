@@ -49,8 +49,17 @@ redef Log::default_logdir = "/usr/local/zeek/logs";
 @load base/frameworks/software
 @load base/frameworks/sumstats
 # @load base/frameworks/traceroute (zeek 8.x removed)
-# @load base/frameworks/weird
+# @load base/frameworks/weird (zeek 8.x removed; weird 由 conn 解析器间接触发)
 # @load base/protocols/x509
+
+## === Notice::policy（生成 notice 事件；必须位于 base/frameworks/notice 之后）===
+@load policy/misc/capture-loss                       ## 抓包丢失告警（依赖 Notice::Too_Much_Loss / Too_Little_Traffic）
+@load policy/misc/loaded-scripts                     ## 输出 loaded_scripts.log（运维调试，确认 @load 是否生效）
+@load policy/protocols/ssh/detect-bruteforcing       ## SSH 暴力破解（与智能体 zeek.ssh≥20 互补）
+@load policy/protocols/ssl/validate-certs            ## TLS 证书验证失败
+@load policy/protocols/ftp/detect                    ## FTP 明文密码告警
+@load policy/protocols/http/detect-sql-injection     ## SQL 注入
+@load policy/protocols/http/detect-webapps           ## Web 应用攻击（含 XSS 等）
 
 ## === 自定义检测脚本 ===
 # @load ./scripts/detect.zeek
