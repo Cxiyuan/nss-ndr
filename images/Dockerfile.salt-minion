@@ -16,6 +16,7 @@
 FROM python:3.10-alpine
 
 ARG SALT_VERSION=3007.14
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 
 RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.aliyun.com/alpine#g; s#alpine/alpine/v3#alpine/v3#g' /etc/apk/repositories \
     && apk update \
@@ -43,7 +44,7 @@ LABEL org.opencontainers.image.title="nss-ndr/salt-minion" \
 
 ENV SALT_MINION_HOME=/home/salt \
     SALT_CONFIG_DIR=/etc/salt-minion \
-    PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+    PIP_INDEX_URL=${PIP_INDEX_URL}
 
 # 非特权用户（Alpine BusyBox 无 standalone adduser，用 python 脚本创建）
 COPY salt-adduser.py /tmp/salt-adduser.py
@@ -56,7 +57,10 @@ RUN python3 /tmp/salt-adduser.py \
 
 # 安装 salt + docker-py（salt docker state 模块通过 docker-py 直连 docker daemon，
 # 不需要 docker CLI；Alpine musl 也无法运行 glibc 的 docker 二进制）
-RUN pip3 install --no-cache-dir --break-system-packages -i "${PIP_INDEX_URL}" \
+# --extra-index-url 官方 pypi 作为清华源不可达时的 fallback（2026-09-08 CI 上清华源偶发返回空版本列表）
+RUN pip3 install --no-cache-dir --break-system-packages \
+        --index-url "${PIP_INDEX_URL}" \
+        --extra-index-url "https://pypi.org/simple" \
         "salt==${SALT_VERSION}" \
         pyzmq \
         pycryptodome \
@@ -71,8 +75,7 @@ RUN pip3 install --no-cache-dir --break-system-packages -i "${PIP_INDEX_URL}" \
         requests \
         packaging \
         looseversion \
-        psutil \
-        distro
+        psutil
 
 # smoke 校验
 RUN for f in salt-minion salt-call; do \

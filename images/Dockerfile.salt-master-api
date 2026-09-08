@@ -22,6 +22,7 @@
 FROM python:3.10-alpine
 
 ARG SALT_VERSION=3007.14
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 运行时依赖（Alpine musl + salt 系统库 + busybox-nc 用于端口探活）
 # openssl-dev 提供 libcrypto.so 符号链接（salt 的 rsax931.py 用 ctypes 查找）
@@ -56,7 +57,7 @@ ENV SALT_MASTER_API_HOME=/home/salt \
     SALT_RUN_DIR=/var/run/salt \
     SALT_CACHE_DIR=/var/cache/salt \
     SALT_LOG_DIR=/var/log/salt \
-    PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+    PIP_INDEX_URL=${PIP_INDEX_URL}
 
 # 非特权用户（Alpine BusyBox 无 standalone adduser，用 python 脚本创建）
 COPY salt-adduser.py /tmp/salt-adduser.py
@@ -70,7 +71,10 @@ RUN python3 /tmp/salt-adduser.py \
 # 安装 salt 3007.14（Python 3.10 下 distutils 正常，console_scripts 自动注册）
 # 附依赖：pyzmq（ZeroMQ）、pycryptodome、markupsafe、distro、tornado、cherrypy（salt-api）
 # PyYAML / jinja2 / msgpack / requests 等 salt 核心依赖（python:3.10-alpine 不自带）
-RUN pip3 install --no-cache-dir --break-system-packages -i "${PIP_INDEX_URL}" \
+# --extra-index-url 官方 pypi 作为清华源不可达时的 fallback（2026-09-08 CI 上清华源偶发返回空版本列表）
+RUN pip3 install --no-cache-dir --break-system-packages \
+        --index-url "${PIP_INDEX_URL}" \
+        --extra-index-url "https://pypi.org/simple" \
         "salt==${SALT_VERSION}" \
         pyzmq \
         pycryptodome \
@@ -85,8 +89,7 @@ RUN pip3 install --no-cache-dir --break-system-packages -i "${PIP_INDEX_URL}" \
         requests \
         packaging \
         looseversion \
-        psutil \
-        distro
+        psutil
 
 # smoke 校验：入口点应已被 pip 自动注册到 /usr/local/bin/
 RUN for f in salt-master salt-api salt-key salt-run salt-call; do \
