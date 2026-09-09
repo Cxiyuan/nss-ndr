@@ -4,17 +4,24 @@
 # ----------------------------------------------------------------------------
 # 幂等合并:只覆写 ELASTIC_PASSWORD / REDIS_PASSWORD / KIBANA_ENCRYPTION_KEY 三键,
 # 其余键(动态 token 等)原样保留;文件不存在则新建(600)。
-# 由 salt 编排 deploy-vault-seed 在 salt-minion 容器内执行(需要 VAULT_TOKEN 环境变量,
-# 经 salt-minion 容器 env 注入)。
+# 由 salt 编排 deploy-vault-seed 在 salt-minion 容器内执行。
+# RO token 来源（2026-09-08 重构，无宿主机 bind）：
+#   优先 VAULT_TOKEN env，其次从共享命名卷 nss-vault-secrets 读 /vault/secrets/ro_token
+#   （vault bootstrap 把 RO token 写入该卷）。
 # ============================================================================
 set -euo pipefail
 
 ENV_FILE="${NSS_ENV_FILE:-/etc/nss-ndr/.env}"
 VAULT_ADDR="${VAULT_ADDR:-http://vault:8200}"
 VAULT_TOKEN="${VAULT_TOKEN:-}"
+VAULT_SECRETS_DIR="${VAULT_SECRETS_DIR:-/vault/secrets}"
+
+if [[ -z "$VAULT_TOKEN" && -f "${VAULT_SECRETS_DIR}/ro_token" ]]; then
+  VAULT_TOKEN=$(cat "${VAULT_SECRETS_DIR}/ro_token")
+fi
 
 if [[ -z "$VAULT_TOKEN" ]]; then
-  echo "[vault-render-env] ERROR: VAULT_TOKEN 未设置" >&2
+  echo "[vault-render-env] ERROR: VAULT_TOKEN 未设置且 ${VAULT_SECRETS_DIR}/ro_token 不存在" >&2
   exit 1
 fi
 

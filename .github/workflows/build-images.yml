@@ -126,6 +126,15 @@ jobs:
             versioned: 'true'
             smoke: 'true'
 
+          # Vault（凭据管理：应用密码唯一来源；vault.hcl + bootstrap 已 bake 进镜像）
+          - image: vault
+            context: images
+            dockerfile: images/Dockerfile.vault
+            platforms: linux/amd64
+            build_args: ''
+            versioned: 'true'
+            smoke: 'true'
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -181,6 +190,8 @@ jobs:
             docker run --rm --entrypoint salt-master "$IMAGE" --version
           elif [[ "${{ matrix.image }}" == "salt-minion" ]]; then
             docker run --rm --entrypoint salt-minion "$IMAGE" --version
+          elif [[ "${{ matrix.image }}" == "vault" ]]; then
+            docker run --rm --entrypoint vault "$IMAGE" --version
           else
             docker run --rm "$IMAGE" version
           fi

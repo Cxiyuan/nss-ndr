@@ -56,8 +56,10 @@ databus:
       tar: nss-ndr_salt-master-api_0.1.1.tar
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-minion:latest
       tar: nss-ndr_salt-minion_0.1.1.tar
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/vault:latest
 
   fixed_ips:
+    vault: 192.168.250.10
     elasticsearch: 192.168.250.40
     kibana: 192.168.250.50
     fleet_server: 192.168.250.55
@@ -125,17 +127,3 @@ databus:
     # minion 固定 IP（nss-net 内）
     ip: 192.168.250.2
 
-  # 运行期外挂配置（其余已烘焙进镜像）
-  configs:
-    - src: salt://databus/files/kibana.yml
-      dst: /etc/nss-ndr/kibana.yml
-      mode: "644"
-    - src: salt://databus/files/elastic-agent-fleet-server.yml
-      dst: /etc/nss-ndr/elastic-agent-fleet-server.yml
-      mode: "644"
-    - src: salt://databus/files/elastic-agent.yml
-      dst: /etc/nss-ndr/elastic-agent.yml
-      mode: "644"
-    - src: salt://databus/files/jvm.options
-      dst: /etc/nss-ndr/jvm.options
-      mode: "644"

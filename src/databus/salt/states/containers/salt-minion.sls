@@ -48,6 +48,8 @@ nss-ndr-salt-minion:
         - /srv/pillar:/srv/pillar:ro
         # /etc/nss-ndr 读写：bootstrap/fleet-setup 写回 .env，configs.sls 下发配置
         - /etc/nss-ndr:/etc/nss-ndr
+        # Vault secrets 卷（RO token 由 vault bootstrap 写入;vault-render-env 从此读）
+        - nss-vault-secrets:/vault/secrets:ro
         # Docker socket（Salt docker state 模块调用 dockerd）
         - /var/run/docker.sock:/var/run/docker.sock
     - environment:
@@ -55,9 +57,10 @@ nss-ndr-salt-minion:
         - SALT_MASTER_HOST=salt-master-api        # nss-net 内 alias（与 master 同网段）
         - SALT_MINION_ID={{ salt_minion.id }}
         - PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
-        # Vault 只读凭据(kv: nss-ndr/*)供 vault-render-env.sh 派生 .env
+        # Vault 地址（kv: nss-ndr/*）供 vault-render-env.sh 派生 .env
+        # RO token 由 vault bootstrap 写入 nss-vault-secrets 卷,minion 只读共享该卷
         - VAULT_ADDR={{ databus.get('vault', {}).get('addr', 'http://vault:8200') }}
-        - VAULT_TOKEN={{ databus.get('vault', {}).get('token', '') }}
+        - VAULT_SECRETS_DIR=/vault/secrets
     - log_driver: json-file
     - require:
       - docker_image: {{ salt_minion.image }}
@@ -67,3 +70,4 @@ nss-ndr-salt-minion:
       - docker_volume: nss-ndr-salt-run
       - docker_volume: nss-ndr-salt-cache
       - docker_volume: nss-ndr-salt-log
+      - docker_volume: nss-vault-secrets

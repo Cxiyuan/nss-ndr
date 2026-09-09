@@ -52,3 +52,16 @@ nss-ndr-salt-log:
 # Salt Minion 容器配置卷（与 master 共享 run/cache/log）
 nss-ndr-salt-config-minion:
   docker_volume.present
+
+# Vault 容器卷（2026-09-08 重构：vault 纳入 salt 管理,无宿主机挂载）
+# nss-vault-data:  file backend 持久化(kv 数据)
+# nss-vault-logs:  vault server 日志
+# nss-vault-secrets: init/unseal key/root token/RO token（非宿主机路径）
+nss-vault-data:
+  docker_volume.present
+
+nss-vault-logs:
+  docker_volume.present
+
+nss-vault-secrets:
+  docker_volume.present

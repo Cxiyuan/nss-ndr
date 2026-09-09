@@ -2,17 +2,23 @@
 # 数据总线全流程编排（从零部署 / 完整初始化）
 # ----------------------------------------------------------------------------
 # 用法：
-#   master 容器: salt <master> state.orchestrate databus.deploy
+#   master 容器: salt-run state.orchestrate databus.deploy
 #   master API : curl -k https://<master>:8000/run (POST body: client=local_async,
 #                tgt=databus, fun=state.orchestrate, arg=databus.deploy)
 #   masterless : （兼容）salt-call --local state.apply databus.deploy
 #
-# 阶段顺序：
-#   images -> network/volumes/configs -> salt-master-api -> salt-minion
+# 阶段顺序（2026-09-08 重构：vault 纳入 salt 管理）：
+#   images -> network/volumes/configs
+#   -> salt-master-api -> salt-minion
+#   -> vault（init/unseal/kv-seed，seed 密码来自 pillar creds）
+#   -> vault-seed（vault 就绪后从 kv 读基础密码派生 /etc/nss-ndr/.env）
 #   -> es/redis -> 等 ES
 #   -> 生成 KIBANA_SERVICE_TOKEN -> kibana -> 等 Kibana
 #   -> 创建 Fleet output/policy/enrollment keys/Zeek Integration
 #   -> fleet-server / elastic-agent / logstash / zeek / llm-server -> 验证
+#
+# 注意：vault-seed 必须在 minion 起来后执行（vault-render-env 在 minion 内跑），
+#       且 vault 容器必须先在 minion 上部署完成（bootstrap 自管 init/unseal/seed）。
 # ============================================================================
 
 {% from "databus/map.jinja" import databus with context %}
@@ -43,13 +49,6 @@ deploy-configs:
     - require:
       - salt: deploy-images
 
-deploy-vault-seed:
-  salt.state:
-    - tgt: {{ databus.get('target', 'databus') }}
-    - sls: databus.vault-seed
-    - require:
-      - salt: deploy-configs
-
 deploy-salt-master-api:
   salt.state:
     - tgt: {{ databus.get('target', 'databus') }}
@@ -66,6 +65,27 @@ deploy-salt-minion:
     - require:
       - salt: deploy-salt-master-api
 
+# Vault 容器（2026-09-08 重构：纳入 salt 管理，无宿主机挂载）
+# vault-bootstrap 幂等：init → unseal → RO token → kv seed(elastic/redis/kibana)
+# seed 密码来自容器 env（SEED_*，由 pillar creds 渲染注入）
+deploy-vault:
+  salt.state:
+    - tgt: {{ databus.get('target', 'databus') }}
+    - sls: databus.containers.vault
+    - require:
+      - salt: deploy-network
+      - salt: deploy-volumes
+      - salt: deploy-salt-minion
+
+# vault-seed：vault 就绪后从 kv 读基础密码派生 /etc/nss-ndr/.env
+# RO token 经共享卷 nss-vault-secrets 传入 minion（vault-render-env 自动读取）
+deploy-vault-seed:
+  salt.state:
+    - tgt: {{ databus.get('target', 'databus') }}
+    - sls: databus.vault-seed
+    - require:
+      - salt: deploy-vault
+
 deploy-es-redis:
   salt.state:
     - tgt: {{ databus.get('target', 'databus') }}
@@ -77,6 +97,7 @@ deploy-es-redis:
       - salt: deploy-volumes
       - salt: deploy-configs
       - salt: deploy-salt-minion
+      - salt: deploy-vault-seed
 
 wait-es-healthy:
   http.wait_for_successful_query:
@@ -95,7 +116,6 @@ deploy-bootstrap-tokens:
     - sls: databus.bootstrap
     - require:
       - http: wait-es-healthy
-      - salt: deploy-vault-seed
 
 deploy-kibana:
   salt.state:

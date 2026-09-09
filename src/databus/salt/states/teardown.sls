@@ -51,6 +51,9 @@ nss-net:
       - docker_container: nss-ndr-logstash
       - docker_container: nss-ndr-redis
       - docker_container: nss-ndr-llm-server
+      - docker_container: nss-ndr-salt-master-api
+      - docker_container: nss-ndr-salt-minion
+      - docker_container: nss-vault
 
 # ---- 数据卷（网络删除后）----
 nss-ndr-zeek-logs:
@@ -82,5 +85,52 @@ nss-ndr-redis-data:
     - force: True
 
 nss-ndr-fleet-server-data:
+  docker_volume.absent:
+    - force: True
+
+# ---- Salt 控制面容器 + 卷（master/minion 由编排 deploy 重建）----
+nss-ndr-salt-master-api:
+  docker_container.absent:
+    - force: True
+
+nss-ndr-salt-minion:
+  docker_container.absent:
+    - force: True
+
+# ---- Vault 容器（凭据管理；vault kv 数据在 nss-vault-data 卷）----
+nss-vault:
+  docker_container.absent:
+    - force: True
+
+# ---- Salt / Vault 卷 ----
+nss-ndr-salt-config:
+  docker_volume.absent:
+    - force: True
+
+nss-ndr-salt-run:
+  docker_volume.absent:
+    - force: True
+
+nss-ndr-salt-cache:
+  docker_volume.absent:
+    - force: True
+
+nss-ndr-salt-log:
+  docker_volume.absent:
+    - force: True
+
+nss-ndr-salt-config-minion:
+  docker_volume.absent:
+    - force: True
+
+nss-vault-data:
+  docker_volume.absent:
+    - force: True
+
+nss-vault-logs:
+  docker_volume.absent:
+    - force: True
+
+nss-vault-secrets:
   docker_volume.absent:
     - force: True
