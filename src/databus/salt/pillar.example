@@ -1,9 +1,10 @@
 # ============================================================================
 # 数据总线 Salt pillar 示例
 # ----------------------------------------------------------------------------
-# 本项目采用 master + minion 容器化部署：
-#   - nss-ndr-salt-master-api 容器（nss-ndr/salt-master-api 镜像）
-#   - nss-ndr-salt-minion    容器（nss-ndr/salt-minion    镜像，host network）
+# 本项目采用 master + minion 容器化部署（两容器共用同一 salt:latest 镜像，
+#   entrypoint 分别选 salt-master-api-entrypoint / salt-minion-entrypoint）：
+#   - nss-ndr-salt-master-api 容器
+#   - nss-ndr-salt-minion    容器
 # 盐命令模板（template state 文件）由以下命令铺到 /srv/salt/：
 #   salt-cp <master> databus/files/*  /srv/salt/databus/
 # 或初次部署时把仓库 src/databus/salt/{files,scripts,states/} 直接 scp。
@@ -52,10 +53,7 @@ databus:
       tar: nss-ndr_redis-databus_8.10.1.tar
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/llm-server:latest
       tar: nss-ndr_llm-server_latest.tar
-    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-master-api:latest
-      tar: nss-ndr_salt-master-api_0.1.1.tar
-    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-minion:latest
-      tar: nss-ndr_salt-minion_0.1.1.tar
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt:latest
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/vault:latest
 
   fixed_ips:
@@ -110,18 +108,18 @@ databus:
     threads_ratio: 0.75
     context_ratio: 0.75
 
-  # Salt Master + Salt API（容器化）
+  # Salt Master + Salt API（容器化，共用 salt:latest，entrypoint 选 master）
   salt_master_api:
-    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-master-api:latest
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt:latest
     ip: 192.168.250.5
     api_port: 8000
     api_user: saltapi
     # 与 create-saltapi.py 内置的 OS 用户密码一致（salt-api PAM external_auth 使用）
     api_password: saltapi-pass
 
-  # Salt Minion（容器化，host network + bind /var/run/docker.sock）
+  # Salt Minion（容器化，共用 salt:latest，entrypoint 选 minion）
   salt_minion:
-    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-minion:latest
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt:latest
     # minion id 与 master minion_key 绑定；改名后需重新 enroll
     id: nss-ai-agent-minion
     # minion 固定 IP（nss-net 内）

@@ -20,6 +20,8 @@ include:
 nss-ndr-salt-master-api:
   docker_container.running:
     - image: {{ salt_master_api.image }}
+    # 整合镜像(salt:latest)无自带 ENTRYPOINT,此处显式指定 master 入口
+    - entrypoint: ["/sbin/tini", "--", "/usr/local/bin/salt-master-api-entrypoint"]
     - restart_policy: unless-stopped
     # 容器默认非特权（uid 10002）；salt-master 不需要特权
     # network_mode 必须显式 nss-net（与线上容器一致；缺省会变 bridge 触发重建）

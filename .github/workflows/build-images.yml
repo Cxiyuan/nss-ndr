@@ -108,19 +108,10 @@ jobs:
             versioned: 'true'
             smoke: 'true'
 
-          # Salt Master + Salt API（Alpine + Python 3.12 + Salt 3007.14）
-          - image: salt-master-api
+          # Salt（master + minion 整合为单镜像，运行时选角色 entrypoint）
+          - image: salt
             context: images
-            dockerfile: images/Dockerfile.salt-master-api
-            platforms: linux/amd64
-            build_args: ''
-            versioned: 'true'
-            smoke: 'true'
-
-          # Salt Minion（host network，与本机 salt-master-api 配对）
-          - image: salt-minion
-            context: images
-            dockerfile: images/Dockerfile.salt-minion
+            dockerfile: images/Dockerfile.salt
             platforms: linux/amd64
             build_args: ''
             versioned: 'true'
@@ -186,10 +177,8 @@ jobs:
         run: |
           if [[ "${{ matrix.image }}" == "llm-server" ]]; then
             docker run --rm --entrypoint /usr/local/bin/llama-server "$IMAGE" --version
-          elif [[ "${{ matrix.image }}" == "salt-master-api" ]]; then
-            docker run --rm --entrypoint salt-master "$IMAGE" --version
-          elif [[ "${{ matrix.image }}" == "salt-minion" ]]; then
-            docker run --rm --entrypoint salt-minion "$IMAGE" --version
+          elif [[ "${{ matrix.image }}" == "salt" ]]; then
+            docker run --rm --entrypoint salt-call "$IMAGE" --version
           elif [[ "${{ matrix.image }}" == "vault" ]]; then
             docker run --rm --entrypoint vault "$IMAGE" --version
           else

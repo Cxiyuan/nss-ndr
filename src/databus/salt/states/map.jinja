@@ -30,17 +30,18 @@
 } -%}
 
 {# Salt Master + Salt API 命名空间 #}
+{# 2026-09-08 镜像整合:master/minion 共用 salt:latest,运行时由 entrypoint 选角色 #}
 {%- set salt_master_api = {
-    'image':        salt['pillar.get']('databus:salt_master_api:image',       'ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-master-api:latest'),
+    'image':        salt['pillar.get']('databus:salt_master_api:image',       'ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt:latest'),
     'ip':           salt['pillar.get']('databus:salt_master_api:ip',          '192.168.250.5'),
     'api_port':     salt['pillar.get']('databus:salt_master_api:api_port',    8000),
     'api_user':     salt['pillar.get']('databus:salt_master_api:api_user',    'saltapi'),
     'api_password': salt['pillar.get']('databus:salt_master_api:api_password',''),
 } -%}
 
-{# Salt Minion 命名空间（与本机 master-api 配对）#}
+{# Salt Minion 命名空间（与本机 master-api 配对，共用 salt:latest 镜像） #}
 {%- set salt_minion = {
-    'image': salt['pillar.get']('databus:salt_minion:image', 'ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt-minion:latest'),
+    'image': salt['pillar.get']('databus:salt_minion:image', 'ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt:latest'),
     'id':    salt['pillar.get']('databus:salt_minion:id',    'nss-ai-agent-minion'),
     'ip':    salt['pillar.get']('databus:salt_minion:ip',    '192.168.250.2'),
 } -%}

@@ -1,0 +1,121 @@
+# ============================================================================
+# 数据总线 · Salt 镜像（master + minion 整合为单镜像，运行时选角色）
+# ----------------------------------------------------------------------------
+# 设计：把 salt-master-api 与 salt-minion 两个镜像合并为一个 salt 镜像：
+#   - 统一基座 python:3.10-alpine（salt 3007.x 官方仅支持 3.10）
+#   - 同时 bake master + minion 两套配置/脚本/entrypoint（超集）
+#   - 不设 ENTRYPOINT/CMD —— salt state 的 docker_container.running 显式
+#     指定 entrypoint（master 容器→salt-master-api-entrypoint，
+#     minion 容器→salt-minion-entrypoint）
+# 体积：单镜像包含两套内容，比原两个镜像之和略小（共享 python/apk/salt 层）；
+#       实际磁盘层指纹相同部分只存一份。
+# 依赖超集：salt + cherrypy(salt-api) + docker(docker-py) + 公共依赖
+# ============================================================================
+
+FROM python:3.10-alpine
+
+ARG SALT_VERSION=3007.14
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 运行时依赖（Alpine musl + salt 系统库 + busybox-nc 用于端口探活）
+# 用阿里云 Alpine 镜像加速（dl-cdn.alpinelinux.org 在国内慢），并修正重复 /alpine 路径
+RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.aliyun.com/alpine#g; s#alpine/alpine/v3#alpine/v3#g' /etc/apk/repositories \
+    && apk update \
+    && apk add --no-cache \
+        zeromq \
+        libffi \
+        openssl \
+        openssl-dev \
+        openblas \
+        openssh-client \
+        shadow \
+        tini \
+        curl \
+        bash \
+        busybox-extras \
+        tzdata \
+    && rm -rf /var/cache/apk/* \
+    # 确保 ctypes.util.find_library('crypto') 能找到 libcrypto（salt rsax931.py 依赖）
+    && ln -sf /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so \
+    && ln -sf /usr/lib/libssl.so.3 /usr/lib/libssl.so
+
+# 镜像元数据
+LABEL org.opencontainers.image.title="nss-ndr/salt" \
+      org.opencontainers.image.description="数据总线 Salt 镜像（master + minion 整合,Python 3.10 + Salt 3007.14）" \
+      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.source="https://github.com/Cxiyuan/nss-ndr"
+
+ENV SALT_HOME=/home/salt \
+    PIP_INDEX_URL=${PIP_INDEX_URL}
+
+# 非特权用户（Alpine BusyBox 无 standalone adduser，用 python 脚本创建）
+COPY salt-adduser.py /tmp/salt-adduser.py
+RUN python3 /tmp/salt-adduser.py \
+    && mkdir -p /etc/salt-master-api /etc/salt-minion /var/run/salt /var/cache/salt \
+                /var/log/salt /srv/salt /srv/pillar \
+    && chmod -R 0755 /home/salt \
+    && chown -R 10002:10002 /var/run/salt /var/cache/salt /var/log/salt \
+                          /srv/salt /srv/pillar
+
+# 安装 salt（超集：cherrypy 供 salt-api，docker 供 docker-py state 模块）
+# --extra-index-url 官方 pypi 作为清华源不可达时的 fallback
+RUN pip3 install --no-cache-dir --break-system-packages \
+        --index-url "${PIP_INDEX_URL}" \
+        --extra-index-url "https://pypi.org/simple" \
+        "salt==${SALT_VERSION}" \
+        pyzmq \
+        pycryptodome \
+        cryptography \
+        markupsafe \
+        distro \
+        docker \
+        tornado \
+        cherrypy \
+        PyYAML \
+        jinja2 \
+        msgpack \
+        requests \
+        packaging \
+        looseversion \
+        psutil
+
+# smoke 校验
+RUN for f in salt-master salt-api salt-key salt-run salt-call salt-minion; do \
+        command -v "$f" >/dev/null 2>&1 && echo "[smoke] $f OK" || echo "[smoke] $f MISSING"; \
+    done
+
+# 修补 salt/utils/rsax931.py（Alpine musl 下 find_library 找不到 libcrypto）
+COPY salt-master-api/patch-rsax931.py /opt/patch-rsax931.py
+RUN python3 /opt/patch-rsax931.py
+
+# ============ master 内容 ============
+# patch-event.py：修补非 dict return 事件丢失 bug
+COPY salt-master-api/patch-event.py /opt/patch-event.py
+# create-saltapi.py：创建 saltapi 系统用户（salt-api PAM external_auth 需要）
+COPY salt-master-api/create-saltapi.py /opt/create-saltapi.py
+# master/api/eauth 配置模板
+COPY salt-master-api/master.tmpl /etc/salt-master-api/master.tmpl
+COPY salt-master-api/api.tmpl /etc/salt-master-api/api.tmpl
+COPY salt-master-api/eauth.tmpl /etc/salt-master-api/eauth.tmpl
+# master 入口（启动时由 salt state 指定）
+COPY --chmod=755 salt-master-api/entrypoint.sh /usr/local/bin/salt-master-api-entrypoint
+
+# ============ minion 内容 ============
+# minion 配置模板
+COPY salt-minion/minion.tmpl /etc/salt-minion/minion.tmpl
+# 部署辅助脚本（fleet-setup / gen-kibana-token / vault-render-env）
+COPY --chmod=755 salt-minion/scripts/ /opt/nss-ndr/scripts/
+# minion 入口（启动时由 salt state 指定）
+COPY --chmod=755 salt-minion/entrypoint.sh /usr/local/bin/salt-minion-entrypoint
+
+# master 特有初始化（patch-event + saltapi 用户）
+RUN python3 /opt/patch-event.py && python3 /opt/create-saltapi.py \
+    && chmod +x /opt/nss-ndr/scripts/*.sh \
+    && chown -R salt:salt /etc/salt-master-api /etc/salt-minion
+
+EXPOSE 4505 4506 8000
+
+# 不设 ENTRYPOINT —— salt state 的 docker_container.running entrypoint 字段显式指定
+# master 容器: ["/sbin/tini","--","/usr/local/bin/salt-master-api-entrypoint"]
+# minion 容器: ["/sbin/tini","--","/usr/local/bin/salt-minion-entrypoint"]
+CMD []

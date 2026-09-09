@@ -25,6 +25,8 @@ include:
 nss-ndr-salt-minion:
   docker_container.running:
     - image: {{ salt_minion.image }}
+    # 整合镜像(salt:latest)无自带 ENTRYPOINT,此处显式指定 minion 入口
+    - entrypoint: ["/sbin/tini", "--", "/usr/local/bin/salt-minion-entrypoint"]
     - restart_policy: unless-stopped
     # 与 master 同网段（nss-net），通过 alias salt-master-api 连接 master
     # network_mode 必须显式 nss-net（与线上容器一致；缺省会变 bridge 触发重建）
