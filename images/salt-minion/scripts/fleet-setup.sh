@@ -169,7 +169,7 @@ write_kv "ELASTIC_AGENT_ENROLLMENT_TOKEN" "$AGENT_KEY"
 # 的 vars.filenames.default / vars.tags.default —— 不要再手工挑选，否则会漏。
 # 升级路径：旧版只配 5 streams 的部署，带 --force（或 NSS_ZEEK_POLICY_FORCE_RECREATE=1）
 #           会先删除旧的 nss-ndr-zeek-1.0.0，再重建为 43 streams。
-log "4) 创建 Zeek Integration package policy（43 个 dataset）"
+log "4) 创建 Zeek Integration package policy（47 个 dataset：43 原生 + 4 zeek 8.x 新增）"
 if [[ "$FORCE_RECREATE" == "true" ]]; then
   OLD_ID=$(kibana_req GET "/api/fleet/package_policies" | python3 -c "
 import sys, json
@@ -237,11 +237,15 @@ if ! kibana_req GET "/api/fleet/package_policies" | grep -q '"name":"nss-ndr-zee
         {"id": "nss-ndr-zeek-traceroute", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.traceroute"}, "vars": {"filenames": {"type": "text", "value": ["traceroute.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-traceroute"]}, "preserve_original_event": {"type": "bool", "value": false}}},
         {"id": "nss-ndr-zeek-tunnel", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.tunnel"}, "vars": {"filenames": {"type": "text", "value": ["tunnel.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-tunnel"]}, "preserve_original_event": {"type": "bool", "value": false}}},
         {"id": "nss-ndr-zeek-weird", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.weird"}, "vars": {"filenames": {"type": "text", "value": ["weird.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-weird"]}, "preserve_original_event": {"type": "bool", "value": false}}},
-        {"id": "nss-ndr-zeek-x509", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.x509"}, "vars": {"filenames": {"type": "text", "value": ["x509.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-x509"]}, "preserve_original_event": {"type": "bool", "value": false}}}
+        {"id": "nss-ndr-zeek-x509", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.x509"}, "vars": {"filenames": {"type": "text", "value": ["x509.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-x509"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-analyzer", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.analyzer"}, "vars": {"filenames": {"type": "text", "value": ["analyzer.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-analyzer"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-postgresql", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.postgresql"}, "vars": {"filenames": {"type": "text", "value": ["postgresql.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-postgresql"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-quic", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.quic"}, "vars": {"filenames": {"type": "text", "value": ["quic.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-quic"]}, "preserve_original_event": {"type": "bool", "value": false}}},
+        {"id": "nss-ndr-zeek-websocket", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.websocket"}, "vars": {"filenames": {"type": "text", "value": ["websocket.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-websocket"]}, "preserve_original_event": {"type": "bool", "value": false}}}
       ]
     }]
   }' >/dev/null
-  echo "  ✓ Zeek Integration package policy 已创建（43 streams 全启用）"
+  echo "  ✓ Zeek Integration package policy 已创建（47 streams 全启用：43 原生 + 4 zeek 8.x 新增）"
 else
   # 检查现有 policy 的 stream 数，若 <43 提示用户用 --force 升级
   STREAM_COUNT=$(kibana_req GET "/api/fleet/package_policies" | python3 -c "

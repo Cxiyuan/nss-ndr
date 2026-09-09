@@ -15,6 +15,11 @@
 
 FROM python:3.10-alpine
 
+# 2026-09-08 修复：强制 invalidate GHA buildx cache layer #15 (COPY salt-minion/scripts/)
+# 背景：缓存命中导致 commit bd834b5 / f341474 改动未生效到镜像（`DONE 0.0s`）
+# 改 CACHE_BUST 即可让 layer 内容 hash 变化，强制重建
+ARG CACHE_BUST=2026-09-08-v1
+
 ARG SALT_VERSION=3007.14
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 

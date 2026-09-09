@@ -17,7 +17,7 @@ COPY zeek-integration/${ZEEK_INT_DIR}/ \
 # 2. metadata 标记
 LABEL org.opencontainers.image.title="nss-ndr-elastic-agent-zeek" \
       org.opencontainers.image.description="Elastic Agent 9.5.2 with Zeek Integration 5.0.1 pre-installed" \
-      org.opencontainers.image.version="9.5.2-zeek5.0.1" \
+      org.opencontainers.image.version="9.5.2-zeek5.0.1+4ds" \
       org.opencontainers.image.source="https://epr.elastic.co/package/zeek/${ZEEK_INT_VERSION}" \
       org.opencontainers.image.licenses="Elastic License 2.0"
 
