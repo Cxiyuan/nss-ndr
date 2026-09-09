@@ -1,9 +1,12 @@
-# 数据总线 · Redis 自定义镜像
-# 内置 redis.conf（maxmemory 由容器 command 参数覆盖）
+# ============================================================================
+# 数据总线 · Redis 自定义镜像（方案 C：配置由 salt 下发宿主机 bind，不 bake）
+# ----------------------------------------------------------------------------
+# redis.conf 不再 bake——由 salt configs.sls 下发到 /opt/nss/ndr/redis/，
+# 容器 bind 只读挂载到 /usr/local/etc/redis/redis.conf
+# 本镜像仅保留官方 Redis 基座
+# ============================================================================
 FROM redis:8.10.1
 
-COPY redis/redis.conf /usr/local/etc/redis/redis.conf
-
 LABEL org.opencontainers.image.title="nss-ndr/redis-databus" \
-      org.opencontainers.image.description="Redis 8.10.1 with databus config pre-installed" \
+      org.opencontainers.image.description="Redis 8.10.1 (config bind-mounted, databus)" \
       org.opencontainers.image.version="8.10.1"

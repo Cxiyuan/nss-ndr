@@ -30,9 +30,9 @@ nss-ndr-salt-master-api:
     - skip_translate: volumes
     - binds:
         - nss-ndr-salt-log:/var/log/salt
-        - /srv/salt:/srv/salt:ro       # 与 minion 共享 state file_roots（只读，内容由宿主机 scp 同步）
-        - /srv/pillar:/srv/pillar:ro   # 与 minion 共享 pillar（只读）
-        - /etc/nss-ndr:/etc/nss-ndr:ro # 读取 .env（动态 token），只读防误写
+        # 方案 C：统一配置根 /opt/nss/ndr（含 .env/file_roots/pillar_roots/业务配置）
+        # master 只读共享（vault-seed/bootstrap 由 minion 读写 .env）
+        - /opt/nss/ndr:/opt/nss/ndr:ro
         - /var/run/docker.sock:/var/run/docker.sock
         - nss-ndr-salt-config:/etc/salt-master-api
         - nss-ndr-salt-run:/var/run/salt

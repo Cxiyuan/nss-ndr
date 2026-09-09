@@ -24,6 +24,13 @@ nss-ndr-logstash:
     - binds:
         - nss-ndr-zeek-logs:/var/log/zeek:ro
         - nss-ndr-logstash-data:/usr/share/logstash/data
+        # 方案 C：pipeline/config 由 salt 下发宿主机 /opt/nss/ndr/logstash, 逐个 bind 覆盖
+        #（bind 单文件避免隐藏官方 config 目录里的默认文件）
+        - /opt/nss/ndr/logstash/pipeline/zeek-pipeline.conf:/usr/share/logstash/pipeline/zeek-pipeline.conf:ro
+        - /opt/nss/ndr/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+        - /opt/nss/ndr/logstash/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro
+        - /opt/nss/ndr/logstash/config/log4j2.properties:/usr/share/logstash/config/log4j2.properties:ro
+        - /opt/nss/ndr/logstash/config/jvm.options:/usr/share/logstash/config/jvm.options:ro
     - port_bindings:
         - "5044:5044"
         - "9600:9600"
@@ -44,3 +51,6 @@ nss-ndr-logstash:
       - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/logstash-databus:9.5.2
       - docker_container: nss-ndr-elasticsearch
       - docker_container: nss-ndr-redis
+      - file: /opt/nss/ndr/logstash/pipeline/zeek-pipeline.conf
+      - file: /opt/nss/ndr/logstash/config/logstash.yml
+      - file: /opt/nss/ndr/logstash/config/pipelines.yml

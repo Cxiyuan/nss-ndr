@@ -5,17 +5,24 @@
 #   entrypoint 分别选 salt-master-api-entrypoint / salt-minion-entrypoint）：
 #   - nss-ndr-salt-master-api 容器
 #   - nss-ndr-salt-minion    容器
-# 盐命令模板（template state 文件）由以下命令铺到 /srv/salt/：
-#   salt-cp <master> databus/files/*  /srv/salt/databus/
-# 或初次部署时把仓库 src/databus/salt/{files,scripts,states/} 直接 scp。
-# 动态 token（KIBANA_SERVICE_TOKEN 等）由 bootstrap 阶段生成写入
-# /etc/nss-ndr/.env，不在 pillar 中维护。
+# 配置统一根（方案 C）：宿主机 /opt/nss/ndr/
+#   salt 引擎目录：file_roots=/opt/nss/ndr/salt/file_roots（state 铺此处,sls 用 databus.* 前缀）
+#                  pillar_roots=/opt/nss/ndr/salt/pillar_roots（pillar 铺此处）
+#   业务配置：/opt/nss/ndr/zeek|logstash|kibana|redis|elastic-agent|vault（configs.sls 下发）
+#   动态 token：/opt/nss/ndr/.env（vault-seed/fleet-setup 生成,不入 pillar）
+# 初次部署：把仓库 src/databus/salt/{files,states} 铺到 file_roots/databus/，
+#           把 pillar 铺到 pillar_roots/，再手工起 salt-master/minion 引导。
 # ============================================================================
 
 databus:
   # orchestrate/deploy.sls 的目标 minion id（salt.state - tgt 使用）
   target: nss-ai-agent-minion
-  env_file: /etc/nss-ndr/.env
+  # 配置统一根（方案 C）
+  config_root: /opt/nss/ndr
+  env_file: /opt/nss/ndr/.env
+  # salt 引擎目录
+  file_roots: /opt/nss/ndr/salt/file_roots
+  pillar_roots: /opt/nss/ndr/salt/pillar_roots
   base_dir: /opt/nss-ndr
   images_dir: /root/nss-ndr/images
   tz: Asia/Shanghai

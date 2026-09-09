@@ -1,16 +1,12 @@
-# 数据总线 · Logstash 自定义镜像
-# 内置双写 pipeline + 固定配置（pipeline/config 进镜像）
-# 运行环境参数（REDIS_PASSWORD 等）通过环境变量注入
+# ============================================================================
+# 数据总线 · Logstash 自定义镜像（方案 C：配置由 salt 下发宿主机 bind，不 bake）
+# ----------------------------------------------------------------------------
+# pipeline/zeek-pipeline.conf + config/*.yml 不再 bake——
+# 由 salt configs.sls 下发到 /opt/nss/ndr/logstash/，容器 bind 只读挂载
+# 本镜像仅保留官方 Logstash 基座
+# ============================================================================
 FROM docker.elastic.co/logstash/logstash:9.5.2
 
-# pipeline：事件总线双写逻辑
-COPY logstash/pipeline/zeek-pipeline.conf /usr/share/logstash/pipeline/zeek-pipeline.conf
-# config：固定配置（jvm.options 一并 bake，不再宿主外挂）
-COPY logstash/config/logstash.yml /usr/share/logstash/config/logstash.yml
-COPY logstash/config/pipelines.yml /usr/share/logstash/config/pipelines.yml
-COPY logstash/config/log4j2.properties /usr/share/logstash/config/log4j2.properties
-COPY logstash/config/jvm.options /usr/share/logstash/config/jvm.options
-
 LABEL org.opencontainers.image.title="nss-ndr/logstash-databus" \
-      org.opencontainers.image.description="Logstash 9.5.2 with databus dual-write pipeline pre-installed" \
+      org.opencontainers.image.description="Logstash 9.5.2 (pipeline bind-mounted, databus)" \
       org.opencontainers.image.version="9.5.2"

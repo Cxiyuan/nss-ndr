@@ -3,9 +3,8 @@
 # ----------------------------------------------------------------------------
 # 容器以 nss-net + 特权运行（必须与本机 docker daemon 交互）：
 #   - bind /var/run/docker.sock 让 docker state 模块能调用 docker CLI
-#   - bind /srv/salt 与 /srv/pillar 与 master-api 共享（同一 nss-net 内 master 也 bind）
-#   - bind /etc/nss-ndr 读写：bootstrap/fleet-setup 要写回 .env（动态 token），
-#     configs.sls 要下发 kibana.yml 等配置；只读会导致这些 state 失败
+#   - bind /opt/nss/ndr 读写：统一配置根（file_roots/pillar_roots/.env/业务配置）
+#     vault-seed/bootstrap/fleet-setup 写回 .env，configs.sls 下发业务配置
 # 注意：
 #   - 容器必须有 docker.sock 写权限
 #   - 必须先于 databus.containers.* 启动（minion 是 master 调度的执行者）
@@ -46,10 +45,11 @@ nss-ndr-salt-minion:
         - nss-ndr-salt-run:/var/run/salt
         - nss-ndr-salt-cache:/var/cache/salt
         - nss-ndr-salt-log:/var/log/salt
-        - /srv/salt:/srv/salt:ro
-        - /srv/pillar:/srv/pillar:ro
-        # /etc/nss-ndr 读写：bootstrap/fleet-setup 写回 .env，configs.sls 下发配置
-        - /etc/nss-ndr:/etc/nss-ndr
+        # 方案 C：统一配置根 /opt/nss/ndr 读写
+        #   - file_roots/pillar_roots（salt 引擎目录）
+        #   - .env（vault-seed/bootstrap/fleet-setup 写回动态 token）
+        #   - 业务配置（configs.sls 下发到 /opt/nss/ndr/zeek 等,业务容器只读 bind）
+        - /opt/nss/ndr:/opt/nss/ndr
         # Vault secrets 卷（RO token 由 vault bootstrap 写入;vault-render-env 从此读）
         - nss-vault-secrets:/vault/secrets:ro
         # Docker socket（Salt docker state 模块调用 dockerd）

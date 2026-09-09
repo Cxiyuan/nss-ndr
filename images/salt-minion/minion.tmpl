@@ -12,14 +12,14 @@ master: ${SALT_MASTER_HOST}
 # 默认使用容器主机名
 id: ${SALT_MINION_ID}
 
-##### 文件系统根（与 master 共享，bind mount /srv/salt /srv/pillar）#####
+##### 文件系统根（方案 C：统一 /opt/nss/ndr,容器 bind 宿主同路径）#####
 file_roots:
   base:
-    - /srv/salt
+    - /opt/nss/ndr/salt/file_roots
 
 pillar_roots:
   base:
-    - /srv/pillar
+    - /opt/nss/ndr/salt/pillar_roots
 
 ##### Master 连接 #####
 master_port: 4506

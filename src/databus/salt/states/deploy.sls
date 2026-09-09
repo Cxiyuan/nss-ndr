@@ -11,7 +11,7 @@
 #   images -> network/volumes/configs
 #   -> salt-master-api -> salt-minion
 #   -> vault（init/unseal/kv-seed，seed 密码来自 pillar creds）
-#   -> vault-seed（vault 就绪后从 kv 读基础密码派生 /etc/nss-ndr/.env）
+#   -> vault-seed（vault 就绪后从 kv 读基础密码派生 /opt/nss/ndr/.env）
 #   -> es/redis -> 等 ES
 #   -> 生成 KIBANA_SERVICE_TOKEN -> kibana -> 等 Kibana
 #   -> 创建 Fleet output/policy/enrollment keys/Zeek Integration
@@ -42,13 +42,6 @@ deploy-volumes:
     - require:
       - salt: deploy-images
 
-deploy-configs:
-  salt.state:
-    - tgt: {{ databus.get('target', 'databus') }}
-    - sls: databus.configs
-    - require:
-      - salt: deploy-images
-
 deploy-salt-master-api:
   salt.state:
     - tgt: {{ databus.get('target', 'databus') }}
@@ -56,7 +49,6 @@ deploy-salt-master-api:
     - require:
       - salt: deploy-network
       - salt: deploy-volumes
-      - salt: deploy-configs
 
 deploy-salt-minion:
   salt.state:
@@ -65,9 +57,19 @@ deploy-salt-minion:
     - require:
       - salt: deploy-salt-master-api
 
-# Vault 容器（2026-09-08 重构：纳入 salt 管理，无宿主机挂载）
+# 业务配置统一下发（方案 C）：minion bind /opt/nss/ndr 后执行 file.managed
+# 下发业务配置（zeek/logstash/kibana/redis/elastic-agent/vault.hcl）到 /opt/nss/ndr
+deploy-configs:
+  salt.state:
+    - tgt: {{ databus.get('target', 'databus') }}
+    - sls: databus.configs
+    - require:
+      - salt: deploy-salt-minion
+
+# Vault 容器（2026-09-08 重构：纳入 salt 管理）
 # vault-bootstrap 幂等：init → unseal → RO token → kv seed(elastic/redis/kibana)
 # seed 密码来自容器 env（SEED_*，由 pillar creds 渲染注入）
+# vault.hcl 由 configs 下发到 /opt/nss/ndr/vault（require deploy-configs）
 deploy-vault:
   salt.state:
     - tgt: {{ databus.get('target', 'databus') }}
@@ -76,8 +78,9 @@ deploy-vault:
       - salt: deploy-network
       - salt: deploy-volumes
       - salt: deploy-salt-minion
+      - salt: deploy-configs
 
-# vault-seed：vault 就绪后从 kv 读基础密码派生 /etc/nss-ndr/.env
+# vault-seed：vault 就绪后从 kv 读基础密码派生 /opt/nss/ndr/.env
 # RO token 经共享卷 nss-vault-secrets 传入 minion（vault-render-env 自动读取）
 deploy-vault-seed:
   salt.state:

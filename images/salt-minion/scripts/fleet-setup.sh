@@ -5,7 +5,7 @@
 # 幂等执行：
 #   1. 创建 Fleet default output（指向 elasticsearch:9200）
 #   2. 创建 agent policies（fleet-server-policy / nss-ndr-zeek-policy）
-#   3. 创建 enrollment API keys，写回 /etc/nss-ndr/.env
+#   3. 创建 enrollment API keys，写回 /opt/nss/ndr/.env
 #   4. 创建 Zeek Integration package policy
 #      - 新部署：直接建 43 streams 全启用
 #      - 已部署（如旧版只有 5 streams）：通过 NSS_ZEEK_POLICY_FORCE_RECREATE=1
@@ -21,7 +21,7 @@ if [[ "${1:-}" == "--force" || "${NSS_ZEEK_POLICY_FORCE_RECREATE:-0}" == "1" ]];
   FORCE_RECREATE="true"
 fi
 
-ENV_FILE="${NSS_ENV_FILE:-/etc/nss-ndr/.env}"
+ENV_FILE="${NSS_ENV_FILE:-/opt/nss/ndr/.env}"
 # 脚本在 salt-minion 容器内执行（nss-net），用 DNS 名访问 ES / Kibana
 ES_URL="${NSS_ES_URL:-http://elasticsearch:9200}"
 KIBANA_URL="${NSS_KIBANA_URL:-http://kibana:5601}"

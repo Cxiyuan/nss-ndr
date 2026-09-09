@@ -9,7 +9,7 @@
 # ============================================================
 set -euo pipefail
 
-ENV_FILE="${NSS_ENV_FILE:-/etc/nss-ndr/.env}"
+ENV_FILE="${NSS_ENV_FILE:-/opt/nss/ndr/.env}"
 # 脚本在 salt-minion 容器内执行（nss-net），用 DNS 名访问 ES
 ES_URL="${NSS_ES_URL:-http://elasticsearch:9200}"
 

@@ -6,6 +6,7 @@ include:
   - databus.network
   - databus.volumes
   - databus.images
+  - databus.configs
 
 {% from "databus/map.jinja" import databus with context %}
 
@@ -19,6 +20,8 @@ nss-ndr-redis:
     # 保持镜像默认用户，与原始编排定义一致
     - binds:
         - nss-ndr-redis-data:/data
+        # 方案 C：redis.conf 由 salt 下发宿主机 /opt/nss/ndr/redis, bind 进容器
+        - /opt/nss/ndr/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     - port_bindings:
         - "{{ databus.host_bind }}:{{ databus.host_ports.redis }}:6379"
     - networks:
@@ -34,3 +37,4 @@ nss-ndr-redis:
       - docker_network: ensure-nss-net-present
       - docker_volume: nss-ndr-redis-data
       - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/redis-databus:8.10.1
+      - file: /opt/nss/ndr/redis/redis.conf

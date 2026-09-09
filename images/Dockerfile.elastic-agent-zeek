@@ -26,12 +26,13 @@ LABEL org.opencontainers.image.title="nss-ndr-elastic-agent-zeek" \
 #       因此用 COPY --chmod=755 直接带执行位
 COPY --chmod=755 elastic-agent-zeek/elastic-agent-start.sh /opt/nss-ndr/scripts/elastic-agent-start.sh
 
-# 角色化构建: FLEET_ROLE=1 时烘焙 fleet-server 用 elastic-agent.yml 为默认配置
-# (数据角色用同一镜像, 启动脚本 enroll 后自行改写 elastic-agent.yml, 故无冲突)
+# 角色化构建说明（方案 C）：fleet-server 角色的 elastic-agent.yml 由 salt 下发
+# 宿主机 /opt/nss/ndr/elastic-agent/fleet-elastic-agent.yml,容器 bind 到
+# /etc/elastic-agent/elastic-agent.yml（镜像不再 bake,避免双源漂移）
+# 这里仅保留 /etc/elastic-agent 目录存在,供 bind 单文件挂载点
 ARG FLEET_ROLE=0
-COPY elastic-agent-zeek/fleet-elastic-agent.yml /opt/nss-ndr/elastic-agent-fleet-server.yml
 USER root
-RUN if [ "$FLEET_ROLE" = "1" ]; then mkdir -p /etc/elastic-agent && cp /opt/nss-ndr/elastic-agent-fleet-server.yml /etc/elastic-agent/elastic-agent.yml; fi
+RUN mkdir -p /etc/elastic-agent
 USER elastic-agent
 
 # 3. 健康检查（复用官方）

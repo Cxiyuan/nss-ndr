@@ -13,13 +13,13 @@
 run-fleet-setup:
   cmd.run:
     - name: /opt/nss-ndr/scripts/fleet-setup.sh
-    - unless: test -f /etc/nss-ndr/.fleet-setup.done
+    - unless: test -f /opt/nss/ndr/.fleet-setup.done
     - require_in:
       - file: mark-fleet-setup-done
 
 mark-fleet-setup-done:
   file.touch:
-    - name: /etc/nss-ndr/.fleet-setup.done
-    - unless: test -f /etc/nss-ndr/.fleet-setup.done
+    - name: /opt/nss/ndr/.fleet-setup.done
+    - unless: test -f /opt/nss/ndr/.fleet-setup.done
     - require:
       - cmd: run-fleet-setup

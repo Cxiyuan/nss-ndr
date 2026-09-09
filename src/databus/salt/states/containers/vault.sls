@@ -1,23 +1,25 @@
 # ============================================================================
 # Vault 容器（nss-vault，凭据管理：应用密码唯一来源）
 # ----------------------------------------------------------------------------
-# 设计（2026-09-08 重构）：
-#   - vault.hcl + vault-bootstrap.sh 已 bake 进镜像 nss-ndr/vault
-#     （无宿主机挂载；unseal key / root token 存命名卷 nss-vault-secrets）
-#   - bootstrap 幂等：init → unseal → RO token → kv seed(elastic/redis/kibana)
+# 设计（2026-09-09 方案 C 重构）：
+#   - vault.hcl 由 configs.sls 下发宿主机 /opt/nss/ndr/vault/vault.hcl, bind 只读
+#   - vault-bootstrap.sh bake 镜像（程序）；init/unseal/kv-seed 幂等
+#   - unseal key / root token / RO token 存命名卷 nss-vault-secrets
 #   - seed 密码来自 pillar creds（SEED_* env 注入，仅首次 seed 用）
 #   - kv 一旦 seed 完成（/.kv-seeded 标记），改 pillar creds 不再覆盖 vault
 #     （vault 是唯一真源；改密码应改 vault kv 而不是 pillar）
 # 上下游：
 #   - 必须先于 salt-minion 的 vault-render-env（vault-seed.sls）执行
-#     （vault-seed 从 vault 读密码写 /etc/nss-ndr/.env）
+#     （vault-seed 从 vault 读密码写 /opt/nss/ndr/.env）
 #   - 必须先于所有依赖凭据的容器（es/redis/kibana...）
+#   - vault.hcl 需先由 configs.sls 下发（require databus.configs）
 # ============================================================================
 
 include:
   - databus.network
   - databus.volumes
   - databus.images
+  - databus.configs
 
 {% from "databus/map.jinja" import databus with context %}
 
@@ -37,6 +39,8 @@ nss-vault:
         - nss-vault-data:/vault/file
         - nss-vault-logs:/vault/logs
         - nss-vault-secrets:/vault/secrets
+        # 方案 C：vault.hcl 由 salt 下发宿主机 /opt/nss/ndr/vault, bind 进容器
+        - /opt/nss/ndr/vault/vault.hcl:/vault/config/vault.hcl:ro
     - networks:
         - nss-net:
             - ipv4_address: {{ vault_ip }}
@@ -58,3 +62,4 @@ nss-vault:
       - docker_volume: nss-vault-data
       - docker_volume: nss-vault-logs
       - docker_volume: nss-vault-secrets
+      - file: /opt/nss/ndr/vault/vault.hcl

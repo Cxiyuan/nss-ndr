@@ -6,14 +6,14 @@
 # Fleet policy / enrollment keys / Zeek Integration 在 Kibana 启动后由
 # fleet-setup.sls 处理（见 deploy.sls 编排顺序）。
 # 幂等：生成成功后创建标记文件，避免重复生成导致 .env 被覆盖。
-# 从零重装时删除 /etc/nss-ndr/.env 与 /etc/nss-ndr/.bootstrap.done 即可。
+# 从零重装时删除 /opt/nss/ndr/.env 与 /opt/nss/ndr/.bootstrap.done 即可。
 # ============================================================================
 
 {% from "databus/map.jinja" import databus with context %}
 
 ensure-env-dir:
   file.directory:
-    - name: /etc/nss-ndr
+    - name: /opt/nss/ndr
     - makedirs: True
     - user: root
     - group: root
@@ -23,13 +23,13 @@ ensure-env-dir:
 generate-kibana-service-token:
   cmd.run:
     - name: /opt/nss-ndr/scripts/gen-kibana-token.sh
-    - unless: test -f /etc/nss-ndr/.bootstrap.done
+    - unless: test -f /opt/nss/ndr/.bootstrap.done
     - require_in:
       - file: mark-bootstrap-done
 
 mark-bootstrap-done:
   file.touch:
-    - name: /etc/nss-ndr/.bootstrap.done
-    - unless: test -f /etc/nss-ndr/.bootstrap.done
+    - name: /opt/nss/ndr/.bootstrap.done
+    - unless: test -f /opt/nss/ndr/.bootstrap.done
     - require:
       - cmd: generate-kibana-service-token

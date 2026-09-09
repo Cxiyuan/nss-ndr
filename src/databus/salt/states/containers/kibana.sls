@@ -19,10 +19,11 @@ nss-ndr-kibana:
     - network_mode: nss-net
     - detach: True
     - skip_translate: volumes
-    # kibana.yml 已烘焙进镜像 /usr/share/kibana/config/kibana.yml
+    # kibana.yml 由 salt 下发宿主机 /opt/nss/ndr/kibana, bind 进容器覆盖镜像默认
     # 保持镜像默认用户（kibana），与原始编排定义一致
     - binds:
         - nss-ndr-kibana-data:/usr/share/kibana/data
+        - /opt/nss/ndr/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
     - port_bindings:
         - "{{ databus.host_bind }}:{{ databus.host_ports.kibana }}:5601"
     - networks:
@@ -42,3 +43,4 @@ nss-ndr-kibana:
       - docker_volume: nss-ndr-kibana-data
       - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/kibana:9.5.2
       - docker_container: nss-ndr-elasticsearch
+      - file: /opt/nss/ndr/kibana/kibana.yml

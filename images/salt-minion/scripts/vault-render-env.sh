@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# 从 Vault 派生 /etc/nss-ndr/.env 的基础凭据(kv-v2: nss-ndr/elastic|redis|kibana)
+# 从 Vault 派生 /opt/nss/ndr/.env 的基础凭据(kv-v2: nss-ndr/elastic|redis|kibana)
 # ----------------------------------------------------------------------------
 # 幂等合并:只覆写 ELASTIC_PASSWORD / REDIS_PASSWORD / KIBANA_ENCRYPTION_KEY 三键,
 # 其余键(动态 token 等)原样保留;文件不存在则新建(600)。
@@ -11,7 +11,7 @@
 # ============================================================================
 set -euo pipefail
 
-ENV_FILE="${NSS_ENV_FILE:-/etc/nss-ndr/.env}"
+ENV_FILE="${NSS_ENV_FILE:-/opt/nss/ndr/.env}"
 VAULT_ADDR="${VAULT_ADDR:-http://vault:8200}"
 VAULT_TOKEN="${VAULT_TOKEN:-}"
 VAULT_SECRETS_DIR="${VAULT_SECRETS_DIR:-/vault/secrets}"

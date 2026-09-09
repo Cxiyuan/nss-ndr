@@ -1,29 +1,28 @@
 # ============================================================================
-# 数据总线 · Vault 镜像（Vault 凭据管理：应用密码唯一来源）
+# 数据总线 · Vault 镜像（方案 C：vault.hcl 由 salt 下发宿主机 bind，不 bake）
 # ----------------------------------------------------------------------------
 # 设计：
 #   - 基于官方 hashicorp/vault（无需自编译）
-#   - vault.hcl bake 到 /vault/config/vault.hcl（官方 entrypoint 自动加载）
-#   - vault-bootstrap.sh 覆盖 entrypoint：init/unseal/kv-seed 幂等
-#     （不 bind 宿主机任何路径；unseal key / root token 存命名卷 nss-vault-secrets）
+#   - vault.hcl 由 salt configs.sls 下发到 /opt/nss/ndr/vault/vault.hcl，
+#     容器 bind 只读挂载到 /vault/config/vault.hcl（镜像不 bake）
+#   - vault-bootstrap.sh 覆盖 entrypoint：启动 server + init/unseal/kv-seed 幂等
+#     （unseal key / root token 存命名卷 nss-vault-secrets）
 #   - 仅 nss-net 内网 8200
 # ============================================================================
 ARG VAULT_VERSION=latest
 FROM hashicorp/vault:${VAULT_VERSION}
 
-# vault.hcl 放官方默认 config 目录（docker-entrypoint 自动 `vault server -config`）
-COPY vault/vault.hcl /vault/config/vault.hcl
-
 # bootstrap 脚本（覆盖 CMD，容器启动后由 entrypoint 执行）
 COPY --chmod=755 vault/vault-bootstrap.sh /usr/local/bin/vault-bootstrap
 
+# 预建 /vault/config（bind vault.hcl 单文件的挂载点）
 # 预建 /vault/secrets（命名卷挂载点，bootstrap 写 unseal key/root token/RO token）
 # 注意：官方 entrypoint 只 chown /vault/config /vault/file /vault/logs，不含 /vault/secrets；
 #      命名卷首挂会继承镜像该目录属主，故这里显式 chown 给 vault 用户
-RUN mkdir -p /vault/secrets && chown vault:vault /vault/secrets
+RUN mkdir -p /vault/config /vault/secrets && chown vault:vault /vault/config /vault/secrets
 
 LABEL org.opencontainers.image.title="nss-ndr/vault" \
-      org.opencontainers.image.description="数据总线 Vault 容器（凭据管理 + kv seed，无宿主挂载）" \
+      org.opencontainers.image.description="数据总线 Vault 容器（凭据管理 + kv seed，config bind-mounted）" \
       org.opencontainers.image.version="latest" \
       org.opencontainers.image.source="https://github.com/Cxiyuan/nss-ndr"
 

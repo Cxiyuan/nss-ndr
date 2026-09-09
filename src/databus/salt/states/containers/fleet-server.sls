@@ -12,6 +12,7 @@ include:
   - databus.network
   - databus.volumes
   - databus.images
+  - databus.configs
   - databus.containers.elasticsearch
   - databus.containers.kibana
 
@@ -25,10 +26,12 @@ nss-ndr-fleet-server:
     - network_mode: nss-net
     - detach: True
     - skip_translate: volumes
-    # 保持镜像默认用户 elastic-agent;fleet 配置已烘焙,仅数据/状态卷
+    # 保持镜像默认用户 elastic-agent;配置由 salt 下发宿主机 /opt/nss/ndr/elastic-agent
     - binds:
         - nss-ndr-fleet-server-state:/var/lib/fleet-server
         - nss-ndr-fleet-server-data:/usr/share/fleet-server/data
+        # 方案 C：fleet-elastic-agent.yml bind 覆盖镜像默认 elastic-agent.yml
+        - /opt/nss/ndr/elastic-agent/fleet-elastic-agent.yml:/etc/elastic-agent/elastic-agent.yml:ro
     - port_bindings:
         - "{{ databus.host_bind }}:{{ databus.host_ports.fleet_server }}:8220"
     - networks:
@@ -56,3 +59,4 @@ nss-ndr-fleet-server:
       - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/fleet-server:9.5.2
       - docker_container: nss-ndr-elasticsearch
       - docker_container: nss-ndr-kibana
+      - file: /opt/nss/ndr/elastic-agent/fleet-elastic-agent.yml
