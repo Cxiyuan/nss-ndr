@@ -1,5 +1,5 @@
 # ============================================================================
-# LLM Server（nss-ndr/llm-server，llama.cpp + Qwen3-0.6B-Q8_0，OpenAI 兼容 API）
+# LLM Server（nss-ndr/llm-server，llama.cpp + Qwen3.8-2B-Distill Q4_K_M，OpenAI 兼容 API）
 # ----------------------------------------------------------------------------
 # 本项目仅提供本地边缘 LLM 推理服务（数据源输出侧），供下游智能体/分析方消费：
 #   - 监听 0.0.0.0:8080，对外暴露 /v1/chat/completions 等 OpenAI 兼容端点
@@ -26,7 +26,7 @@ nss-ndr-llm-server:
     - detach: True
     - skip_translate: volumes
     # 镜像默认非特权用户 llm（uid 10001）
-    # 模型 Qwen3-0.6B-Q8_0.gguf 已内置进镜像（/models），无需外挂模型卷
+    # 模型 Qwen3.8-2B-Q4_K_M.gguf 已内置进镜像（/models），无需外挂模型卷
     # ----------------------------------------------------------------------
     # CPU 资源：按宿主机比例（默认 0.75 = 75%）限制，不写绝对值。
     # 注意：salt 3007 dockermod 不支持 cpus/NanoCpus（会静默忽略），

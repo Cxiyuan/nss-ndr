@@ -84,17 +84,16 @@ databus:
   host_bind: 127.0.0.1
 
   # LLM Server（nss-ndr/llm-server）——本项目提供的本地边缘 LLM 推理服务
-  # （llama.cpp + 内置 Qwen3-0.6B-Q8_0，OpenAI 兼容 API），供下游智能体/分析方消费。
+  # （llama.cpp + 内置 Qwen3.8-2B-Distill Q4_K_M，OpenAI 兼容 API），供下游智能体/分析方消费。
   llm_server:
     image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/llm-server:latest
     ip: 192.168.250.90
     port: 8080
-    model_path: /models/Qwen3-0.6B-Q8_0.gguf
-    model_alias: Qwen3-0.6B-Q8_0
-    # ctx 4096 避免长 prompt 触发 llama.cpp 主动 cancel
-    context_size: 4096
-    # 并行 2 提升吞吐
-    parallel: 2
+    model_path: /models/Qwen3.8-2B-Q4_K_M.gguf
+    model_alias: Qwen3.8-2B-Distill
+    # ctx 16384（镜像默认）；并行 1 避免单机 CPU 多 slot 抢占
+    context_size: 16384
+    parallel: 1
     # 减小 batch / ubatch 让单会话推理更轻量
     batch_size: 1024
     ubatch_size: 256
@@ -108,7 +107,7 @@ databus:
     # Qwen3 思考模式会耗尽输出预算（content 空→“无法解析”）；长 prompt 超单 slot ctx
     # 会被 llama-server 拒绝（cancel task）。线上 pillar 设置：
     #   extra_args="--chat-template-kwargs {\"enable_thinking\":false}"
-    #   context_ratio: 1.0   # ctx 4096；parallel 2 → 每 slot 2048
+    #   context_ratio: 1.0   # ctx 16384；parallel 1 → 单 slot 16384
     # ---------- 资源比例（默认 0.75 = 占宿主机 75%） ----------
     # 换硬件环境无需修改数值，按需覆盖（Docker 侧硬限用动态 cpuset_cpus，见 llm-server.sls）。
     cpu_ratio: 0.75

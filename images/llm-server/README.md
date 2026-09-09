@@ -16,10 +16,10 @@
 - **轻量镜像**：Alpine（musl）+ 动态链接（运行期仅 libstdc++/libgcc/libgomp），
   镜像约 200MB 量级，不依赖宿主 glibc。
 - **可复现**：llama.cpp 固定 tag `b10681`（`Dockerfile` 内 `ARG LLAMA_CPP_TAG`）。
-- **内置模型**：`Qwen3-0.6B-Q8_0.gguf`（约 624MB，Apache-2.0）已打包进镜像，
-  构建时从官方 `Qwen/Qwen3-0.6B-GGUF` 仓库下载并做 SHA-256 校验；无需外挂模型目录即可运行。
+- **内置模型**：`Qwen3.8-2B-Q4_K_M.gguf`（约 1.31GB，Apache-2.0）已打包进镜像，
+  构建时从 `empero-ai/Qwen3.8-2B-Distill-GGUF` 仓库下载 Q4_K_M 并做 SHA-256 校验；无需外挂模型目录即可运行。
   更换模型可挂载 `/models` 覆盖或改 `LLM_MODEL` 指向其他 GGUF。
-- **现阶段线上默认选型**：`Qwen3-0.6B-Q8_0` 是当前数据总线线上默认的本地边缘 LLM
+- **现阶段线上默认选型**：`Qwen3.8-2B-Distill` 是当前数据总线线上默认的本地边缘 LLM
   （与 salt pillar `llm_server.model_alias` 一致），定位为"预筛 + 初判 + 结构化输出"
   的快速执行器，选型理由：Apache-2.0、工具调用能力可接受、模型与 KV 缓存合计约 1.1GB，
   在 6C/12G 预算内仍有余量。
@@ -28,7 +28,7 @@
 
 | 文件 | 说明 |
 |---|---|
-| `images/Dockerfile.llm-server` | 多阶段构建：编译 llama-server + Alpine 运行时 + 内置 Qwen3-0.6B-Q8_0 模型 |
+| `images/Dockerfile.llm-server` | 多阶段构建：编译 llama-server + Alpine 运行时 + 内置 Qwen3.8-2B-Distill 模型 |
 | `images/llm-server/entrypoint.sh` | ENV → llama-server 参数映射入口 |
 | `images/llm-server/scripts/fetch-model.sh` | 下载 GGUF 到 `offline/models/` |
 | `images/scripts/build-llm-server.sh` | 构建 + 校验 + 导出离线 tar |
@@ -41,7 +41,7 @@
 images/scripts/build-llm-server.sh [版本]
 
 # 产物：images/offline/nss-ndr_llm-server_0.1.0.tar
-# 镜像：nss-ndr/llm-server:0.1.0（含 /models/Qwen3-0.6B-Q8_0.gguf）
+# 镜像：nss-ndr/llm-server:0.1.0（含 /models/Qwen3.8-2B-Q4_K_M.gguf）
 ```
 
 > 如需离线构建，可先执行 `images/llm-server/scripts/fetch-model.sh` 把模型放到
@@ -65,7 +65,7 @@ docker run -d --name nss-ndr-llm-server \
 curl http://127.0.0.1:8080/v1/models
 curl http://127.0.0.1:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -d '{"model":"Qwen3-0.6B-Q8_0","messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
+  -d '{"model":"Qwen3.8-2B-Distill","messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
 ```
 
 > 若需覆盖内置模型：`-v /opt/nss-ndr/models:/models:ro -e LLM_MODEL=/models/model.gguf`
@@ -74,9 +74,9 @@ curl http://127.0.0.1:8080/v1/chat/completions \
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
-| `LLM_MODEL` | `/models/Qwen3-0.6B-Q8_0.gguf` | GGUF 模型路径（内置） |
+| `LLM_MODEL` | `/models/Qwen3.8-2B-Q4_K_M.gguf` | GGUF 模型路径（内置） |
 | `LLM_HOST` / `LLM_PORT` | `0.0.0.0` / `8080` | 监听地址 / 端口 |
-| `LLM_ALIAS` | `Qwen3-0.6B-Q8_0` | API 返回的 model 名（与下游消费方约定保持一致） |
+| `LLM_ALIAS` | `Qwen3.8-2B-Distill` | API 返回的 model 名（与下游消费方约定保持一致） |
 | `LLM_CONTEXT_SIZE` | `32768` | 上下文窗口（32K） |
 | `LLM_PARALLEL` | `1` | 并发 slot（6C/12G 预算建议保持 1） |
 | `LLM_BATCH_SIZE` / `LLM_UBATCH_SIZE` | `2048` / `512` | 批处理大小 |
@@ -94,23 +94,23 @@ curl http://127.0.0.1:8080/v1/chat/completions \
 # 下游消费方（智能体侧）配置示例——不属本项目，由消费方自行维护
 EDGE_LLM_BASE_URL=http://llm-server:8080/v1
 EDGE_LLM_API_KEY=            # 与 LLM_API_KEY 一致；未开启鉴权可留空
-EDGE_LLM_MODEL=Qwen3-0.6B-Q8_0
+EDGE_LLM_MODEL=Qwen3.8-2B-Distill
 ```
 
 llama-server 不校验请求里的 `model` 字段，下游消费方模型名只需与 `LLM_ALIAS` 对应便于日志审计。
 
 ## 内存预算参考（6C/12G 专属环境）
 
-- 模型权重（Qwen3-0.6B Q8_0）：约 0.6GB
+- 模型权重（Qwen3.8-2B Q4_K_M）：约 1.31GB
 - KV 缓存（32K 上下文，q8_0）：约 0.5GB
 - 计算缓冲 / 运行开销：约 1~2GB
 - 合计约 2~3GB 量级，12G 预算内可再加 `LLM_CONTEXT_SIZE` 或并发 slot
 
 ## 模型备选（仅换 GGUF + 重启）
 
-> 现状：**`Qwen3-0.6B-Q8_0` 是线上默认选型**（已内置）。本节给出后续如需升级/替换的备选清单。
+> 现状：**`Qwen3.8-2B-Distill` 是线上默认选型**（已内置）。本节给出后续如需升级/替换的备选清单。
 
-- `Qwen3-0.6B-Q8_0`（**已内置，线上默认**，Apache-2.0，0.6B / Q8_0，工具调用好、内存占用低）
+- `Qwen3.8-2B-Distill`（**已内置，线上默认**，Apache-2.0，Q4_K_M 1.31GB，推理质量显著优于原 0.6B、内存占用适中）
 - `xLAM-2-3b-fc-r`（Q4_K_M 约 1.93GB，工具调用更强）
 - `Granite-4.1-3B`（Apache 2.0，131K 上下文，商用合规）
 
@@ -124,8 +124,8 @@ images/llm-server/scripts/fetch-model.sh xLAM-2-3B-fc-r-Q4_K_M.gguf
 
 ## 说明与限制
 
-- 纯 CPU 0.6B 模型（**当前线上默认 `Qwen3-0.6B-Q8_0`**）推理速度有限，
+- 纯 CPU 2B 模型（当前线上默认 `Qwen3.8-2B-Distill`）推理速度受 CPU 限制，建议 /models 放 NVMe；
   定位为"预筛 + 初判 + 结构化输出"的快速执行器，
   复杂任务由下游消费方自行升级云端，不依赖本服务做深度分析。
-- 模型已内置镜像（`/models/Qwen3-0.6B-Q8_0.gguf`，约 624MB），
+- 模型已内置镜像（`/models/Qwen3.8-2B-Q4_K_M.gguf`，约 1.31GB），
   构建时从 HF 官方仓库下载并校验 SHA-256；挂载 `/models` 仍可覆盖或补充其他 GGUF。

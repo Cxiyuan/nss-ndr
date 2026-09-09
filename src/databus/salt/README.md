@@ -177,7 +177,7 @@ databus:
     - name: nss-ndr/elastic-agent-zeek:9.5.2
     - name: nss-ndr/logstash-databus:9.5.2
     - name: nss-ndr/redis-databus:8.10.1
-    - name: nss-ndr/llm-server:0.1.0    # 本地边缘 LLM（llama.cpp + 内置 Qwen3-0.6B-Q8_0），OpenAI 兼容推理，供下游智能体/分析方消费
+    - name: nss-ndr/llm-server:0.1.0    # 本地边缘 LLM（llama.cpp + 内置 Qwen3.8-2B-Distill Q4_K_M），OpenAI 兼容推理，供下游智能体/分析方消费
   fixed_ips:
     elasticsearch: 192.168.250.40
     kibana: 192.168.250.50

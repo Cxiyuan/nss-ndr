@@ -34,7 +34,7 @@ nss-ndr-elastic-agent-state:
   docker_volume.present
 
 # LLM Server 模型卷（只读挂到容器 /models）。
-# 镜像 nss-ndr/llm-server 已内置 Qwen3-0.6B-Q8_0.gguf，正常情况无需外挂；
+# 镜像 nss-ndr/llm-server 已内置 Qwen3.8-2B-Q4_K_M.gguf，正常情况无需外挂；
 # 预留该卷用于以下场景：(1) 升级到更大模型；(2) 替换为非默认模型；(3) 多模型并存。
 nss-ndr-llm-models:
   docker_volume.present
