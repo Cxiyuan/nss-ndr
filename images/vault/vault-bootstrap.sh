@@ -75,9 +75,9 @@ do_init() {
   vault operator init -key-shares=1 -key-threshold=1 -format=json > "${INIT_FILE}"
   # 提取 unseal key（init json 是格式化多行，grep 不跨行，用 awk）
   # 优先 unseal_keys_b64（hashicorp vault 2.x），兼容 keys_base64（vault 1.x）
-  unseal_b64=$(awk -F'"' '/unseal_keys_b64/ {for(i=1;i<=NF;i++) if($i~/^[A-Za-z0-9+/=]{20,}$/) print $i; exit}' "${INIT_FILE}")
+  unseal_b64=$(awk -F'"' '/unseal_keys_b64/ {for(i=1;i<=NF;i++) if(match($i, /^[A-Za-z0-9+/=]{20,}$/)) print $i; exit}' "${INIT_FILE}")
   if [ -z "$unseal_b64" ]; then
-    unseal_b64=$(awk -F'"' '/keys_base64/ {for(i=1;i<=NF;i++) if($i~/^[A-Za-z0-9+/=]{20,}$/) print $i; exit}' "${INIT_FILE}")
+    unseal_b64=$(awk -F'"' '/keys_base64/ {for(i=1;i<=NF;i++) if(match($i, /^[A-Za-z0-9+/=]{20,}$/)) print $i; exit}' "${INIT_FILE}")
   fi
   echo "$unseal_b64" > "${UNSEAL_KEY_FILE}"
   if [ ! -s "${UNSEAL_KEY_FILE}" ]; then
