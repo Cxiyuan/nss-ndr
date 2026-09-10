@@ -73,10 +73,15 @@ do_init() {
   log "init（key-shares=1 key-threshold=1，可能已存在 init）..."
   mkdir -p "${SECRETS_DIR}"
   vault operator init -key-shares=1 -key-threshold=1 -format=json > "${INIT_FILE}"
-  # 提取 unseal key（优先 unseal_keys_b64，兼容 keys_base64）
-  grep -o '"unseal_keys_b64":\["[^"]*"' "${INIT_FILE}" | sed 's/.*\["//; s/"$//' > "${UNSEAL_KEY_FILE}" || true
+  # 提取 unseal key（init json 是格式化多行，grep 不跨行，用 awk）
+  # 优先 unseal_keys_b64（hashicorp vault 2.x），兼容 keys_base64（vault 1.x）
+  unseal_b64=$(awk -F'"' '/unseal_keys_b64/ {for(i=1;i<=NF;i++) if($i~/^[A-Za-z0-9+/=]{20,}$/) print $i; exit}' "${INIT_FILE}")
+  if [ -z "$unseal_b64" ]; then
+    unseal_b64=$(awk -F'"' '/keys_base64/ {for(i=1;i<=NF;i++) if($i~/^[A-Za-z0-9+/=]{20,}$/) print $i; exit}' "${INIT_FILE}")
+  fi
+  echo "$unseal_b64" > "${UNSEAL_KEY_FILE}"
   if [ ! -s "${UNSEAL_KEY_FILE}" ]; then
-    grep -o '"keys_base64":\["[^"]*"' "${INIT_FILE}" | sed 's/.*\["//; s/"$//' > "${UNSEAL_KEY_FILE}" || true
+    log "ERROR: 无法提取 unseal key"; cat "${INIT_FILE}" | head -20; exit 1
   fi
   if [ ! -s "${UNSEAL_KEY_FILE}" ]; then
     log "ERROR: 无法从 init 输出提取 unseal key"; cat "${INIT_FILE}"; exit 1
