@@ -42,7 +42,9 @@ start_server() {
     else
       vault server -config="${VAULT_CONFIG}" >/vault/logs/server.log 2>&1 &
     fi
+    # 脚本主流程能看到的全局变量（不能 local，否则函数返回后丢失）
     SERVER_PID=$!
+    export SERVER_PID
   else
     log "vault server 已在运行"
   fi
@@ -143,8 +145,6 @@ fi
 
 log "Vault bootstrap 完成,保持前台..."
 
-if [ -n "${SERVER_PID:-}" ]; then
-  wait "${SERVER_PID}"
-else
-  tail -f /vault/logs/server.log
-fi
+# vault server 是 su-exec 子 shell 启动的（孙进程），wait 无参会立即返回
+# 导致脚本退出 + 容器反复重启。改用 tail -f server.log 保活（alpine busybox 有）
+exec tail -F /vault/logs/server.log
