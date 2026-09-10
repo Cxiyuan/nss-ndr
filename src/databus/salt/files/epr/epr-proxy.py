@@ -47,6 +47,14 @@ ZIP_PATH_CANON = "/epr/%s/%s.zip" % (ZEEK_NAME, ZEEK_PKG)
 ZIP_PATHS = {ZIP_PATH_CANON, "/epr/%s.zip" % ZEEK_PKG}
 ZIP_SIG_PATHS = {p + ".sig" for p in ZIP_PATHS}
 
+# Kibana 还会请求 /package/<name>/<version>[/] 拿「完整包元数据」，
+# 那里的 data_streams 是上游的 43 个 —— 必须一并打补丁，
+# 否则 Kibana 会按 43 个去安装（zip 里多出的 4 个被丢弃）。
+PKG_INFO_PATHS = {
+    "/package/%s/%s" % (ZEEK_NAME, ZEEK_VERSION),
+    "/package/%s/%s/" % (ZEEK_NAME, ZEEK_VERSION),
+}
+
 
 def log(*a):
     print("[epr-proxy]", *a, flush=True)
@@ -56,6 +64,21 @@ def upstream_get(path, query):
     url = UPSTREAM + path + (("?" + query) if query else "")
     req = urllib.request.Request(url, headers={"User-Agent": "nss-ndr-epr-proxy/1.0"})
     return urllib.request.urlopen(req, timeout=60)
+
+
+def _patch_pkg_obj(p):
+    """给单个包元数据对象补上定制 dataset（/search 数组元素 与 /package/... 对象通用）。"""
+    have = {d.get("dataset") for d in p.get("data_streams", [])}
+    n = 0
+    for ds, title in EXTRA_DS:
+        if ds not in have:
+            p.setdefault("data_streams", []).append(
+                {"type": "logs", "dataset": ds, "title": title}
+            )
+            n += 1
+    p["download"] = ZIP_PATH_CANON
+    p["signature_path"] = ZIP_PATH_CANON + ".sig"
+    return n
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -91,18 +114,18 @@ class Handler(BaseHTTPRequestHandler):
         for p in data:
             if p.get("name") != ZEEK_NAME or p.get("version") != ZEEK_VERSION:
                 continue
-            have = {d.get("dataset") for d in p.get("data_streams", [])}
-            for ds, title in EXTRA_DS:
-                if ds not in have:
-                    p.setdefault("data_streams", []).append(
-                        {"type": "logs", "dataset": ds, "title": title}
-                    )
-                    patched += 1
-            p["download"] = ZIP_PATH_CANON
-            p["signature_path"] = ZIP_PATH_CANON + ".sig"
+            patched = _patch_pkg_obj(p)
             break
         log("patch /search?%s -> zeek-%s data_streams +%d" % (query, ZEEK_VERSION, patched))
         return json.dumps(data).encode()
+
+    def _patch_zeek_pkg_info(self, path):
+        """转发 /package/zeek/<ver>[/] 并补上定制 dataset（Kibana 用它决定装哪些 stream）。"""
+        with upstream_get(path, "") as resp:
+            obj = json.loads(resp.read())
+        patched = _patch_pkg_obj(obj) if isinstance(obj, dict) else 0
+        log("patch %s -> zeek-%s data_streams +%d" % (path, ZEEK_VERSION, patched))
+        return json.dumps(obj).encode()
 
     def _proxy(self, path, query):
         """原样透传（含大响应，流式拷贝避免占内存）。"""
@@ -142,7 +165,16 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/", "/health"):
             return self._send(200, b'{"status":"ok","proxy":true}')
 
-        # 3) /search?package=zeek 打补丁
+        # 3) /package/zeek/<ver>[/] 打补丁（Kibana 用它决定安装哪些 data stream）
+        if path.rstrip("/") in {p.rstrip("/") for p in PKG_INFO_PATHS}:
+            try:
+                body = self._patch_zeek_pkg_info(path)
+            except Exception as e:  # noqa: BLE001
+                log("patch %s 失败: %r" % (path, e))
+                return self._send(502, b'{"error":"patch failed"}')
+            return self._send(200, body)
+
+        # 4) /search?package=zeek 打补丁
         qs = parse_qs(query)
         if path == "/search" and qs.get("package", [""])[0] == ZEEK_NAME:
             try:
@@ -152,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(502, b'{"error":"patch failed"}')
             return self._send(200, body)
 
-        # 4) 其余透传
+        # 5) 其余透传
         return self._proxy(path, query)
 
     def do_HEAD(self):
