@@ -9,3 +9,11 @@ i18n.locale: zh-CN
 #   启动即 FATAL: Additional properties are not allowed）。
 #   该选项原用于绕过「旧 saved object 用旧密钥加密导致 EPM Install 卡死」，
 #   全新部署 saved object 由当前 Vault 密钥新建，无历史残留，不再需要。
+#
+# 2026-09-10：Fleet 包仓库指向本地 EPR（nss-ndr-epr 容器）。
+#   上游 epr.elastic.co 的 zeek-5.0.1 只声明 43 个 dataset；本项目的
+#   images/zeek-integration/zeek-5.0.1 定制包声明 47 个（+analyzer/
+#   postgresql/quic/websocket）。本地 EPR 用定制包覆盖官方 zip，
+#   使 Kibana 能安装到 47 dataset 版本。
+xpack.fleet:
+  registryUrl: http://epr:8080

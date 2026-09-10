@@ -163,6 +163,44 @@ write_kv "FLEET_ENROLLMENT_TOKEN" "$FLEET_KEY"
 AGENT_KEY=$(create_enroll_key "nss-ndr-zeek-agent-key" "$ZEEK_POLICY")
 write_kv "ELASTIC_AGENT_ENROLLMENT_TOKEN" "$AGENT_KEY"
 
+# 3.5) 确保 zeek 包已安装且为「含定制 dataset」的版本
+# 上游 epr.elastic.co 的 zeek-5.0.1 只声明 43 个 dataset；本项目本地 EPR
+# （nss-ndr-epr，见 containers/epr.sls）提供 47 个（+4 个 zeek 8.x 新增：
+# analyzer / postgresql / quic / websocket）。若已安装的是 43 个版本，
+# 第 4 步创建 47 streams 会 404：
+#   "Stream template not found, unable to find dataset zeek.analyzer"
+# 故缺失时先卸载→从（本地 EPR）重装，并强制重建 package policy。
+CUSTOM_DS="zeek.analyzer zeek.postgresql zeek.quic zeek.websocket"
+log "3.5) 确保 Zeek Integration 包含定制 dataset"
+INSTALLED_DS=$(kibana_req GET "/api/fleet/epm/packages/zeek/5.0.1" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    items = d['item'].get('data_streams', [])
+    print(' '.join(sorted({x.get('dataset','') for x in items} - {''})))
+except Exception:
+    print('')
+" 2>/dev/null || echo '')
+if [[ -z "$INSTALLED_DS" ]]; then
+  echo "  zeek 包未安装，从 registry 安装..."
+  kibana_req POST "/api/fleet/epm/packages/zeek/5.0.1" >/dev/null || echo "  ⚠ 安装 zeek 包失败"
+else
+  MISSING=""
+  for d in $CUSTOM_DS; do
+    case " $INSTALLED_DS " in *" $d "*) ;; *) MISSING="$MISSING $d" ;; esac
+  done
+  if [[ -n "$MISSING" ]]; then
+    echo "  已安装包缺少:$MISSING（上游 43 dataset 版本）→ 卸载后重装"
+    kibana_req DELETE "/api/fleet/epm/packages/zeek/5.0.1?force=true" >/dev/null 2>&1 || true
+    sleep 3
+    kibana_req POST "/api/fleet/epm/packages/zeek/5.0.1" >/dev/null || echo "  ⚠ 重装 zeek 包失败"
+    # 卸载会删除包资产（pipeline/template）；已存在的 policy 变成悬空，必须重建
+    FORCE_RECREATE="true"
+  else
+    echo "  ✓ zeek 包已安装且含全部定制 dataset"
+  fi
+fi
+
 # 4) Zeek Integration package policy（幂等）
 # 启用 Zeek Integration 5.0.1 全部 43 个 dataset（与 manifest.yml 一致）。
 # 每个 stream 的 filenames / tags 取自 images/zeek-integration/zeek-5.0.1/data_stream/<ds>/manifest.yml
@@ -196,7 +234,7 @@ except Exception:
 " 2>/dev/null || echo '')
   PP_PAYLOAD='{
     "name": "nss-ndr-zeek-1.0.0",
-    "description": "NSS-NDR Zeek Integration (43 datasets, full coverage)",
+    "description": "NSS-NDR Zeek Integration (all datasets, full coverage)",
     "namespace": "default",
     "policy_id": "nss-ndr-zeek-policy",
     "package": {"name": "zeek", "version": "5.0.1"},
@@ -294,7 +332,7 @@ for p in json.load(sys.stdin).get('items', []):
     echo "  ⚠ Zeek Integration package policy 已存在但只有 $STREAM_COUNT streams（<43）"
     echo "    升级方式: /opt/nss-ndr/scripts/fleet-setup.sh --force"
   else
-    echo "  ✓ Zeek Integration package policy 已存在（43 streams）"
+    echo "  ✓ Zeek Integration package policy 已存在（$STREAM_COUNT streams）"
   fi
 fi
 
