@@ -27,7 +27,9 @@ SEED_KIBANA_ENCRYPTION_KEY="${SEED_KIBANA_ENCRYPTION_KEY:-}"
 
 log() { echo "[vault-bootstrap] $*"; }
 
-health() { wget -q -O- "${VAULT_ADDR}/v1/sys/health" 2>/dev/null; }
+# vault server 启动过程中 /v1/sys/health 在 sealed 状态返回 501（不支持），
+# 改用 /v1/sys/init（unsealed/initialized server 总可访问）作就绪探测
+health() { wget -q -O- "${VAULT_ADDR}/v1/sys/init" >/dev/null 2>&1; }
 
 # ---------- 1) 启动 vault server（后台） ----------
 start_server() {
@@ -49,7 +51,7 @@ start_server() {
 wait_vault() {
   log "等待 vault server 就绪..."
   i=0
-  until health | grep -q '"initialized"'; do
+  until health >/dev/null 2>&1; do
     i=$((i+1))
     if [ "$i" -gt 90 ]; then
       log "ERROR: vault 90s 内未就绪"
@@ -61,8 +63,9 @@ wait_vault() {
   log "vault server 就绪"
 }
 
-is_initialized() { health | grep -q '"initialized":true'; }
-is_sealed()      { health | grep -q '"sealed":true'; }
+# is_initialized/is_sealed 走 /v1/sys/init（health 在 sealed 状态下 501 不工作）
+is_initialized() { wget -q -O- "${VAULT_ADDR}/v1/sys/init" 2>/dev/null | grep -q '"initialized":true'; }
+is_sealed()      { wget -q -O- "${VAULT_ADDR}/v1/sys/init" 2>/dev/null | grep -q '"sealed":true'; }
 
 do_init() {
   log "首次 init（key-shares=1 key-threshold=1）..."

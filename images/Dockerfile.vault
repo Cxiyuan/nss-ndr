@@ -12,6 +12,10 @@
 ARG VAULT_VERSION=latest
 FROM hashicorp/vault:${VAULT_VERSION}
 
+# CACHE_BUST（2026-09-10）：vault-bootstrap.sh 修复后必须强制 layer invalidate
+# 不加 ARG 时 buildx 缓存命中旧层导致新脚本进不了镜像
+ARG CACHE_BUST=v3
+
 # bootstrap 脚本（覆盖 CMD，容器启动后由 entrypoint 执行）
 COPY --chmod=755 vault/vault-bootstrap.sh /usr/local/bin/vault-bootstrap
 
