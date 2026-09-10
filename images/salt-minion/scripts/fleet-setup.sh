@@ -163,19 +163,53 @@ write_kv "FLEET_ENROLLMENT_TOKEN" "$FLEET_KEY"
 AGENT_KEY=$(create_enroll_key "nss-ndr-zeek-agent-key" "$ZEEK_POLICY")
 write_kv "ELASTIC_AGENT_ENROLLMENT_TOKEN" "$AGENT_KEY"
 
-# 3.5) 确保 zeek 包已安装
-# Kibana 从 xpack.fleet.registryUrl 拉包（默认公网 epr.elastic.co）。
-# 上游 zeek-5.0.1 声明 43 个 dataset；第 4 步会按「已安装包实际声明的
-# dataset」自动过滤 stream，故 43 个也能正常建策略。
-# 注：本项目 images/zeek-integration/zeek-5.0.1 里另有 4 个新增 dataset
-# （analyzer/postgresql/quic/websocket），需本地 EPR 才能进 Kibana，
-# 当前不启用（验收不要求）。
-log "3.5) 确保 Zeek Integration 已安装"
-if kibana_req GET "/api/fleet/epm/packages/zeek/5.0.1" >/dev/null 2>&1; then
-  echo "  ✓ zeek 包已安装"
-else
-  echo "  zeek 包未安装，从 registry 安装..."
+# 3.5) 确保 zeek 包已安装且含定制 dataset
+# Kibana 从 xpack.fleet.registryUrl 拉包 = 本地微型 EPR（nss-ndr-epr，
+# 见 containers/epr.sls），它给 zeek-5.0.1 补上 4 个定制 dataset
+# （analyzer / postgresql / quic / websocket），共 47 个。
+# 若已安装的是公网上游的 43 个版本，第 4 步创建 47 streams 会 404：
+#   "Stream template not found, unable to find dataset zeek.analyzer"
+# 故缺定制 dataset 时先卸载→重装，并强制重建 package policy
+# （卸载会删包资产，旧 policy 会悬空）。
+CUSTOM_DS="zeek.analyzer zeek.postgresql zeek.quic zeek.websocket"
+log "3.5) 确保 Zeek Integration 含定制 dataset"
+INSTALLED_DS=$(kibana_req GET "/api/fleet/epm/packages/zeek/5.0.1" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    items = d['item'].get('data_streams', [])
+    print(' '.join(sorted({x.get('dataset','') for x in items} - {''})))
+except Exception:
+    print('')
+" 2>/dev/null || echo '')
+if [[ -z "$INSTALLED_DS" ]]; then
+  echo "  zeek 包未安装，从 EPR 安装..."
   kibana_req POST "/api/fleet/epm/packages/zeek/5.0.1" >/dev/null || echo "  ⚠ 安装 zeek 包失败"
+else
+  MISSING=""
+  for d in $CUSTOM_DS; do
+    case " $INSTALLED_DS " in *" $d "*) ;; *) MISSING="$MISSING $d" ;; esac
+  done
+  if [[ -n "$MISSING" ]]; then
+    echo "  已安装包缺少:$MISSING（公网 43 dataset 版本）→ 卸载后从本地 EPR 重装"
+    # 必须先删引用该包的 package policy，否则 Kibana 拒绝卸载包
+    # （in use），卸载失败→重装变成 no-op，自始至终还是 43 个。
+    OLD_ID=$(kibana_req GET "/api/fleet/package_policies" | python3 -c "
+import sys, json
+for p in json.load(sys.stdin).get('items', []):
+  if p.get('name') == 'nss-ndr-zeek-1.0.0':
+    print(p.get('id')); break
+" 2>/dev/null || true)
+    if [[ -n "$OLD_ID" ]]; then
+      kibana_req DELETE "/api/fleet/package_policies/$OLD_ID?force=true" >/dev/null 2>&1 || true
+      echo "  ✓ 已删除旧 package policy（$OLD_ID）"
+    fi
+    kibana_req DELETE "/api/fleet/epm/packages/zeek/5.0.1?force=true" >/dev/null 2>&1 || true
+    sleep 3
+    kibana_req POST "/api/fleet/epm/packages/zeek/5.0.1" >/dev/null || echo "  ⚠ 重装 zeek 包失败"
+  else
+    echo "  ✓ zeek 包已安装且含全部定制 dataset"
+  fi
 fi
 
 # 4) Zeek Integration package policy（幂等）

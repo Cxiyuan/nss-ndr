@@ -63,6 +63,15 @@ databus:
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt:latest
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/vault:latest
 
+  # 微型 EPR 代理（containers/epr.sls）：给 Kibana 提供含定制 47 dataset 的
+  # zeek-5.0.1。复用 salt 镜像（python:3.10-alpine 基座，服务器已有）；
+  # 定制包 zip 从 source_agent_image 烘焙的目录抽出生成
+  epr:
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt:latest
+    ip: 192.168.250.70
+    source_agent_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
+    zeek_package: zeek-5.0.1
+
   fixed_ips:
     vault: 192.168.250.10
     elasticsearch: 192.168.250.40
@@ -73,6 +82,7 @@ databus:
     redis: 192.168.250.60
     llm_server: 192.168.250.90
     salt_master_api: 192.168.250.5
+    epr: 192.168.250.70
 
   host_ports:
     es: 9200

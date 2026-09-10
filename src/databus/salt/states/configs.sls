@@ -36,7 +36,8 @@ ensure-config-root:
   {'src': 'salt://databus/files/kibana/kibana.yml',                'dst': cfg_root ~ '/kibana/kibana.yml', 'mode': '644'},
   {'src': 'salt://databus/files/redis/redis.conf',                 'dst': cfg_root ~ '/redis/redis.conf', 'mode': '644'},
   {'src': 'salt://databus/files/elastic-agent/fleet-elastic-agent.yml', 'dst': cfg_root ~ '/elastic-agent/fleet-elastic-agent.yml', 'mode': '644'},
-  {'src': 'salt://databus/files/vault/vault.hcl',                  'dst': cfg_root ~ '/vault/vault.hcl', 'mode': '644'}
+  {'src': 'salt://databus/files/vault/vault.hcl',                  'dst': cfg_root ~ '/vault/vault.hcl', 'mode': '644'},
+  {'src': 'salt://databus/files/epr/epr-proxy.py',                 'dst': cfg_root ~ '/epr/epr-proxy.py', 'mode': '644'}
 ] %}
 
 {% for cfg in configs %}

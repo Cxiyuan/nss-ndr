@@ -120,12 +120,33 @@ deploy-bootstrap-tokens:
     - require:
       - http: wait-es-healthy
 
+# 本地微型 EPR（给 Kibana 提供定制 47-dataset zeek 包）
+deploy-epr:
+  salt.state:
+    - tgt: {{ databus.get('target', 'databus') }}
+    - sls: databus.containers.epr
+    - require:
+      - salt: deploy-network
+      - salt: deploy-volumes
+      - salt: deploy-configs
+      - salt: deploy-salt-minion
+
+wait-epr-ready:
+  http.wait_for_successful_query:
+    - name: http://epr:8080/
+    - status: 200
+    - wait_for: 300
+    - request_interval: 5
+    - require:
+      - salt: deploy-epr
+
 deploy-kibana:
   salt.state:
     - tgt: {{ databus.get('target', 'databus') }}
     - sls: databus.containers.kibana
     - require:
       - salt: deploy-bootstrap-tokens
+      - http: wait-epr-ready
 
 wait-kibana-healthy:
   http.wait_for_successful_query:
@@ -144,6 +165,7 @@ deploy-fleet-setup:
     - sls: databus.fleet-setup
     - require:
       - http: wait-kibana-healthy
+      - http: wait-epr-ready
 
 deploy-llm-server:
   salt.state:
