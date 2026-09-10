@@ -11,3 +11,9 @@ build/
 # 产品发布改为镜像直发（CI 推送 GHCR）；不再使用本地 .tar / .run 安装包
 images/offline/
 部署发布/
+
+# 镜像离线包（本机下载后 scp 到服务器 docker load，不入库）
+docker/*.tar
+docker/*.tar.gz
+docker/*.tar.d/
+docker/*.tar.gz.d/
