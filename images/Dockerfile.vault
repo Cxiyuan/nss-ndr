@@ -12,14 +12,8 @@
 ARG VAULT_VERSION=latest
 FROM hashicorp/vault:${VAULT_VERSION}
 
-# CACHE_BUST（2026-09-10）：vault-bootstrap.sh 修复后必须强制 layer invalidate
-# 不加 ARG 时 buildx 缓存命中旧层导致新脚本进不了镜像
-ARG CACHE_BUST=v3
-
-# 真正强制 buildx cache 失效（ARG 不影响 layer hash，必须 RUN 一个真命令）
-ARG CACHE_BUST=2026-09-10-v5
-RUN echo "vault-bootstrap cache-bust 2026-09-10-v5" > /dev/null
-
+# 注意：本镜像以 vault(uid 100) 运行；COPY --chmod 需 BuildKit（CI 用 buildx 支持）
+# 官方 ENTRYPOINT=docker-entrypoint.sh（chown+setcap 后 exec CMD），CMD=vault-bootstrap
 # bootstrap 脚本（覆盖 CMD，容器启动后由 entrypoint 执行）
 COPY --chmod=755 vault/vault-bootstrap.sh /usr/local/bin/vault-bootstrap
 
