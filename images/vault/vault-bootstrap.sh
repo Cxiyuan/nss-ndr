@@ -70,7 +70,7 @@ is_initialized() { wget -q -O- "${VAULT_ADDR}/v1/sys/init" 2>/dev/null | grep -q
 is_sealed()      { wget -q -O- "${VAULT_ADDR}/v1/sys/init" 2>/dev/null | grep -q '"sealed":true'; }
 
 do_init() {
-  log "首次 init（key-shares=1 key-threshold=1）..."
+  log "init（key-shares=1 key-threshold=1，可能已存在 init）..."
   mkdir -p "${SECRETS_DIR}"
   vault operator init -key-shares=1 -key-threshold=1 -format=json > "${INIT_FILE}"
   # 提取 unseal key（优先 unseal_keys_b64，兼容 keys_base64）
@@ -130,17 +130,29 @@ seed_kv() {
 start_server
 wait_vault
 
+# vault 启动后状态判断 + 自动恢复：
+# 1) init 文件存在 + server sealed（之前 init 过但 data 清了）→ 删旧 init/secrets,
+#    do_init 重建（同时 vault 自动 unseal 因 init 文件含 keys）
+# 2) init 文件存在 + server unsealed（正常 init 完）→ 跳过 do_init
+# 3) 无 init 文件 → do_init（全新 init）
+if is_initialized; then
+  if is_sealed; then
+    log "检测到历史 init 文件但 vault sealed(数据卷空),清理 secrets 后重 init"
+    rm -f "${INIT_FILE}" "${UNSEAL_KEY_FILE}" "${RO_TOKEN_FILE}" "${SEED_FLAG}" 2>/dev/null || true
+  fi
+fi
+
 if ! is_initialized; then
   do_init
 fi
-if is_sealed; then
+if [ -f "${UNSEAL_KEY_FILE}" ] && is_sealed; then
   do_unseal
 fi
 if [ ! -f "${RO_TOKEN_FILE}" ]; then
-  create_ro_token
+  create_ro_token || log "WARN: 创建 RO token 失败（vault 可能 sealed,后续重试）"
 fi
 if [ ! -f "${SEED_FLAG}" ]; then
-  seed_kv
+  seed_kv || log "WARN: kv seed 失败（vault 可能 sealed,后续重试）"
 fi
 
 log "Vault bootstrap 完成,保持前台..."
