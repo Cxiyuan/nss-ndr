@@ -16,6 +16,10 @@ FROM hashicorp/vault:${VAULT_VERSION}
 # 不加 ARG 时 buildx 缓存命中旧层导致新脚本进不了镜像
 ARG CACHE_BUST=v3
 
+# 真正强制 buildx cache 失效（ARG 不影响 layer hash，必须 RUN 一个真命令）
+ARG CACHE_BUST=2026-09-10-v5
+RUN echo "vault-bootstrap cache-bust 2026-09-10-v5" > /dev/null
+
 # bootstrap 脚本（覆盖 CMD，容器启动后由 entrypoint 执行）
 COPY --chmod=755 vault/vault-bootstrap.sh /usr/local/bin/vault-bootstrap
 
