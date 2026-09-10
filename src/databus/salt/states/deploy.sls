@@ -120,36 +120,12 @@ deploy-bootstrap-tokens:
     - require:
       - http: wait-es-healthy
 
-# 本地 EPR（自定义 zeek 包 47 dataset；Kibana Fleet 从中安装）
-# 上游 epr.elastic.co 的 zeek-5.0.1 只有 43 dataset，缺 analyzer/postgresql/
-# quic/websocket，fleet-setup 提交 47 streams 会 404。
-deploy-epr:
-  salt.state:
-    - tgt: {{ databus.get('target', 'databus') }}
-    - sls: databus.containers.epr
-    - require:
-      - salt: deploy-network
-      - salt: deploy-volumes
-      - salt: deploy-configs
-      - salt: deploy-salt-minion
-
-# EPR 需索引 29903 个包（~3 分钟）才开始监听 8080
-wait-epr-ready:
-  http.wait_for_successful_query:
-    - name: http://epr:8080/
-    - status: 200
-    - wait_for: 900
-    - request_interval: 15
-    - require:
-      - salt: deploy-epr
-
 deploy-kibana:
   salt.state:
     - tgt: {{ databus.get('target', 'databus') }}
     - sls: databus.containers.kibana
     - require:
       - salt: deploy-bootstrap-tokens
-      - http: wait-epr-ready
 
 wait-kibana-healthy:
   http.wait_for_successful_query:
@@ -168,7 +144,6 @@ deploy-fleet-setup:
     - sls: databus.fleet-setup
     - require:
       - http: wait-kibana-healthy
-      - http: wait-epr-ready
 
 deploy-llm-server:
   salt.state:

@@ -16,7 +16,6 @@ include:
   - databus.containers.salt-minion
   - databus.containers.elasticsearch
   - databus.containers.redis
-  - databus.containers.epr
   - databus.containers.kibana
   - databus.containers.fleet-server
   - databus.containers.elastic-agent

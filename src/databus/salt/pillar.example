@@ -62,18 +62,6 @@ databus:
       tar: nss-ndr_llm-server_latest.tar
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt:latest
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/vault:latest
-    # 本地 EPR（Fleet 包仓库）。官方 distribution 镜像 ~43GB，不适合推 GHCR，
-    # 故直接从 docker.elastic.co 拉（服务器可直连）
-    - name: docker.elastic.co/package-registry/distribution:9.5.2
-
-  # 本地 Elastic Package Registry：提供含定制 47 dataset 的 zeek-5.0.1
-  # （覆盖镜像内官方 43 dataset 版），Kibana xpack.fleet.registryUrl 指向它
-  epr:
-    image: docker.elastic.co/package-registry/distribution:9.5.2
-    ip: 192.168.250.70
-    # 定制包从 elastic-agent-zeek 镜像烘焙的目录抽出并打 zip
-    source_agent_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/elastic-agent-zeek:9.5.2
-    zeek_package: zeek-5.0.1
 
   fixed_ips:
     vault: 192.168.250.10
@@ -85,7 +73,6 @@ databus:
     redis: 192.168.250.60
     llm_server: 192.168.250.90
     salt_master_api: 192.168.250.5
-    epr: 192.168.250.70
 
   host_ports:
     es: 9200

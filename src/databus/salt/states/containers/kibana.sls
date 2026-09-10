@@ -44,7 +44,7 @@ nss-ndr-kibana:
       - docker_image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/kibana:9.5.2
       - docker_container: nss-ndr-elasticsearch
       - file: /opt/nss/ndr/kibana/kibana.yml
-    # kibana.yml 变更（如 xpack.fleet.registryUrl）必须重启才生效
-    # （docker_container.running 不会因为 bind 文件内容变而重启）
+    # kibana.yml 变更必须重启才生效（docker_container.running 不会因为
+    # bind 文件内容变化而重启容器）
     - watch:
       - file: /opt/nss/ndr/kibana/kibana.yml
