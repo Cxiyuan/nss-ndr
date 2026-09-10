@@ -4,9 +4,8 @@ server.host: 0.0.0.0
 i18n.locale: zh-CN
 
 # 加密 key 由容器 env XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY 注入(Vault 派生),不入镜像
-
-# 2026-09-08 修复：禁用 Fleet message signing
-# 历史 saved object (fleet-message-signing-keys) 用旧密钥加密,当前 Vault 密钥解密失败 → Install with state machine 卡死 → zeek-5.0.1 EPM 包装不上
-# 临时禁用 message signing 让 EPM install 走通;后续 saved object 重建后可重新启用
-xpack.fleet:
-  useSigningKey: false
+#
+# 2026-09-10：移除 xpack.fleet.useSigningKey（Kibana 9.5.2 已删除该配置项，
+#   启动即 FATAL: Additional properties are not allowed）。
+#   该选项原用于绕过「旧 saved object 用旧密钥加密导致 EPM Install 卡死」，
+#   全新部署 saved object 由当前 Vault 密钥新建，无历史残留，不再需要。

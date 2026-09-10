@@ -169,7 +169,7 @@ write_kv "ELASTIC_AGENT_ENROLLMENT_TOKEN" "$AGENT_KEY"
 # 的 vars.filenames.default / vars.tags.default —— 不要再手工挑选，否则会漏。
 # 升级路径：旧版只配 5 streams 的部署，带 --force（或 NSS_ZEEK_POLICY_FORCE_RECREATE=1）
 #           会先删除旧的 nss-ndr-zeek-1.0.0，再重建为 43 streams。
-log "4) 创建 Zeek Integration package policy（47 个 dataset：43 原生 + 4 zeek 8.x 新增）"
+log "4) 创建 Zeek Integration package policy（47 个 dataset：43 原生 + 4 zeek 8.x 新增；按已安装包自动过滤）"
 if [[ "$FORCE_RECREATE" == "true" ]]; then
   OLD_ID=$(kibana_req GET "/api/fleet/package_policies" | python3 -c "
 import sys, json
@@ -183,7 +183,18 @@ for p in json.load(sys.stdin).get('items', []):
   fi
 fi
 if ! kibana_req GET "/api/fleet/package_policies" | grep -q '"name":"nss-ndr-zeek-1.0.0"'; then
-  kibana_req POST "/api/fleet/package_policies" '{
+  # 仅提交「已安装 zeek 包实际声明」的 dataset：提交包内不存在的 dataset 会 404。
+  # 上游 EPR 的 zeek-5.0.1 声明 43 个；若接入本地 EPR 提供定制包
+  # （+analyzer/postgresql/quic/websocket）则为 47。
+  PKG_DS=$(kibana_req GET "/api/fleet/epm/packages/zeek/5.0.1" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(' '.join(sorted({x.get('dataset','') for x in d['item'].get('data_streams', [])} - {''})))
+except Exception:
+    print('')
+" 2>/dev/null || echo '')
+  PP_PAYLOAD='{
     "name": "nss-ndr-zeek-1.0.0",
     "description": "NSS-NDR Zeek Integration (43 datasets, full coverage)",
     "namespace": "default",
@@ -244,8 +255,31 @@ if ! kibana_req GET "/api/fleet/package_policies" | grep -q '"name":"nss-ndr-zee
         {"id": "nss-ndr-zeek-websocket", "enabled": true, "data_stream": {"type": "logs", "dataset": "zeek.websocket"}, "vars": {"filenames": {"type": "text", "value": ["websocket.log"]}, "tags": {"type": "text", "value": ["forwarded", "zeek-websocket"]}, "preserve_original_event": {"type": "bool", "value": false}}}
       ]
     }]
-  }' >/dev/null
-  echo "  ✓ Zeek Integration package policy 已创建（47 streams 全启用：43 原生 + 4 zeek 8.x 新增）"
+  }'
+  # 按已安装包声明的 dataset 过滤（PKG_DS 为空则不过滤，原样提交）
+  if [[ -n "$PKG_DS" ]]; then
+    PP_PAYLOAD=$(printf '%s' "$PP_PAYLOAD" | PKG_DS="$PKG_DS" python3 -c "
+import sys, json, os
+d = json.load(sys.stdin)
+ok = set(os.environ.get('PKG_DS', '').split())
+dropped = set()
+for inp in d.get('inputs', []):
+    kept = []
+    for s in inp.get('streams', []):
+        ds = s.get('data_stream', {}).get('dataset')
+        if ds in ok:
+            kept.append(s)
+        else:
+            dropped.add(ds)
+    inp['streams'] = kept
+if dropped:
+    sys.stderr.write('  跳过包内不存在的 dataset: %s\n' % ', '.join(sorted(dropped)))
+print(json.dumps(d))
+")
+  fi
+  PP_STREAMS=$(printf '%s' "$PP_PAYLOAD" | python3 -c "import sys,json; print(sum(len(i.get('streams',[])) for i in json.load(sys.stdin).get('inputs',[])))")
+  kibana_req POST "/api/fleet/package_policies" "$PP_PAYLOAD" >/dev/null
+  echo "  ✓ Zeek Integration package policy 已创建（$PP_STREAMS streams 启用）"
 else
   # 检查现有 policy 的 stream 数，若 <43 提示用户用 --force 升级
   STREAM_COUNT=$(kibana_req GET "/api/fleet/package_policies" | python3 -c "
