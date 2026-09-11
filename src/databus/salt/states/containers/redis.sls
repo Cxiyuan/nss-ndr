@@ -31,7 +31,21 @@ nss-ndr-redis:
                 - redis
     - environment:
         - TZ={{ databus.tz }}
-    - command: ["redis-server", "--requirepass", "{{ databus.creds.redis_password }}", "--maxmemory", "1gb", "--maxmemory-policy", "allkeys-lru"]
+    # ⚠ 必须把配置文件作为 redis-server 的第一个参数传进去：
+    #   原先只传 --requirepass/--maxmemory/--maxmemory-policy，没传配置文件 →
+    #   bind / protected-mode / appendonly 等【全部不生效】。
+    #   实测线上 appendonly=no（尽管 redis.conf 写的是 yes）—— Redis 实际
+    #   根本没有持久化，容器一重建数据就丢（analyze-agent 的任务队列在内）。
+    #   命令行参数优先于配置文件，两边的 maxmemory/maxmemory-policy 保持一致。
+    - command:
+        - redis-server
+        - /usr/local/etc/redis/redis.conf
+        - --requirepass
+        - "{{ databus.creds.redis_password }}"
+        - --maxmemory
+        - 1gb
+        - --maxmemory-policy
+        - volatile-lru
     - log_driver: json-file
     - require:
       - docker_network: ensure-nss-net-present
