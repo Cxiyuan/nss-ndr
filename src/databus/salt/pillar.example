@@ -101,9 +101,11 @@ databus:
     port: 8080
     model_path: /models/Qwen3.8-2B-Q4_K_M.gguf
     model_alias: Qwen3.8-2B-Distill
-    # ctx 16384（镜像默认）；并行 1 避免单机 CPU 多 slot 抢占
+    # ctx 16384（镜像默认）；context_ratio=1.0 不再缩为 75%；
+    # parallel=4 允许并发（llama.cpp 会自动批处理，总吞吐提升，单请求速度基本不变）
     context_size: 16384
-    parallel: 1
+    parallel: 4
+    context_ratio: 1.0
     # 减小 batch / ubatch 让单会话推理更轻量
     batch_size: 1024
     ubatch_size: 256
