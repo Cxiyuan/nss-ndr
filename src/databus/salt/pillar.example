@@ -101,11 +101,13 @@ databus:
     port: 8080
     model_path: /models/Qwen3.8-2B-Q4_K_M.gguf
     model_alias: Qwen3.8-2B-Distill
-    # ctx 16384（镜像默认）；context_ratio=1.0 不再缩为 75%；
-    # parallel=4 允许并发（llama.cpp 会自动批处理，总吞吐提升，单请求速度基本不变）
-    context_size: 16384
+    # ctx：llama.cpp 的 --ctx-size 是【总】context，--parallel N 会均分给每个 slot。
+    #   65536 总 ctx ÷ parallel 4 = 每 slot 16384（单请求可用 16K）。
+    #   注意：改 parallel 时 context_size 要同步乘除——parallel=1 时写 16384 即可。
+    #   镜像内 lamma-server 日志会打印 n_ctx_slot 供核对。
+    # parallel=4：llama.cpp 自动批处理并发请求，总吞吐 ~1.85×（单请求速度基本不变）。
+    context_size: 65536
     parallel: 4
-    context_ratio: 1.0
     # 减小 batch / ubatch 让单会话推理更轻量
     batch_size: 1024
     ubatch_size: 256
@@ -114,17 +116,19 @@ databus:
     # 空 = entrypoint 按宿主机 CPU 实时计算 threads + ctx
     threads: ""
     api_key: ""
-    extra_args: ""
     # ---------- 生产调优（2026-09 线上验证） ----------
-    # Qwen3 思考模式会耗尽输出预算（content 空→“无法解析”）；长 prompt 超单 slot ctx
-    # 会被 llama-server 拒绝（cancel task）。线上 pillar 设置：
-    #   extra_args="--chat-template-kwargs {\"enable_thinking\":false}"
-    #   context_ratio: 1.0   # ctx 16384；parallel 1 → 单 slot 16384
+    # 1) 关思考链（推荐）：Qwen3 思考模式会先把输出预算耗在 reasoning 上，
+    #    content 长时间为空（下游解析不到结果）；关掉后同预算全给正文，
+    #    首 token 从 ~1.8s 降到 ~0.34s。
+    # 2) 长 prompt 处理很慢（实测唯一内容约 35~73 tok/s；重复内容命中 KV
+    #    缓存才“看起来”上千 tok/s），长 prompt 需耐心或后续调 KV 精度/ubatch。
+    extra_args: "--reasoning off"
     # ---------- 资源比例（默认 0.75 = 占宿主机 75%） ----------
     # 换硬件环境无需修改数值，按需覆盖（Docker 侧硬限用动态 cpuset_cpus，见 llm-server.sls）。
     cpu_ratio: 0.75
     threads_ratio: 0.75
-    context_ratio: 0.75
+    # 1.0 = 不再对 context_size 缩水（否则 0.75 会把 65536 变成 49152）
+    context_ratio: 1.0
 
   # Salt Master + Salt API（容器化，共用 salt:latest，entrypoint 选 master）
   salt_master_api:
