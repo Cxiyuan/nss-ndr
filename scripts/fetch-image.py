@@ -32,7 +32,19 @@ import tarfile
 import time
 import urllib.request
 
-REGISTRY = "https://ghcr.io"
+# 支持的 registry（服务器上不去 Docker Hub / ghcr.io 时，在本机下载）
+REGISTRIES = {
+    "ghcr.io": {
+        "api": "https://ghcr.io",
+        "token": "https://ghcr.io/token?scope=repository:{repo}:pull&service=ghcr.io",
+    },
+    "docker.io": {
+        "api": "https://registry-1.docker.io",
+        "token": "https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull",
+    },
+}
+# Docker Hub 官方镜像的仓库名需要补 library/ 前缀（如 alpine → library/alpine）
+DOCKERHUB_OFFICIAL = {"alpine", "python", "redis", "busybox", "ubuntu"}
 ACCEPT = ",".join([
     "application/vnd.oci.image.index.v1+json",
     "application/vnd.docker.distribution.manifest.list.v2+json",
@@ -50,17 +62,27 @@ def http(url, token=None, accept=None):
     return urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=180)
 
 
-def get_token(repo):
-    return json.load(http("%s/token?scope=repository:%s:pull&service=ghcr.io" % (REGISTRY, repo)))["token"]
+def resolve(reg, repo):
+    """返回 (api_base, token_url)；reg 为 ghcr.io / docker.io"""
+    if reg == "docker.io":
+        if "/" not in repo:
+            repo = "library/" + repo
+        return REGISTRIES["docker.io"]["api"], REGISTRIES["docker.io"]["token"].format(repo=repo), repo
+    r = REGISTRIES["ghcr.io"]
+    return r["api"], r["token"].format(repo=repo), repo
 
 
-def download_blob(repo, token, digest, dest, expected_size=None):
+def get_token(token_url):
+    return json.load(http(token_url))["token"]
+
+
+def download_blob(api, repo, token, digest, dest, expected_size=None):
     if expected_size and os.path.exists(dest) and os.path.getsize(dest) == expected_size:
         return 0
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     tmp = dest + ".part"
     n = 0
-    with http("%s/v2/%s/blobs/%s" % (REGISTRY, repo, digest), token) as r, open(tmp, "wb") as fh:
+    with http("%s/v2/%s/blobs/%s" % (api, repo, digest), token) as r, open(tmp, "wb") as fh:
         while True:
             c = r.read(1 << 16)
             if not c:
@@ -72,7 +94,15 @@ def download_blob(repo, token, digest, dest, expected_size=None):
 
 
 def main():
-    repo, tag, out_tar = sys.argv[1], sys.argv[2], sys.argv[3]
+    # 调用形式：
+    #   fetch-image.py <repo> <tag> <out.tar.gz> [ref1 ref2 ...]
+    #   fetch-image.py <registry>/<repo> <tag> <out.tar.gz> [refs...]   # registry: ghcr.io | docker.io
+    spec, tag, out_tar = sys.argv[1], sys.argv[2], sys.argv[3]
+    reg = "ghcr.io"
+    for r in ("ghcr.io", "docker.io"):
+        if spec.startswith(r + "/"):
+            reg, spec = r, spec[len(r) + 1:]
+    api, token_url, repo = resolve(reg, spec)
     refs = sys.argv[4:] or ["%s:%s" % (repo, tag)]
 
     work = out_tar + ".d"
@@ -80,14 +110,15 @@ def main():
     blobdir = os.path.join(work, "_blobs")
     os.makedirs(blobdir, exist_ok=True)
 
-    token = get_token(repo)
+    print("[0/4] registry=%s repo=%s tag=%s" % (reg, repo, tag), flush=True)
+    token = get_token(token_url)
     print("[1/4] 取 manifest ...", flush=True)
-    m = json.load(http("%s/v2/%s/manifests/%s" % (REGISTRY, repo, tag), token, ACCEPT))
+    m = json.load(http("%s/v2/%s/manifests/%s" % (api, repo, tag), token, ACCEPT))
     if "manifests" in m:  # manifest list → linux/amd64
         for x in m["manifests"]:
             p = x.get("platform", {})
             if p.get("architecture") == "amd64" and p.get("os") == "linux":
-                m = json.load(http("%s/v2/%s/manifests/%s" % (REGISTRY, repo, x["digest"]), token, ACCEPT))
+                m = json.load(http("%s/v2/%s/manifests/%s" % (api, repo, x["digest"]), token, ACCEPT))
                 break
         else:
             raise SystemExit("找不到 linux/amd64 manifest")
@@ -100,11 +131,11 @@ def main():
     print("[2/4] 下载 blobs ...", flush=True)
     t0, done = time.time(), 0
     cfg_path = os.path.join(blobdir, "config")
-    download_blob(repo, token, cfg_digest, cfg_path, m["config"]["size"])
+    download_blob(api, repo, token, cfg_digest, cfg_path, m["config"]["size"])
     layer_paths = []
     for i, l in enumerate(layers, 1):
         p = os.path.join(blobdir, "layer%03d" % i)
-        download_blob(repo, token, l["digest"], p, l["size"])
+        download_blob(api, repo, token, l["digest"], p, l["size"])
         layer_paths.append(p)
         done += l["size"]
         print("\r      %d/%d 层  %.1f/%.1fMB" % (i, len(layers), done / 1048576, total / 1048576), end="", flush=True)

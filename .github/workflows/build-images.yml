@@ -117,6 +117,15 @@ jobs:
             versioned: 'true'
             smoke: 'true'
 
+          # EasyTier（P2P 组网；官方镜像只在 Docker Hub，服务器连不上，
+          # 故由 CI 转到 GHCR 统一分发）
+          - image: easytier
+            context: images
+            dockerfile: images/Dockerfile.easytier
+            platforms: linux/amd64
+            build_args: ''
+            fixed_tags: type=raw,value=v2.6.4
+
           # Vault（凭据管理：应用密码唯一来源；vault.hcl + bootstrap 已 bake 进镜像）
           - image: vault
             context: images

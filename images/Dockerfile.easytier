@@ -1,0 +1,26 @@
+# ============================================================================
+# 数据总线 · EasyTier 镜像（从 Docker Hub 转发到 GHCR）
+# ----------------------------------------------------------------------------
+# 为什么要有这个 Dockerfile：
+#   项目所有镜像统一从 ghcr.nju.edu.cn（→ ghcr.io）拉取，而 EasyTier 官方镜像
+#   只在 Docker Hub（easytier/easytier）。服务器实测【连不上 Docker Hub】
+#   （registry-1.docker.io 连接超时），所以由 CI 从 Docker Hub 拉下来再推 GHCR，
+#   服务器只从 nju 拉，不需要离线 tar 传输。
+#
+# 版本固定：不用 :latest，避免上游静默升级导致组网行为变化。
+# 升级步骤：改 EASYTIER_VERSION → push → CI 构建 → 服务器拉 tag。
+#
+# 容器运行要求（见 states/containers/easytier.sls）：
+#   network_mode: host + cap_add(NET_ADMIN/NET_RAW) + /dev/net/tun
+#   —— EasyTier 要建 TUN 接口，且要让宿主机/其他容器走虚拟网，必须 host 网络。
+# ============================================================================
+ARG EASYTIER_VERSION=v2.6.4
+FROM easytier/easytier:${EASYTIER_VERSION}
+
+LABEL org.opencontainers.image.title="nss-ndr/easytier" \
+      org.opencontainers.image.description="EasyTier P2P 组网（转发自 Docker Hub easytier/easytier）" \
+      org.opencontainers.image.version="${EASYTIER_VERSION}" \
+      org.opencontainers.image.source="https://github.com/EasyTier/EasyTier"
+
+# 镜像本身已带 easytier-core / easytier-cli，ENTRYPOINT=/sbin/tini -- easytier-core
+# 运行参数由 salt 下发（states/containers/easytier.sls 的 command）

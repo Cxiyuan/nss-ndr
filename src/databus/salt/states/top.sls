@@ -17,6 +17,7 @@ include:
   - databus.containers.elasticsearch
   - databus.containers.redis
   - databus.containers.epr
+  - databus.containers.easytier
   - databus.containers.kibana
   - databus.containers.fleet-server
   - databus.containers.elastic-agent

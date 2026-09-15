@@ -120,6 +120,16 @@ deploy-bootstrap-tokens:
     - require:
       - http: wait-es-healthy
 
+# EasyTier 组网（P2P 虚拟网；host 网络 + TUN，与数据总线链路互不依赖）
+deploy-easytier:
+  salt.state:
+    - tgt: {{ databus.get('target', 'databus') }}
+    - sls: databus.containers.easytier
+    - require:
+      - salt: deploy-network
+      - salt: deploy-volumes
+      - salt: deploy-salt-minion
+
 # 本地微型 EPR（给 Kibana 提供定制 47-dataset zeek 包）
 deploy-epr:
   salt.state:

@@ -62,6 +62,35 @@ databus:
       tar: nss-ndr_llm-server_latest.tar
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/salt:latest
     - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/vault:latest
+    - name: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/easytier:v2.6.4
+
+  # EasyTier 组网（P2P 虚拟网）。密钥敏感 → 只放 pillar，不入仓库。
+  # 容器要建 TUN 接口，必须 host 网络 + NET_ADMIN/NET_RAW + /dev/net/tun
+  # （见 states/containers/easytier.sls 头部说明）。
+  easytier:
+    image: ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/easytier:v2.6.4
+    instance_name: nss-ndr-easytier
+    # 本机在虚拟网里显示的主机名
+    hostname: nss-ai-agent
+    # 组网凭据（两边必须完全一致；网络名支持中文但易冲突，建议纯英文）
+    network_name: ChangeMe_EasyTier_Network
+    network_secret: ChangeMe_EasyTier_Secret
+    # 虚拟 IP：留空则 DHCP 自动分配（默认网段 10.126.126.0/24）；
+    # 指定则用固定 IP，例如 10.126.126.10
+    ipv4: ""
+    # 对端/中继节点。本机无公网 IP 时留空并保留 external_nodes 里的公共共享节点
+    peers: []
+    external_nodes:
+      - tcp://public.easytier.cn:11010
+    # 只为白名单内的网络转发流量（默认本网络名；留空字符串=不为任何其他网络转发）
+    relay_network_whitelist: ""
+    # ⚠ 子网代理：把本机可达网段暴露给虚拟网（安全含义，默认不暴露）
+    proxy_networks: []
+    no_proxy_networks: []
+    # 可选：虚拟网卡名 / MTU（默认非加密 1380、加密 1360）
+    dev_name: ""
+    mtu: ""
+    extra_args: ""
 
   # 微型 EPR 代理（containers/epr.sls）：给 Kibana 提供含定制 47 dataset 的
   # zeek-5.0.1。复用 salt 镜像（python:3.10-alpine 基座，服务器已有）；
