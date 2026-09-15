@@ -30,60 +30,78 @@
 |---|---|
 | `images/Dockerfile.llm-server` | 多阶段构建：编译 llama-server + Alpine 运行时 + 内置 Qwen3.8-2B-Distill 模型 |
 | `images/llm-server/entrypoint.sh` | ENV → llama-server 参数映射入口 |
-| `images/llm-server/scripts/fetch-model.sh` | 下载 GGUF 到 `offline/models/` |
-| `images/scripts/build-llm-server.sh` | 构建 + 校验 + 导出离线 tar |
-| `images/offline/nss-ndr_llm-server_<版本>.tar` | 离线镜像产物（Salt load） |
+| `images/llm-server/scripts/fetch-model.sh` | 开发用：把备选 GGUF 下到本地（换模型时才用，镜像构建不依赖它） |
 
 ## 构建
 
-```bash
-# 构建镜像 + 导出 offline tar（默认版本 0.1.0；模型由 Dockerfile 构建时自动下载）
-images/scripts/build-llm-server.sh [版本]
+镜像由 CI 构建（本地不构建、不上传）：
 
-# 产物：images/offline/nss-ndr_llm-server_0.1.0.tar
-# 镜像：nss-ndr/llm-server:0.1.0（含 /models/Qwen3.8-2B-Q4_K_M.gguf）
+```bash
+# push 到 main 即触发 .github/workflows/build-images.yml 的 llm-server job
+# 产物：ghcr.io/cxiyuan/nss-ndr-public/llm-server:<tag>（镜像站 ghcr.nju.edu.cn 同步）
+# 模型在构建期由 Dockerfile 从 HF 拉取并校验 SHA-256
 ```
 
-> 如需离线构建，可先执行 `images/llm-server/scripts/fetch-model.sh` 把模型放到
-> `images/offline/models/`，再用 `docker build` 时挂载或手动 COPY 进镜像。
+> 服务器拉不动 ghcr.io 时，用 `scripts/fetch-all-images.sh` 在本机下载
+> OCI/docker-save 包，再 `scripts/sync-salt.sh --with-images` 传过去 `docker load`。
 
 AVX512-BF16（Cooper Lake / Zen4 / Sapphire Rapids）与 AMX（Sapphire Rapids）内核
 已包含在多变体构建中，仅在对应硬件上被加载，无需额外参数。
 
 ## 运行
 
-```bash
-# 默认模型已内置镜像，直接运行即可（无需挂载模型目录）
-docker run -d --name nss-ndr-llm-server \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  -e LLM_CONTEXT_SIZE=32768 \
-  -e LLM_THREADS=6 \
-  nss-ndr/llm-server:0.1.0
+**线上由 Salt 管理**（`src/databus/salt/states/containers/llm-server.sls`），
+参数经 `pillar databus.llm_server` 下发，端口不发布到宿主机、只在 nss-net 内
+以 alias `llm-server` 暴露。手工起容器仅用于本地验证：
 
-# 冒烟：等待 /health 返回 200 后
-curl http://127.0.0.1:8080/v1/models
-curl http://127.0.0.1:8080/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"Qwen3.8-2B-Distill","messages":[{"role":"user","content":"ping"}],"max_tokens":16}'
+```bash
+docker run -d --name llm-test \
+  --network nss-net \
+  -e LLM_CONTEXT_SIZE=16384 -e LLM_PARALLEL=1 \
+  ghcr.nju.edu.cn/cxiyuan/nss-ndr-public/llm-server:latest
+
+# 冒烟（在 nss-net 内的容器里执行，如 salt-minion）
+wget -qO- http://llm-server:8080/health
+wget -qO- http://llm-server:8080/v1/models
 ```
 
-> 若需覆盖内置模型：`-v /opt/nss-ndr/models:/models:ro -e LLM_MODEL=/models/model.gguf`
+> 覆盖内置模型：`-v /opt/nss/ndr/models:/models:ro -e LLM_MODEL=/models/model.gguf`
 
 ## 运行配置（环境变量）
 
-| 环境变量 | 默认 | 说明 |
+| 环境变量 | 镜像默认 | 说明 |
 |---|---|---|
 | `LLM_MODEL` | `/models/Qwen3.8-2B-Q4_K_M.gguf` | GGUF 模型路径（内置） |
 | `LLM_HOST` / `LLM_PORT` | `0.0.0.0` / `8080` | 监听地址 / 端口 |
 | `LLM_ALIAS` | `Qwen3.8-2B-Distill` | API 返回的 model 名（与下游消费方约定保持一致） |
-| `LLM_CONTEXT_SIZE` | `32768` | 上下文窗口（32K） |
-| `LLM_PARALLEL` | `1` | 并发 slot（6C/12G 预算建议保持 1） |
-| `LLM_BATCH_SIZE` / `LLM_UBATCH_SIZE` | `2048` / `512` | 批处理大小 |
-| `LLM_CACHE_TYPE_K/V` | `q8_0` | KV 缓存量化：32K 上下文下省约一半缓存内存；追求精度可改 `f16` |
-| `LLM_THREADS` | 空（自动） | 推理线程数，建议 ≤ 分配核数，如 `6` |
+| `LLM_CONTEXT_SIZE` | `16384` | **总**上下文；`--parallel N` 时每个 slot 分到 `ctx/N`（要每 slot 16K 且 4 并发就得配 65536） |
+| `LLM_CONTEXT_RATIO` | `0.75` | 再乘一次系数（`1.0` = 不缩水） |
+| `LLM_PARALLEL` | `1` | 并发 slot（现网 4，由 salt pillar 下发） |
+| `LLM_BATCH_SIZE` / `LLM_UBATCH_SIZE` | `1024` / `256` | 批处理大小 |
+| `LLM_CACHE_TYPE_K/V` | `q8_0` | KV 缓存量化；追求精度可改 `f16`（内存翻倍） |
+| `LLM_THREADS_RATIO` | `0.75` | 线程数 = 宿主机核数 × 该比例 |
 | `LLM_API_KEY` | 空 | 开启 API Key 鉴权（与下游消费方 API Key 对应） |
 | `LLM_EXTRA_ARGS` | 空 | 追加任意 llama-server 参数（如 `--mlock --numa distribute`） |
+
+> 现网实际值由 salt pillar `databus.llm_server` 下发（见 `src/databus/salt/pillar.example`），
+> 与本表默认值可能不同：当前为 `context_size=65536` / `parallel=4` /
+> `extra_args="--reasoning off"`（关思考链，见下）。
+
+## 关思考链（现网默认开启）
+
+Qwen3 系列默认会先输出 `reasoning_content`（思考），把输出预算大量耗在推理上，
+`content` 长时间为空（下游解析不到结果）。现网通过 salt pillar 下发：
+
+```
+extra_args: "--reasoning off"
+```
+
+实测效果：`reasoning_content` 为空、直接出正文，首 token 延迟 1.79s → **0.34s**，
+同样 128 token 输出预算下有用正文从 ~130 字符提升到 ~630 字符（~4-5×）。
+
+代价：事实类问题质量基本不变，但**分析/判断类任务质量会下降**（推理链正是
+复杂判断的强项）。如需对特定请求恢复思考，可在请求体里带
+`"chat_template_kwargs": {"enable_thinking": true}`。
 
 ## 与下游消费方对接
 
@@ -99,12 +117,12 @@ EDGE_LLM_MODEL=Qwen3.8-2B-Distill
 
 llama-server 不校验请求里的 `model` 字段，下游消费方模型名只需与 `LLM_ALIAS` 对应便于日志审计。
 
-## 内存预算参考（6C/12G 专属环境）
+## 内存预算参考
 
 - 模型权重（Qwen3.8-2B Q4_K_M）：约 1.31GB
-- KV 缓存（32K 上下文，q8_0）：约 0.5GB
+- KV 缓存（q8_0）：按 `ctx-slots × tokens` 估算，现网四 slot 合计约 1-2GB（按需分配）
 - 计算缓冲 / 运行开销：约 1~2GB
-- 合计约 2~3GB 量级，12G 预算内可再加 `LLM_CONTEXT_SIZE` 或并发 slot
+- 合计约 2~4GB 量级（现网宿主机 10 核 / 23G，余量充足）
 
 ## 模型备选（仅换 GGUF + 重启）
 

@@ -45,11 +45,11 @@ llm-server（llama.cpp + Qwen3-0.6B-Q8_0，OpenAI 兼容 /v1）—— 本地边�
 | Fleet Server / Elastic Agent | `elastic-agent-zeek:9.5.2` | 采集 Zeek 日志入 ES（Zeek Integration 5.0.1，43 datasets） |
 | Logstash | `logstash-databus:9.5.2` | zeek → redis 双写（供下游消费） |
 | Redis | `redis-databus:8.10.1` | 数据源队列（stream: `analysis:events`） |
-| LLM Server | `llm-server` | llama.cpp + Qwen3-0.6B-Q8_0，OpenAI 兼容推理服务 |
+| LLM Server | `llm-server` | llama.cpp + Qwen3.8-2B-Distill Q4_K_M，OpenAI 兼容推理服务 |
 | Salt Master + Minion | `salt-master-api` / `salt-minion` | 容器化部署编排 |
 
 ## 构建与部署
 
 - 镜像构建：`.github/workflows/build-images.yml`（推送到 GHCR `nss-ndr-public/*`）
-- 容器编排：`src/databus/salt/`（Salt state + pillar，详见 `src/databus/salt/README.md`）
+- 容器编排：`src/databus/salt/`（Salt state + pillar.example）
 - 开发/发布流程铁律：见 `docs/deploy-process.md`
