@@ -112,6 +112,13 @@ nss-ndr-easytier:
         - --mtu
         - "{{ et.mtu }}"
 {%- endif %}
+{%- if et.get('proxy_forward_by_system') %}
+        # ⚠ 关键：子网代理交给【系统内核】转发，而不是 EasyTier 内部 NAT/smoltcp。
+        #   实测默认（内部栈）下 ICMP 通但 TCP 一律不通（连宿主 22 端口都不通）；
+        #   配合下面的 DOCKER-USER 放行规则后 TCP 正常。
+        - --proxy-forward-by-system
+        - "true"
+{%- endif %}
 {%- for n in et.get('proxy_networks', []) %}
         # ⚠ 子网代理：把本机可达网段暴露给虚拟网（如 172.16.196.0/24）
         - --proxy-networks
@@ -124,6 +131,10 @@ nss-ndr-easytier:
 {%- if et.get('extra_args') %}
         - "{{ et.extra_args }}"
 {%- endif %}
+    - environment:
+        # 交给镜像 entrypoint 补齐宿主 DOCKER-USER 放行规则
+        # （子网代理的流量要穿过 Docker 默认 DROP 的 FORWARD 链）
+        - EASYTIER_PROXY_SUBNETS={{ et.get('proxy_networks', []) | join(',') }}
     - log_driver: json-file
     - require:
       - docker_image: {{ img }}

@@ -22,5 +22,12 @@ LABEL org.opencontainers.image.title="nss-ndr/easytier" \
       org.opencontainers.image.version="${EASYTIER_VERSION}" \
       org.opencontainers.image.source="https://github.com/EasyTier/EasyTier"
 
-# 镜像本身已带 easytier-core / easytier-cli，ENTRYPOINT=/sbin/tini -- easytier-core
-# 运行参数由 salt 下发（states/containers/easytier.sls 的 command）
+# iptables：子网代理需要往宿主 DOCKER-USER 链补放行规则（见 entrypoint.sh）
+RUN apk add --no-cache iptables
+
+# 覆盖上游 ENTRYPOINT：先补 iptables 放行规则，再起 easytier-core
+COPY --chmod=755 easytier/entrypoint.sh /opt/nss-ndr/entrypoint.sh
+ENTRYPOINT ["/sbin/tini", "--", "/opt/nss-ndr/entrypoint.sh"]
+
+# 运行参数由 salt 下发（states/containers/easytier.sls 的 command），
+# 会被 entrypoint.sh 透传给 easytier-core
