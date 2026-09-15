@@ -67,6 +67,30 @@ nss-ndr-easytier:
 {%- else %}
         - --dhcp
 {%- endif %}
+{%- if et.get('manual_routes') %}
+        # ⚠ 关键：只把指定 CIDR 路由到虚拟网，【不接管】对端广播的
+        # proxy-networks / wireguard 路由。
+        # 不加这个的话，其他节点（如 zabbix）广播的 172.16.194~199.0/24、
+        # 10.250.250.0/24 等会被装成 tun0 路由，而这些网段本机本来就能
+        # 通过物理网直接到达 —— 结果回包走 tun0 进虚拟网，网络直接断掉
+        # （实测：加完容器后 172.16.196.79 完全不可达，但 10.255.12.4 可 ping 通）。
+{%- for r in et.get('manual_routes', []) %}
+        - --manual-routes
+        - "{{ r }}"
+{%- endfor %}
+{%- endif %}
+{%- if et.get('listeners') %}
+        # 监听端口（供其他节点 P2P 直连；与 zabbix 机同套端口，不同机器不冲突）
+{%- for l in et.get('listeners', []) %}
+        - --listeners
+        - "{{ l }}"
+{%- endfor %}
+{%- endif %}
+{%- if et.get('rpc_portal') %}
+        # 供 easytier-cli 连接查看状态的 RPC 端口
+        - --rpc-portal
+        - "{{ et.rpc_portal }}"
+{%- endif %}
 {%- for p in et.get('peers', []) %}
         - --peers
         - "{{ p }}"
