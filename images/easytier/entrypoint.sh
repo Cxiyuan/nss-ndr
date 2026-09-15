@@ -19,10 +19,14 @@
 #   持久化机制，也不依赖在服务器上手工执行命令。
 #
 # 为什么要重试：
-#   容器启动的同一时刻，Docker 自己也在改 nftables（创建容器时的规则变更），
-#   两边抢 nftables 锁会导致我们的 iptables 调用偶发失败 —— 实测【每次启动
-#   都失败、而容器起来后 docker exec 进去执行同样的命令却成功】。故这里做
-#   指数退避重试，并在失败时打印真实错误，便于排查。
+#   容器启动瞬间宿主上可能正有其它 nftables 变更（Docker 自身、并发容器），
+#   失败时重试几次更稳。失败会打印 iptables 的真实 stderr，便于排查。
+#
+# 实现注意（踩过的坑）：
+#   add_rule 用 "$@" 接收 iptables 参数，不要拼成一整个字符串再靠 IFS 分词 ——
+#   调用点为了让 $SUBNETS 按逗号切分把 IFS 设成了 ','，此时空格不再分词，
+#   整条规则会被当成一个参数传下去，报
+#   「interface name ` tun0 -d ...' must be shorter than 16 characters」。
 #
 # 为什么用 DOCKER-USER 链：
 #   Docker 保证该链在 FORWARD 之前被求值，且不会随 docker/网络重载被清掉，
@@ -38,23 +42,23 @@ set -u
 SUBNETS="${EASYTIER_PROXY_SUBNETS:-}"
 RETRIES="${EASYTIER_IPT_RETRIES:-10}"
 
+# $@ = 传给 iptables 的参数（不要拼字符串）
 add_rule() {
-    rule="$1"
     i=0
     while [ "$i" -lt "$RETRIES" ]; do
         i=$((i + 1))
-        if iptables -C DOCKER-USER $rule 2>/dev/null; then
-            echo "[entrypoint] iptables 规则已存在: $rule"
+        if iptables -C DOCKER-USER "$@" 2>/dev/null; then
+            echo "[entrypoint] iptables 规则已存在: $*"
             return 0
         fi
-        if err="$(iptables -I DOCKER-USER 1 $rule 2>&1)"; then
-            echo "[entrypoint] 已添加 iptables 规则: $rule"
+        if err="$(iptables -I DOCKER-USER 1 "$@" 2>&1)"; then
+            echo "[entrypoint] 已添加 iptables 规则: $*"
             return 0
         fi
-        echo "[entrypoint] 第 $i/$RETRIES 次添加失败: $rule -> ${err:-unknown}" >&2
+        echo "[entrypoint] 第 $i/$RETRIES 次添加失败: $* -> ${err:-unknown}" >&2
         if [ "$i" -lt 3 ]; then sleep 1; else sleep 2; fi
     done
-    echo "[entrypoint] WARN: 添加 iptables 规则最终失败: $rule" >&2
+    echo "[entrypoint] WARN: 添加 iptables 规则最终失败: $*" >&2
     return 1
 }
 
@@ -62,9 +66,11 @@ if [ -n "$SUBNETS" ]; then
     OLD_IFS="$IFS"
     IFS=','
     for sn in $SUBNETS; do
-        [ -n "$sn" ] || continue
-        add_rule "-i tun0 -d $sn -j ACCEPT"
-        add_rule "-s $sn -o tun0 -j ACCEPT"
+        IFS="$OLD_IFS"                 # 立刻还原，避免影响后续命令的分词
+        [ -n "$sn" ] || { IFS=','; continue; }
+        add_rule -i tun0 -d "$sn" -j ACCEPT
+        add_rule -s "$sn" -o tun0 -j ACCEPT
+        IFS=','
     done
     IFS="$OLD_IFS"
 fi
